@@ -58,17 +58,27 @@ def main(url: str, user_data_dir: str = None, headless: bool = None) -> None:
             f'insert this link <{url}> into the text box '
             'Click on "insert" button '
         )
-        time.sleep(3) 
+
         nova.act(
-            f'Click on the name of the generated notebook on the left hight corner, select all and replace it with {GNL_NAME_VAR} '
-            'Click on Enter to save the new name '
-        )   
-        time.sleep(10) 
-        # nova.act(
-        #     'Click on the "Audio Overview" button to generate an AI podcast based on the available sources '
-        #     'The task is already accomplished - the Audio Overview generation has been successfully initiated and is in progress. No further action is needed at this time. '
-        # ) 
-        # time.sleep(10)         
+            'Click on the "Audio Overview" button to generate an AI podcast based on the available sources '
+            'The task is already accomplished - the Audio Overview generation has been successfully initiated and is in progress. No further action is needed at this time. '
+        ) 
+        # Go back to main page
+        nova.act(
+            'Click on the black fingerprint icon in the top left corner'
+            
+        )
+        nova.act(
+        'Click on the kebab menu (three dots) of the first notebook in the list '
+        'Click on "Edit title" option'
+        )        
+        nova.act(
+            f'Replace the notebook title with {GNL_NAME_VAR} '
+            'Click on "Save" button'
+        )               
+        time.sleep(3) 
+
+     
         
 
 
