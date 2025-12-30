@@ -30,19 +30,19 @@ This project automates the process of:
 #### `nllm-aws-asl-v2.py`
 Main processing script for AWS solutions.
 ```bash
-python nllm-aws-asl-v2.py --user_data_dir "/home/nizar/Clone-Chrome-profile/User Data"
+python nllm-aws-asl-v2.py
 ```
 
 #### `nllm-aws-asl-add-generate-gnl.py`
 Adds and generates content from AWS solution URLs.
 ```bash
-python nllm-aws-asl-add-generate-gnl.py --user_data_dir "/home/nizar/Clone-Chrome-profile/User Data" <URL>
+python nllm-aws-asl-add-generate-gnl.py <URL>
 ```
 
 #### `nllm-aws-asl-download-rename-gnl.py`
 Downloads and renames generated content.
 ```bash
-python nllm-aws-asl-download-rename-gnl.py --user_data_dir "/home/nizar/Clone-Chrome-profile/User Data" <URL>
+python nllm-aws-asl-download-rename-gnl.py <URL>
 ```
 
 ### Utility Scripts
@@ -50,19 +50,19 @@ python nllm-aws-asl-download-rename-gnl.py --user_data_dir "/home/nizar/Clone-Ch
 #### `nllm-aws-asl-clean-gnls.py`
 Cleans existing NotebookLM content.
 ```bash
-python nllm-aws-asl-clean-gnls.py --user_data_dir "/home/nizar/Clone-Chrome-profile/User Data"
+python nllm-aws-asl-clean-gnls.py
 ```
 
 #### `nllm-aws-asl-add-gnl.py`
 Adds new content to NotebookLM.
 ```bash
-python nllm-aws-asl-add-gnl.py --user_data_dir "/home/nizar/Clone-Chrome-profile/User Data"
+python nllm-aws-asl-add-gnl.py
 ```
 
 #### `nllm-aws-asl-update-podcast-name-on-gnl.py`
 Updates podcast names in NotebookLM.
 ```bash
-python nllm-aws-asl-update-podcast-name-on-gnl.py --user_data_dir "/home/nizar/Clone-Chrome-profile/User Data" <URL>
+python nllm-aws-asl-update-podcast-name-on-gnl.py <URL>
 ```
 
 #### `run_multiple.py`
@@ -75,11 +75,12 @@ python run_multiple.py
 
 ### Environment Variables (.env)
 ```
-# Add your environment variables here
+USER_DATA_DIR=/home/nizar/Clone-Chrome-profile/User Data
+# Add other environment variables here
 ```
 
 ### Chrome User Data Directory
-Default path: `/home/nizar/Clone-Chrome-profile/User Data`
+The `user_data_dir` is configured in `.env` file. You can override it using the `--user_data_dir` flag when running scripts.
 
 ## Workflow
 
@@ -106,30 +107,26 @@ Default path: `/home/nizar/Clone-Chrome-profile/User Data`
 python -m setup_chrome_user_data_dir
 
 # 2. Main processing
-python nllm-aws-asl-v2.py --user_data_dir "/home/nizar/Clone-Chrome-profile/User Data"
+python nllm-aws-asl-v2.py
 
 # 3. Clean existing content
-python nllm-aws-asl-clean-gnls.py --user_data_dir "/home/nizar/Clone-Chrome-profile/User Data"
+python nllm-aws-asl-clean-gnls.py
 
 # 4. Add new content
-python nllm-aws-asl-add-gnl.py --user_data_dir "/home/nizar/Clone-Chrome-profile/User Data"
+python nllm-aws-asl-add-gnl.py
 
 # 5. Update podcast name
-python nllm-aws-asl-update-podcast-name-on-gnl.py --user_data_dir "/home/nizar/Clone-Chrome-profile/User Data" https://aws.amazon.com/solutions/guidance/generative-ai-deployments-using-amazon-sagemaker-jumpstart/
+python nllm-aws-asl-update-podcast-name-on-gnl.py https://aws.amazon.com/solutions/guidance/generative-ai-deployments-using-amazon-sagemaker-jumpstart/
 
 # 6. Add and generate content
-python nllm-aws-asl-add-generate-gnl.py --user_data_dir "/home/nizar/Clone-Chrome-profile/User Data" https://aws.amazon.com/solutions/guidance/generative-ai-deployments-using-amazon-sagemaker-jumpstart/
+python nllm-aws-asl-add-generate-gnl.py https://aws.amazon.com/solutions/guidance/generative-ai-deployments-using-amazon-sagemaker-jumpstart/
 
 # 7. Download and rename
-python nllm-aws-asl-download-rename-gnl.py --user_data_dir "/home/nizar/Clone-Chrome-profile/User Data" https://aws.amazon.com/solutions/guidance/generative-ai-deployments-using-amazon-sagemaker-jumpstart/
+python nllm-aws-asl-download-rename-gnl.py https://aws.amazon.com/solutions/guidance/generative-ai-deployments-using-amazon-sagemaker-jumpstart/
 ```
 
 ### Single URL Processing
 ```bash
-# With user data directory
-python nllm-aws-asl-add-generate-gnl.py --user_data_dir "/home/nizar/Clone-Chrome-profile/User Data" https://aws.amazon.com/solutions/guidance/generative-ai-deployments-using-amazon-sagemaker-jumpstart/
-
-# Without user data directory (uses .env configuration)
 python nllm-aws-asl-add-generate-gnl.py https://aws.plainenglish.io/develop-aws-ml-workloads-locally-with-localstack-and-sam-24bdc0de81aa
 ```
 

@@ -34,6 +34,9 @@ def main(user_data_dir: str = None, headless: bool = None) -> None:
             raise ValueError("USER_DATA_DIR must be provided either as parameter or in .env file")
     
     if headless is None:
+        headless = os.getenv('HEADLESS', '0') == '1'
+        
+    if not headless:
         fzf = FzfPrompt()
         options = ["Visible (you can see the browser)", "Headless (background, faster)"]
         choice = fzf.prompt(options, "--prompt='Select browser mode: '")
