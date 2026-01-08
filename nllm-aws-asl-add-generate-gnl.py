@@ -15,28 +15,8 @@ from nova_act import NovaAct
 
 load_dotenv()
 
-def get_webpage_title(url: str) -> str:
-    try:
-        response = requests.get(url, timeout=2, stream=True)
-        # Read only first 8KB to find title quickly
-        content = response.raw.read(8192)
-        response.close()
-        
-        soup = BeautifulSoup(content, 'html.parser')
-        if soup.title and soup.title.string:
-            title = soup.title.string.strip().replace(" ", "-")
-            return title[:50] + "-etc" if len(title) > 50 else title
-    except:
-        pass
-    
-    # Fast fallback - just use URL
-    import re
-    last_part = url.split('/')[-1].split('#')[0].split('?')[0]
-    title = re.sub(r'[^a-zA-Z0-9]', '-', last_part).strip('-')
-    return title[:50] + "-etc" if len(title) > 50 else title or "webpage"
-
-def main(url: str, user_data_dir: str = None, headless: bool = None) -> None:
-    GNL_NAME_VAR = get_webpage_title(url)
+def main(url: str, title: str, user_data_dir: str = None, headless: bool = None) -> None:
+    GNL_NAME_VAR = title
     if user_data_dir is None:
         user_data_dir = os.getenv('USER_DATA_DIR')
         if user_data_dir is None:

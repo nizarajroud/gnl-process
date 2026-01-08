@@ -17,28 +17,8 @@ from nova_act import NovaAct
 
 load_dotenv()
 
-def get_webpage_title(url: str) -> str:
-    try:
-        response = requests.get(url, timeout=2, stream=True)
-        # Read only first 8KB to find title quickly
-        content = response.raw.read(8192)
-        response.close()
-        
-        soup = BeautifulSoup(content, 'html.parser')
-        if soup.title and soup.title.string:
-            title = soup.title.string.strip().replace(" ", "-")
-            return title[:50] + "-etc" if len(title) > 50 else title
-    except:
-        pass
-    
-    # Fast fallback - just use URL
-    import re
-    last_part = url.split('/')[-1].split('#')[0].split('?')[0]
-    title = re.sub(r'[^a-zA-Z0-9]', '-', last_part).strip('-')
-    return title[:50] + "-etc" if len(title) > 50 else title or "webpage"
-
-def main(url: str, user_data_dir: str = None, headless: bool = None) -> None:
-    GNL_NAME_VAR = get_webpage_title(url)
+def main(title: str, user_data_dir: str = None, suffix: str = None, headless: bool = None) -> None:
+    GNL_NAME_VAR = title
     if user_data_dir is None:
         user_data_dir = os.getenv('USER_DATA_DIR')
         if user_data_dir is None:
@@ -55,7 +35,7 @@ def main(url: str, user_data_dir: str = None, headless: bool = None) -> None:
             headless = choice and "Headless" in choice[0]
 
     with NovaAct(
-        starting_page="http://notebooklm.google.com/",
+        starting_page=os.getenv('NOTEBOOKLM_URL', 'http://notebooklm.google.com/'),
         user_data_dir=user_data_dir,
         headless=headless,
         clone_user_data_dir=False,
@@ -69,26 +49,46 @@ def main(url: str, user_data_dir: str = None, headless: bool = None) -> None:
             'Click only on the three dots icon, NOT on the audio overview card itself. '
             'Then select the Download option from the menu'
         ) 
-        time.sleep(300)
-    
-    # Find and copy the file from playwright-artifacts folder
-    playwright_folders = glob.glob("/tmp/playwright-artifacts*")
-    if playwright_folders:
-        # Get the most recent folder
-        latest_folder = max(playwright_folders, key=os.path.getmtime)
-        # Find files without extension in the folder
-        all_files = [f for f in os.listdir(latest_folder) if os.path.isfile(os.path.join(latest_folder, f)) and '.' not in f]
-        if all_files:
-            source_file = os.path.join(latest_folder, all_files[0])
-            dest_file = os.path.expanduser(f"~/Downloads/{GNL_NAME_VAR}.m4a")
-            shutil.copy2(source_file, dest_file)
-            print(f"File copied to: {dest_file}")
+        
+        # Wait for download to complete by checking for playwright-artifacts folder
+        print("Waiting for download to complete...")
+        download_timeout = 300  # 5 minutes max
+        start_time = time.time()
+        
+        while time.time() - start_time < download_timeout:
+            playwright_folders = glob.glob("/tmp/playwright-artifacts*")
+            if playwright_folders:
+                latest_folder = max(playwright_folders, key=os.path.getmtime)
+                files = [f for f in os.listdir(latest_folder) if os.path.isfile(os.path.join(latest_folder, f))]
+                if files:
+                    # Wait a bit more to ensure download is complete
+                    time.sleep(5)
+                    break
+            time.sleep(2)
         else:
-            print("No file without extension found in playwright-artifacts folder")
-    else:
-        print("No playwright-artifacts folder found in /tmp")
-     
-    input("Press Enter to close the browser...")
+            print("Download timeout reached")
+
+        # Find and copy the file from playwright-artifacts folder while browser is still open
+        dest_dir = os.getenv('GNL_BACKLOG', '/home/nizar')
+        if suffix:
+            dest_dir = os.path.join(dest_dir, suffix)
+        os.makedirs(dest_dir, exist_ok=True)
+        
+        playwright_folders = glob.glob("/tmp/playwright-artifacts*")
+        if playwright_folders:
+            # Get the most recent folder
+            latest_folder = max(playwright_folders, key=os.path.getmtime)
+            # Find all files in the folder
+            all_files = [f for f in os.listdir(latest_folder) if os.path.isfile(os.path.join(latest_folder, f))]
+            if all_files:
+                source_file = os.path.join(latest_folder, all_files[0])
+                dest_file = os.path.join(dest_dir, f"{GNL_NAME_VAR}.m4a")
+                shutil.copyfile(source_file, dest_file)
+                print(f"File copied to: {dest_file}")
+            else:
+                print("No files found in playwright-artifacts folder")
+        else:
+            print("No playwright-artifacts folder found in /tmp")
 
 
 if __name__ == "__main__":

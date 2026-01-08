@@ -1,0 +1,142 @@
+{
+  "name": "GNL",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        96
+      ],
+      "id": "b4744b38-3df4-46d0-877b-42156f6b79ab",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "command": "python /home/nizar/workspace/gnl-process/nllm-aws-asl-add-generate-gnl.py https://aws.amazon.com/solutions/guidance/generative-ai-deployments-using-amazon-sagemaker-jumpstart/"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        272,
+        96
+      ],
+      "id": "baedc0cc-92a1-4858-b487-c83e053838b3",
+      "name": "Generate podcast",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "amount": 10,
+        "unit": "minutes"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        512,
+        96
+      ],
+      "id": "0320a76b-432a-4999-8c0b-e801b859d924",
+      "name": "Wait 10 min",
+      "webhookId": "720bc643-d4a3-47ed-ba4c-d7599f9a2da4"
+    },
+    {
+      "parameters": {
+        "command": "python /home/nizar/workspace/gnl-process/nllm-aws-asl-download-rename-gnl.py https://aws.amazon.com/solutions/guidance/generative-ai-deployments-using-amazon-sagemaker-jumpstart/"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        784,
+        96
+      ],
+      "id": "a6fd4709-6d38-41b3-ba3f-75706d5f3a51",
+      "name": "download Podcast",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "python /home/nizar/workspace/gnl-process/nllm-aws-asl-clean-gnls.py"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        416,
+        -368
+      ],
+      "id": "b04e844d-3859-4f19-8cfb-83a11ec743b2",
+      "name": "Clean All podcasts",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "sudo mount -t drvfs G: /mnt/g"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        720,
+        -368
+      ],
+      "id": "277505ca-69d5-4173-84f2-a17715d59ae0",
+      "name": "mount G:",
+      "executeOnce": true,
+      "retryOnFail": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Generate podcast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate podcast": {
+      "main": [
+        [
+          {
+            "node": "Wait 10 min",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 10 min": {
+      "main": [
+        [
+          {
+            "node": "download Podcast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "mount G:": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "98906d99-eaad-4406-8b5d-b5dab84ca313",
+  "meta": {
+    "instanceId": "29bbad6a021294d5b83ebed3249a5266272c6039eb11ee512f64a5f0562491f0"
+  },
+  "id": "jQ9zKZRa4JbOgEdG",
+  "tags": []
+}
