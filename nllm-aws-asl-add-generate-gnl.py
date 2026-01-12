@@ -1,7 +1,9 @@
 """AWS Solutions to NotebookLM automation script.
 
 Usage:
-python nllm-aws-asl-add-generate-gnl.py [user_data_dir] [--headless]
+python nllm-aws-asl-add-generate-gnl.py <url> <title> <content_type> <filename> [user_data_dir] [--headless]
+
+Content types: google-drive, website, youtube, copied-text
 """
 
 import fire
@@ -15,8 +17,14 @@ from nova_act import NovaAct
 
 load_dotenv()
 
-def main(url: str, title: str, user_data_dir: str = None, headless: bool = None) -> None:
+def main(url: str, title: str, content_type: str, filename: str, user_data_dir: str = None, headless: bool = None) -> None:
     GNL_NAME_VAR = title
+    
+    # Validate content_type parameter
+    valid_types = ['google-drive', 'website', 'youtube', 'copied-text']
+    if content_type not in valid_types:
+        raise ValueError(f"content_type must be one of: {', '.join(valid_types)}")
+    
     if user_data_dir is None:
         user_data_dir = os.getenv('USER_DATA_DIR')
         if user_data_dir is None:
@@ -40,13 +48,32 @@ def main(url: str, title: str, user_data_dir: str = None, headless: bool = None)
     ) as nova:
         time.sleep(3)  # Wait for page to load
         
-        nova.act(
-            'Click on "+ Create new" button on the right hight corner '
-            'Click on "Website" button '
-            f'insert this link <{url}> into the text box '
-            'Click on "insert" button '
-            'Wait until the source finishes loading'
-        )
+        # Handle different content types
+        if content_type == 'website':
+            nova.act(
+                'Click on "+ Create new" button on the right hight corner '
+                'Click on "Websites" button '
+                f'insert this link <{url}> into the text box '
+                'Click on "insert" button '
+                'Wait until the source finishes loading'
+            )
+        elif content_type == 'google-drive':
+            nova.act(
+                'Click on "+ Create new" button on the right hight corner '
+                'Click on "Drive" button '
+                'Click on "My Drive" tab '
+                f'search for  <{filename}> and select it '
+                'Click on "insert" button '
+                'Wait until the source finishes loading'
+            )
+        elif content_type == 'copied-text':
+            nova.act(
+                'Click on "+ Create new" button on the right hight corner '
+                'Click on "Copied text" button '
+                f'insert this text <{url}> into the text box '
+                'Click on "insert" button '
+                'Wait until the source finishes loading'
+            )
         # time.sleep(50)
         nova.act(
             'Click on the "Audio Overview" button to generate an AI podcast based on the available sources '
