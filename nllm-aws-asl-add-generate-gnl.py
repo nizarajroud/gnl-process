@@ -1,9 +1,9 @@
 """AWS Solutions to NotebookLM automation script.
 
 Usage:
-python nllm-aws-asl-add-generate-gnl.py <url> <title> <content_type> <filename> [user_data_dir] [--headless]
+python nllm-aws-asl-add-generate-gnl.py <sourceIdentifier> <title> <content_type> [user_data_dir] [--headless]
 
-Content types: google-drive, website, youtube, copied-text
+Content types: FileUpload, website, youtube, copied-text
 """
 
 import fire
@@ -17,11 +17,11 @@ from nova_act import NovaAct
 
 load_dotenv()
 
-def main(url: str, title: str, content_type: str, filename: str, user_data_dir: str = None, headless: bool = None) -> None:
+def main(sourceIdentifier: str, title: str, content_type: str, user_data_dir: str = None, headless: bool = None) -> None:
     GNL_NAME_VAR = title
     
     # Validate content_type parameter
-    valid_types = ['google-drive', 'website', 'youtube', 'copied-text']
+    valid_types = os.getenv('VALID_CONTENT_TYPES', 'FileUpload,website,youtube,copied-text').split(',')
     if content_type not in valid_types:
         raise ValueError(f"content_type must be one of: {', '.join(valid_types)}")
     
@@ -53,16 +53,16 @@ def main(url: str, title: str, content_type: str, filename: str, user_data_dir: 
             nova.act(
                 'Click on "+ Create new" button on the right hight corner '
                 'Click on "Websites" button '
-                f'insert this link <{url}> into the text box '
+                f'insert this link <{sourceIdentifier}> into the text box '
                 'Click on "insert" button '
                 'Wait until the source finishes loading'
             )
-        elif content_type == 'google-drive':
+        elif content_type == 'FileUpload':
             nova.act(
                 'Click on "+ Create new" button on the right hight corner '
                 'Click on "Drive" button '
                 'Click on "My Drive" tab '
-                f'search for  <{filename}> and select it '
+                f'search for  <{sourceIdentifier}> and select it '
                 'Click on "insert" button '
                 'Wait until the source finishes loading'
             )
@@ -70,7 +70,7 @@ def main(url: str, title: str, content_type: str, filename: str, user_data_dir: 
             nova.act(
                 'Click on "+ Create new" button on the right hight corner '
                 'Click on "Copied text" button '
-                f'insert this text <{url}> into the text box '
+                f'insert this text <{sourceIdentifier}> into the text box '
                 'Click on "insert" button '
                 'Wait until the source finishes loading'
             )

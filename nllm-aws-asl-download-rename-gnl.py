@@ -17,7 +17,7 @@ from nova_act import NovaAct
 
 load_dotenv()
 
-def main(title: str, user_data_dir: str = None, suffix: str = None, headless: bool = None) -> None:
+def main(title: str, user_data_dir: str = None, suffix: str = None, subsuffix: str = None, headless: bool = None) -> None:
     GNL_NAME_VAR = title
     if user_data_dir is None:
         user_data_dir = os.getenv('USER_DATA_DIR')
@@ -72,6 +72,8 @@ def main(title: str, user_data_dir: str = None, suffix: str = None, headless: bo
         dest_dir = os.getenv('GNL_BACKLOG', '/home/nizar')
         if suffix:
             dest_dir = os.path.join(dest_dir, suffix)
+        if subsuffix:
+            dest_dir = os.path.join(dest_dir, subsuffix)
         os.makedirs(dest_dir, exist_ok=True)
         
         playwright_folders = glob.glob("/tmp/playwright-artifacts*")
