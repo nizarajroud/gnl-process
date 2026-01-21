@@ -43,7 +43,7 @@ def main(title: str, user_data_dir: str = None, suffix: str = None, subsuffix: s
         time.sleep(3)  # Wait for page to load
  
         nova.act(
-            'Click on  the first notebook in the list '
+            f'Click on  the  notebook named <{GNL_NAME_VAR}> in the list '
             'Scroll down to view the second half of the Studio section. '
             'Then locate the kebab menu (three vertical dots) on the right side of the first audio overview item in that section. '
             'Click only on the three dots icon, NOT on the audio overview card itself. '
