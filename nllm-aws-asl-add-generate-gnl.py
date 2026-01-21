@@ -3,7 +3,7 @@
 Usage:
 python nllm-aws-asl-add-generate-gnl.py <sourceIdentifier> <title> <content_type> [user_data_dir] [--headless]
 
-Content types: FileUpload, website, youtube, copied-text
+Content types: GoogleDrive, website, youtube, copied-text
 """
 
 import fire
@@ -22,7 +22,7 @@ def main(sourceIdentifier: str, title: str, content_type: str, user_data_dir: st
     GNL_NAME_VAR = title
     
     # Validate content_type parameter
-    valid_types = os.getenv('VALID_CONTENT_TYPES', 'FileUpload,website,youtube,copied-text').split(',')
+    valid_types = os.getenv('VALID_CONTENT_TYPES', 'GoogleDrive,website,youtube,copied-text').split(',')
     if content_type not in valid_types:
         raise ValueError(f"content_type must be one of: {', '.join(valid_types)}")
     
@@ -58,7 +58,7 @@ def main(sourceIdentifier: str, title: str, content_type: str, user_data_dir: st
                 'Click on "insert" button '
                 'Wait until the source finishes loading'
             )
-        elif content_type == 'FileUpload':
+        elif content_type == 'GoogleDrive':
             nova.act(
                 'Click on "+ Create new" button on the right hight corner '
                 'Click on "Drive" button '
