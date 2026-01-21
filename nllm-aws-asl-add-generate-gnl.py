@@ -10,6 +10,7 @@ import fire
 import os
 import time
 import requests
+import sqlite3
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from pyfzf.pyfzf import FzfPrompt
@@ -78,7 +79,9 @@ def main(sourceIdentifier: str, title: str, content_type: str, user_data_dir: st
         nova.act(
             'Click on the "Audio Overview" button to generate an AI podcast based on the available sources '
             'Do not wait for the generation to complete, proceed to the next step immediately'
-        )        
+        )
+        
+      
         # nova.act(
         #     'Click on the "Audio Overview" button to generate an AI podcast based on the available sources '
         #     'The task is already accomplished - the Audio Overview generation has been successfully initiated and is in progress. No further action is needed at this time. '
@@ -97,7 +100,14 @@ def main(sourceIdentifier: str, title: str, content_type: str, user_data_dir: st
             'Click on "Save" button'
         )               
         time.sleep(3) 
-
+        # Save to database
+        conn = sqlite3.connect('gnl.db')
+        cursor = conn.cursor()
+        cursor.execute('CREATE TABLE IF NOT EXISTS podcast_download (podcast_name TEXT, download_state INTEGER)')
+        cursor.execute('INSERT INTO podcast_download (podcast_name, download_state) VALUES (?, ?)', 
+                      (GNL_NAME_VAR, 0))
+        conn.commit()
+        conn.close()  
      
         
 
