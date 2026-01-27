@@ -109,14 +109,7 @@ def main(sourceIdentifier: str, title: str, content_type: str, user_data_dir: st
             'Click on "Save" button'
         )               
         time.sleep(3) 
-        # Save to database
-        conn = sqlite3.connect('gnl.db')
-        cursor = conn.cursor()
-        cursor.execute('CREATE TABLE IF NOT EXISTS podcast_download (podcast_name TEXT, download_state INTEGER)')
-        cursor.execute('INSERT INTO podcast_download (podcast_name, download_state) VALUES (?, ?)', 
-                      (GNL_NAME_VAR, 0))
-        conn.commit()
-        conn.close()  
+  
      
         
 

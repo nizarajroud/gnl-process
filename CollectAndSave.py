@@ -11,6 +11,10 @@ def collect_and_save(json_input):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     db_path = os.path.join(script_dir, 'gnl.db')
     
+    if not os.path.exists(db_path):
+        print(f"Error: Database not found at {db_path}")
+        sys.exit(1)
+    
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
