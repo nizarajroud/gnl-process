@@ -5,8 +5,16 @@ cursor = conn.cursor()
 
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS podcast_download (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_id TEXT,
+        source_type TEXT,
+        source_path TEXT,
+        source_parent TEXT,
+        generation_mode TEXT,
         podcast_name TEXT,
-        download_state TEXT
+        podcast_theme TEXT,
+        podcast_subfolder TEXT,
+        download_state INTEGER
     )
 ''')
 

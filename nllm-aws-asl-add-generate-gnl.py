@@ -3,7 +3,7 @@
 Usage:
 python nllm-aws-asl-add-generate-gnl.py <sourceIdentifier> <title> <content_type> [user_data_dir] [--headless]
 
-Content types: GoogleDrive, website, youtube, copied-text
+Content types: GoogleDrive, WebAndYoutube, youtube, copied-text
 """
 
 import fire
@@ -14,7 +14,7 @@ import sqlite3
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from pyfzf.pyfzf import FzfPrompt
-from nova_act import NovaAct
+from nova_act import NovaAct, SecurityOptions
 
 load_dotenv()
 
@@ -22,7 +22,7 @@ def main(sourceIdentifier: str, title: str, content_type: str, user_data_dir: st
     GNL_NAME_VAR = title
     
     # Validate content_type parameter
-    valid_types = os.getenv('VALID_CONTENT_TYPES', 'GoogleDrive,website,youtube,copied-text').split(',')
+    valid_types = os.getenv('VALID_CONTENT_TYPES', 'GoogleDrive,WebAndYoutube,LocalStorage').split(',')
     if content_type not in valid_types:
         raise ValueError(f"content_type must be one of: {', '.join(valid_types)}")
     
@@ -41,19 +41,22 @@ def main(sourceIdentifier: str, title: str, content_type: str, user_data_dir: st
             choice = fzf.prompt(options, "--prompt='Select browser mode: '")
             headless = choice and "Headless" in choice[0]
 
+    local_storage_path = os.getenv('LOCAL_STORAGE_PATH', '')
+    
     with NovaAct(
         starting_page="http://notebooklm.google.com/",
         user_data_dir=user_data_dir,
         headless=headless,
         clone_user_data_dir=False,
+        security_options=SecurityOptions(allowed_file_upload_paths=[f'{local_storage_path}/*']) if content_type == 'LocalStorage' else None,
     ) as nova:
         time.sleep(3)  # Wait for page to load
         
         # Handle different content types
-        if content_type == 'website':
+        if content_type == 'WebAndYoutube':
             nova.act(
                 'Click on "+ Create new" button on the right hight corner '
-                'Click on "Websites" button '
+                'Click on "WebAndYoutubes" button '
                 f'insert this link <{sourceIdentifier}> into the text box '
                 'Click on "insert" button '
                 'Wait until the source finishes loading'
@@ -67,12 +70,18 @@ def main(sourceIdentifier: str, title: str, content_type: str, user_data_dir: st
                 'Click on "insert" button '
                 'Wait until the source finishes loading'
             )
-        elif content_type == 'copied-text':
+        elif content_type == 'LocalStorage':
+            full_path = f"{local_storage_path}/{sourceIdentifier}"
             nova.act(
                 'Click on "+ Create new" button on the right hight corner '
-                'Click on "Copied text" button '
-                f'insert this text <{sourceIdentifier}> into the text box '
-                'Click on "insert" button '
+                'Click on the file upload button'
+            )
+            time.sleep(1)
+            nova.act(
+                f'Type this path into the file input: {full_path}'
+            )
+            time.sleep(2)
+            nova.act(
                 'Wait until the source finishes loading'
             )
         # time.sleep(50)

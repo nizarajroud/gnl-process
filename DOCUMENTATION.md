@@ -1,178 +1,243 @@
 # GNL Process - NotebookLM Automation
 
-Automated workflow for processing AWS solutions and generating NotebookLM content.
+Automated workflow for processing content sources and generating NotebookLM podcasts with database tracking and audio processing.
 
 ## Overview
 
-This project automates the process of:
-- Scraping AWS solution pages
-- Processing content through NotebookLM
-- Managing Chrome browser automation
-- Downloading and organizing generated content
+This project automates:
+- Adding sources to NotebookLM (Web, YouTube, Google Drive, Local files)
+- Generating AI podcasts from sources
+- Downloading and organizing generated audio
+- Converting and combining audio files
+- Tracking podcast generation state in SQLite database
 
 ## Prerequisites
 
 - Python 3.x
-- Chrome browser
-- Chrome user data directory setup
+- Chrome browser with user data directory
+- ffmpeg (for audio conversion)
+- NovaAct API key
 
 ## Setup
 
 1. Clone the repository
 2. Install dependencies: `pip install -r requirements.txt`
-3. Configure environment variables in `.env`
-4. Set up Chrome user data directory: `python -m setup_chrome_user_data_dir`
+3. Configure `.env` file
+4. Initialize database: `python setup_database.py`
+5. Setup Chrome profile: `python setup_chrome_user_data_dir.py`
 
-## Scripts
+## Core Scripts
 
-### Core Scripts
-
-#### `nllm-aws-asl-v2.py`
-Main processing script for AWS solutions.
+### `nllm-aws-asl-add-generate-gnl.py`
+Adds source to NotebookLM and generates podcast.
 ```bash
-python nllm-aws-asl-v2.py
+python nllm-aws-asl-add-generate-gnl.py <sourceIdentifier> <title> <content_type> [user_data_dir] [--headless]
+```
+**Content types**: `GoogleDrive`, `WebAndYoutube`, `LocalStorage`
+**Features**:
+- Validates content type against `.env` config
+- Supports multiple source types
+- Auto-renames notebook with custom title
+- Saves generation state to database
+- Interactive/headless browser modes
+
+### `nllm-aws-asl-download-rename-gnl.py`
+Downloads generated podcast and saves with custom name.
+```bash
+python nllm-aws-asl-download-rename-gnl.py <title> [user_data_dir] [suffix] [subsuffix] [--headless]
+```
+**Features**:
+- Waits for download completion (5 min timeout)
+- Copies from playwright temp folder
+- Organizes by suffix/subsuffix folders
+- Saves as `.m4a` format
+
+### `nllm-aws-asl-clean-gnls.py`
+Bulk deletes NotebookLM notebooks (up to 200).
+```bash
+python nllm-aws-asl-clean-gnls.py [user_data_dir] [--headless]
 ```
 
-#### `nllm-aws-asl-add-generate-gnl.py`
-Adds and generates content from AWS solution URLs.
+## Database Management
+
+### `setup_database.py`
+Creates `gnl.db` with `podcast_download` table.
 ```bash
-python nllm-aws-asl-add-generate-gnl.py <URL>
+python setup_database.py
+```
+**Schema**:
+- `id` (PRIMARY KEY)
+- `source_id`, `source_type`, `source_path`, `source_parent`
+- `generation_mode` (single/bulk)
+- `podcast_name`, `podcast_theme`, `podcast_subfolder`
+- `download_state` (0/1)
+
+### `CollectAndSave.py`
+Saves podcast metadata to database from JSON input.
+```bash
+python CollectAndSave.py <json_file>
+echo '<json>' | python CollectAndSave.py
+```
+**Modes**: `single` (one file) or `bulk` (multiple files)
+
+### `delete_all_records.py`
+Clears all database records.
+```bash
+python delete_all_records.py
 ```
 
-#### `nllm-aws-asl-download-rename-gnl.py`
-Downloads and renames generated content.
+## Audio Processing
+
+### `batch_convert_to_mp3.py`
+Converts M4A to MP3 and deletes original.
 ```bash
-python nllm-aws-asl-download-rename-gnl.py <URL>
+python batch_convert_to_mp3.py <filename> <suffix> <subsuffix>
 ```
+**Requirements**: ffmpeg, `GNL_BACKLOG` env var
 
-### Utility Scripts
-
-#### `nllm-aws-asl-clean-gnls.py`
-Cleans existing NotebookLM content.
+### `combine_mp3.py`
+Concatenates multiple MP3 files into one.
 ```bash
-python nllm-aws-asl-clean-gnls.py
+python combine_mp3.py <subdirectory> <output.mp3>
 ```
+**Features**:
+- Uses ffmpeg concat (memory efficient)
+- Moves source files to `zz/` subfolder
+- Reads from `GNL_BACKLOG` path
 
-#### `nllm-aws-asl-add-gnl.py`
-Adds new content to NotebookLM.
+## Utility Scripts
+
+### `get_title.py`
+Generates standardized titles from source identifiers.
 ```bash
-python nllm-aws-asl-add-gnl.py
+python get_title.py <sourceIdentifier> [type] [subsuffix]
 ```
+**Types**: `WebAndYoutube` (adds date prefix), `GoogleDrive`, `LocalStorage`
 
-#### `nllm-aws-asl-update-podcast-name-on-gnl.py`
-Updates podcast names in NotebookLM.
+### `find_local_source.zsh`
+Searches local storage and generates JSON for database.
 ```bash
-python nllm-aws-asl-update-podcast-name-on-gnl.py <URL>
+./find_local_source.zsh <filename> [generation_mode] [source_type] [podcast_theme] [podcast_subfolder]
 ```
+**Modes**: `single` or `bulk`
+**Output**: JSON with file paths and metadata
 
-#### `run_multiple.py`
-Batch processing script.
+### `collect_and_save.sh`
+Pipes JSON to CollectAndSave.py.
 ```bash
-python run_multiple.py
+./collect_and_save.sh '<json_string>'
 ```
 
 ## Configuration
 
 ### Environment Variables (.env)
-```
-USER_DATA_DIR=/home/nizar/Clone-Chrome-profile/User Data
-# Add other environment variables here
-```
-
-### Chrome User Data Directory
-The `user_data_dir` is configured in `.env` file. You can override it using the `--user_data_dir` flag when running scripts.
-
-## Workflow
-
-1. **Setup**: Initialize Chrome profile and environment
-2. **Process**: Run main script with AWS solution URL
-3. **Generate**: Create NotebookLM content
-4. **Download**: Retrieve generated files
-5. **Organize**: Rename and organize output
-
-## Dependencies
-
-- `fire` - CLI interface
-- `requests` - HTTP requests
-- `beautifulsoup4` - HTML parsing
-- `python-dotenv` - Environment management
-- `pyfzf` - Fuzzy finding
-- `nova_act` - Browser automation
-
-## Usage Examples
-
-### Complete Workflow
 ```bash
-# 1. Setup Chrome user data directory
-python -m setup_chrome_user_data_dir
+# NovaAct Configuration
+NOVA_ACT_API_KEY=your-api-key
+NOVA_ACT_SKIP_PLAYWRIGHT_INSTALL=1
+USER_DATA_DIR=/path/to/chrome/User Data
+HEADLESS=1  # 0 for visible, 1 for headless
 
-# 2. Main processing
-python nllm-aws-asl-v2.py
+# Paths
+GNL_BACKLOG=/path/to/audio/storage
+LOCAL_STORAGE_PATH=/path/to/local/files
 
-# 3. Clean existing content
-python nllm-aws-asl-clean-gnls.py
-
-# 4. Add new content
-python nllm-aws-asl-add-gnl.py
-
-# 5. Update podcast name
-python nllm-aws-asl-update-podcast-name-on-gnl.py https://aws.amazon.com/solutions/guidance/generative-ai-deployments-using-amazon-sagemaker-jumpstart/
-
-# 6. Add and generate content
-python nllm-aws-asl-add-generate-gnl.py https://aws.amazon.com/solutions/guidance/generative-ai-deployments-using-amazon-sagemaker-jumpstart/
-
-# 7. Download and rename
-python nllm-aws-asl-download-rename-gnl.py https://aws.amazon.com/solutions/guidance/generative-ai-deployments-using-amazon-sagemaker-jumpstart/
+# Content Types
+VALID_CONTENT_TYPES=GoogleDrive,WebAndYoutube,LocalStorage
+NOTEBOOKLM_URL=http://notebooklm.google.com/
 ```
 
-### Single URL Processing
+## Workflow Examples
+
+### Complete Single File Workflow
 ```bash
-python nllm-aws-asl-add-generate-gnl.py https://aws.plainenglish.io/develop-aws-ml-workloads-locally-with-localstack-and-sam-24bdc0de81aa
+# 1. Setup database
+python setup_database.py
+
+# 2. Add source and generate podcast
+python nllm-aws-asl-add-generate-gnl.py \
+  "https://example.com/article" \
+  "my-podcast-title" \
+  "WebAndYoutube"
+
+# 3. Wait 10 minutes for generation
+
+# 4. Download podcast
+python nllm-aws-asl-download-rename-gnl.py \
+  "my-podcast-title" \
+  --suffix "aws" \
+  --subsuffix "solutions"
+
+# 5. Convert to MP3
+python batch_convert_to_mp3.py "my-podcast-title" "aws" "solutions"
 ```
 
-### Batch Processing
+### Bulk Local Files Processing
 ```bash
-python run_multiple.py
+# 1. Find files and generate JSON
+./find_local_source.zsh "document.pdf" "bulk" "LocalStorage" "tech" "ai"
+
+# 2. Save to database
+./find_local_source.zsh "document.pdf" "bulk" | ./collect_and_save.sh
+
+# 3. Process each file (repeat for each)
+python nllm-aws-asl-add-generate-gnl.py \
+  "document.pdf" \
+  "$(python get_title.py document.pdf LocalStorage)" \
+  "LocalStorage"
 ```
 
-## Troubleshooting
+### Combine Multiple Podcasts
+```bash
+# Combine all MP3s in a folder
+python combine_mp3.py "aws/solutions" "combined-output.mp3"
+```
 
-### Common Issues
+## N8N Integration
 
-1. **Chrome Profile Issues**: Ensure Chrome user data directory exists and is accessible
-2. **Download Path**: Default downloads go to `/home/nizar/Downloads`
-3. **Environment Variables**: Check `.env` file configuration
-
-### Error Resolution
-
-- **NovaAct Errors**: Verify Chrome profile setup
-- **Download Issues**: Check download directory permissions
-- **Network Errors**: Verify internet connection and URL accessibility
+The project includes n8n workflow templates (`GNL.json`, `GNL-parametrized.json`) for automation:
+- Webhook trigger for podcast generation
+- 10-minute wait for processing
+- Automatic download and organization
 
 ## Project Structure
 
 ```
 gnl-process/
-├── .env                                    # Environment configuration
-├── README.md                              # Basic usage instructions
-├── DOCUMENTATION.md                       # This file
-├── nllm-aws-asl-v2.py                    # Main processing script
-├── nllm-aws-asl-add-generate-gnl.py      # Content generation
-├── nllm-aws-asl-download-rename-gnl.py   # Download management
-├── nllm-aws-asl-clean-gnls.py            # Cleanup utility
-├── nllm-aws-asl-add-gnl.py               # Content addition
-├── nllm-aws-asl-update-podcast-name-on-gnl.py  # Name updates
-├── run_multiple.py                        # Batch processing
-└── setup_chrome_user_data_dir.py         # Chrome setup
+├── .env                                    # Environment config
+├── gnl.db                                  # SQLite database
+├── setup_database.py                       # DB initialization
+├── CollectAndSave.py                       # Save metadata to DB
+├── delete_all_records.py                   # Clear DB records
+├── nllm-aws-asl-add-generate-gnl.py       # Add source + generate
+├── nllm-aws-asl-download-rename-gnl.py    # Download podcast
+├── nllm-aws-asl-clean-gnls.py             # Bulk delete notebooks
+├── batch_convert_to_mp3.py                # M4A to MP3 conversion
+├── combine_mp3.py                          # Concatenate MP3s
+├── get_title.py                            # Title generation
+├── find_local_source.zsh                   # Local file search
+├── collect_and_save.sh                     # JSON to DB helper
+├── setup_chrome_user_data_dir.py          # Chrome setup
+├── GNL.json                                # n8n workflow
+└── GNL-parametrized.json                   # n8n workflow (params)
 ```
 
-## Contributing
+## Dependencies
 
-1. Follow existing code patterns
-2. Update documentation for new features
-3. Test with sample AWS solution URLs
-4. Maintain environment variable configuration
+```
+fire                # CLI interface
+requests            # HTTP requests
+beautifulsoup4      # HTML parsing
+python-dotenv       # Environment management
+pyfzf               # Fuzzy finding
+nova_act            # Browser automation
+pydub               # Audio processing
+```
 
-## License
+## Troubleshooting
 
-[Add your license information here]
+**Database locked**: Close other connections to `gnl.db`
+**Download timeout**: Increase timeout in download script (default 300s)
+**ffmpeg not found**: Install with `apt install ffmpeg` or `brew install ffmpeg`
+**NovaAct errors**: Verify API key and Chrome profile path
+**File upload fails**: Check `LOCAL_STORAGE_PATH` and security options
