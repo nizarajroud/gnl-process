@@ -39,7 +39,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
         AND generation_mode = ? 
         AND podcast_theme = ? 
         AND podcast_subfolder = ? 
-        AND download_state = 0
+        AND generation_state = 0
     """, (source_type, generation_mode, theme, subfolder))
     
     records = cursor.fetchall()
@@ -116,15 +116,21 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
             elif source_type == 'LocalStorage':
                 full_path = source_path if source_path else f"{local_storage_path}/{sourceIdentifier}"
                 nova.act(
-                    'Click on "+ Create new" button on the right hight corner '
-                    f'Type this path into the file input: {full_path}'
+                    f'Click on "+ Create new" button '
+                    f'Provide file path {full_path} to the file input'
                 )
                 time.sleep(5)
             
             nova.act(
-                'Click on the "Audio Overview" button to generate an AI podcast based on the available sources '
-                'Do not wait for the generation to complete, proceed to the next step immediately'
+                'Wait until the source finishes loading and the "Audio Overview" button is no longer gray/disabled '
+                'The button must be fully active and clickable before proceeding'
             )
+            time.sleep(20)
+            nova.act(
+                'Click on the "Audio Overview" button to open the menu '
+                'Once you see "Generating Audio Overview..." message, the task is complete'
+            )
+            time.sleep(5)
             
             nova.act(
                 'Click on the black fingerprint icon in the top left corner'
@@ -140,6 +146,13 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
             time.sleep(3)
             
         print(f"\n✓ Successfully processed record {record_id}")
+        
+        # Mark record as processed
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("UPDATE podcast_download SET generation_state = 1 WHERE id = ?", (record_id,))
+        conn.commit()
+        conn.close()
         
     except Exception as e:
         print(f"\n✗ Failed to process record {record_id}: {str(e)}")

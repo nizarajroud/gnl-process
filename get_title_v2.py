@@ -43,7 +43,7 @@ if __name__ == "__main__":
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    query = "SELECT id, source_id, source_type, source_parent FROM podcast_download WHERE (podcast_name IS NULL OR podcast_name = '') AND download_state = 0"
+    query = "SELECT id, source_id, source_type, source_parent FROM podcast_download WHERE (podcast_name IS NULL OR podcast_name = '') AND generation_state = 0"
     params = []
     
     if source_type:

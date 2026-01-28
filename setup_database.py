@@ -14,6 +14,7 @@ cursor.execute('''
         podcast_name TEXT,
         podcast_theme TEXT,
         podcast_subfolder TEXT,
+        generation_state INTEGER,
         download_state INTEGER
     )
 ''')
