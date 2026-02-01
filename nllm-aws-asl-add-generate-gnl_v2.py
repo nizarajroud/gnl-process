@@ -121,14 +121,13 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                 )
                 time.sleep(5)
             
+            time.sleep(30)
             nova.act(
-                'Wait until the source finishes loading and the "Audio Overview" button is no longer gray/disabled '
-                'The button must be fully active and clickable before proceeding'
-            )
-            time.sleep(20)
-            nova.act(
-                'Click on the "Audio Overview" button to open the menu '
-                'Once you see "Generating Audio Overview..." message, the task is complete'
+                'Wait until the source finishes loading '
+                'In the Notebook guide section on the right side, find the Audio Overview card '
+                'Click directly on the "Audio Overview" button inside that card '
+                'Wait until you see "Generating..." text or a progress indicator appear '
+                'The task is complete once the generation process has visibly started'
             )
             time.sleep(5)
             

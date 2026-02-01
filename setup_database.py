@@ -15,7 +15,9 @@ cursor.execute('''
         podcast_theme TEXT,
         podcast_subfolder TEXT,
         generation_state INTEGER,
-        download_state INTEGER
+        download_state INTEGER,
+        conversion_state INTEGER,
+        combination_state INTEGER
     )
 ''')
 
