@@ -64,6 +64,11 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, out
             sys.exit(1)
         
         mp3_files.sort()
+        
+        # Ensure output file has .mp3 extension
+        if not output_file.endswith('.mp3'):
+            output_file = f"{output_file}.mp3"
+        
         output_path = full_path / output_file
         
         # Use ffmpeg to concatenate

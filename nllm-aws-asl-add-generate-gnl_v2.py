@@ -122,8 +122,11 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                 time.sleep(5)
             
             time.sleep(30)
+            
+            # Wait for page to fully stabilize before attempting audio generation
+            time.sleep(10)
+            
             nova.act(
-                'Wait until the source finishes loading '
                 'In the Notebook guide section on the right side, find the Audio Overview card '
                 'Click directly on the "Audio Overview" button inside that card '
                 'Wait until you see "Generating..." text or a progress indicator appear '
