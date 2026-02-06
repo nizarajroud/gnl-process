@@ -41,7 +41,7 @@ def main(sourceIdentifier: str, title: str, content_type: str, user_data_dir: st
             choice = fzf.prompt(options, "--prompt='Select browser mode: '")
             headless = choice and "Headless" in choice[0]
 
-    local_storage_path = os.getenv('LOCAL_STORAGE_PATH', '')
+    local_storage_path = os.getenv('GNL_PROCESSING_PATH', '')
     
     with NovaAct(
         starting_page="http://notebooklm.google.com/",

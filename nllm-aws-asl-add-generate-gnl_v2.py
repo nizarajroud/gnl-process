@@ -71,7 +71,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
             choice = fzf.prompt(options, "--prompt='Select browser mode: '")
             headless = choice and "Headless" in choice[0]
 
-    local_storage_path = os.getenv('LOCAL_STORAGE_PATH', '')
+    local_storage_path = os.getenv('GNL_PROCESSING_PATH', '')
     
     # Process only the first record
     if not records:

@@ -102,8 +102,12 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                 print("Download timeout reached")
                 sys.exit(1)
 
-            dest_dir = os.getenv('GNL_BACKLOG', '/home/nizar')
-            dest_dir = os.path.join(dest_dir, theme, subfolder)
+            # Use Audio-Parts folder in GNL_PROCESSING_PATH
+            gnl_processing_path = os.getenv('GNL_PROCESSING_PATH')
+            # Extract parent folder from podcast_name (format: p1, p2, etc.)
+            # The parent folder is the main PDF folder name
+            parent_folder = subfolder  # subfolder contains the PDF name
+            dest_dir = os.path.join(gnl_processing_path, parent_folder, "Audio-Parts")
             os.makedirs(dest_dir, exist_ok=True)
             
             playwright_folders = glob.glob("/tmp/playwright-artifacts*")

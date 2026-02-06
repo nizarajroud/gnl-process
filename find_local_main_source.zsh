@@ -5,7 +5,7 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
-LOCAL_STORAGE_PATH=$(grep "^LOCAL_STORAGE_PATH=" /home/nizar/workspace/gnl-process/.env | cut -d'=' -f2)
+LOCAL_STORAGE_PATH=$(grep "^GNL_PROCESSING_PATH=" /home/nizar/workspace/gnl-process/.env | cut -d'=' -f2)
 SEARCH_PATH="$LOCAL_STORAGE_PATH/../../courses"
 
 FILE_PATH=$(find "$SEARCH_PATH" -name "$1" -type f 2>/dev/null | head -1)

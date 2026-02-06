@@ -6,7 +6,7 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
-LOCAL_STORAGE_PATH=$(grep "^LOCAL_STORAGE_PATH=" /home/nizar/workspace/gnl-process/.env | cut -d'=' -f2)
+LOCAL_STORAGE_PATH=$(grep "^GNL_PROCESSING_PATH=" /home/nizar/workspace/gnl-process/.env | cut -d'=' -f2)
 GENERATION_MODE=${2:-single}
 GENERATION_MODE=$(echo "$GENERATION_MODE" | tr '[:upper:]' '[:lower:]')
 SOURCE_TYPE=${3:-""}

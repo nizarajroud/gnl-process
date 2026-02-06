@@ -25,14 +25,25 @@ def split_pdf(pdf_path: str, pages_per_split: int, source_type: str = "LocalStor
     if not pdf_file.exists():
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
     
+    gnl_processing_path = os.getenv("GNL_PROCESSING_PATH")
     pdf_name = pdf_file.stem
-    output_dir = pdf_file.parent / pdf_name
     
-    # Remove existing output directory if it exists
-    if output_dir.exists():
-        shutil.rmtree(output_dir)
+    # Create main folder
+    main_folder = Path(gnl_processing_path) / pdf_name
+    if main_folder.exists():
+        shutil.rmtree(main_folder)
+    main_folder.mkdir(exist_ok=True)
     
-    output_dir.mkdir(exist_ok=True)
+    # Copy original PDF to main folder
+    shutil.copy2(pdf_file, main_folder / pdf_file.name)
+    
+    # Create subfolders
+    pdf_parts_dir = main_folder / "PDF-Parts"
+    audio_parts_dir = main_folder / "Audio-Parts"
+    pdf_parts_dir.mkdir(exist_ok=True)
+    audio_parts_dir.mkdir(exist_ok=True)
+    
+    output_dir = pdf_parts_dir
     
     reader = PdfReader(pdf_file)
     total_pages = len(reader.pages)

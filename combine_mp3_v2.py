@@ -42,18 +42,28 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, out
     
     print(f"Found {len(records)} records to combine")
     
-    base_path = os.getenv('GNL_BACKLOG')
-    if not base_path:
+    gnl_processing_path = os.getenv('GNL_PROCESSING_PATH')
+    if not gnl_processing_path:
+        print("Error: GNL_PROCESSING_PATH environment variable not set")
+        sys.exit(1)
+    
+    gnl_backlog = os.getenv('GNL_BACKLOG')
+    if not gnl_backlog:
         print("Error: GNL_BACKLOG environment variable not set")
         sys.exit(1)
     
-    full_path = Path(base_path) / theme / subfolder
+    # Read from Audio-Parts folder
+    audio_parts_path = Path(gnl_processing_path) / subfolder / "Audio-Parts"
+    
+    # Output to GNL_BACKLOG
+    output_dir = Path(gnl_backlog) / theme / subfolder
+    output_dir.mkdir(parents=True, exist_ok=True)
     
     try:
         # Create list of files to combine
         mp3_files = []
         for record_id, podcast_name in records:
-            mp3_file = full_path / f"{podcast_name}.mp3"
+            mp3_file = audio_parts_path / f"{podcast_name}.mp3"
             if mp3_file.exists():
                 mp3_files.append(mp3_file)
             else:
@@ -69,7 +79,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, out
         if not output_file.endswith('.mp3'):
             output_file = f"{output_file}.mp3"
         
-        output_path = full_path / output_file
+        output_path = output_dir / output_file
         
         # Use ffmpeg to concatenate
         list_file = "concat_list.txt"
@@ -82,8 +92,8 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, out
         os.remove(list_file)
         print(f"Combined {len(mp3_files)} files into {output_path}")
         
-        # Move input files to zz folder
-        zz_folder = full_path / "zz"
+        # Move input files to zz folder in Audio-Parts
+        zz_folder = audio_parts_path / "zz"
         zz_folder.mkdir(exist_ok=True)
         for file in mp3_files:
             file.rename(zz_folder / file.name)

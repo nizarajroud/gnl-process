@@ -47,12 +47,14 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str):
     print(f"\nProcessing record {record_id}: {podcast_name}")
     print(f"Remaining records: {len(records) - 1}")
     
-    gnl_backlog = os.getenv('GNL_BACKLOG')
-    if not gnl_backlog:
-        raise ValueError("GNL_BACKLOG not found in .env file")
+    gnl_processing_path = os.getenv('GNL_PROCESSING_PATH')
+    if not gnl_processing_path:
+        raise ValueError("GNL_PROCESSING_PATH not found in .env file")
     
     try:
-        input_file = Path(gnl_backlog) / theme / subfolder / f"{podcast_name}.m4a"
+        # Use Audio-Parts folder
+        audio_parts_dir = Path(gnl_processing_path) / subfolder / "Audio-Parts"
+        input_file = audio_parts_dir / f"{podcast_name}.m4a"
         output_file = input_file.with_suffix('.mp3')
         
         if not input_file.exists():
