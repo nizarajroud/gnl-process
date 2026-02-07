@@ -38,7 +38,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
         WHERE source_type = ? 
         AND generation_mode = ? 
         AND podcast_theme = ? 
-        AND podcast_subfolder = ? 
+        AND podcast_subtheme = ? 
         AND generation_state = 0
     """, (source_type, generation_mode, theme, subfolder))
     
@@ -86,12 +86,19 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
     GNL_NAME_VAR = podcast_name
     
     try:
+        # For LocalStorage, allow file uploads from the specific file's directory
+        security_opts = None
+        if source_type == 'LocalStorage':
+            full_path = source_path if source_path else f"{local_storage_path}/{sourceIdentifier}"
+            file_dir = os.path.dirname(full_path)
+            security_opts = SecurityOptions(allowed_file_upload_paths=[f'{file_dir}/*'])
+        
         with NovaAct(
             starting_page="http://notebooklm.google.com/",
             user_data_dir=user_data_dir,
             headless=headless,
             clone_user_data_dir=False,
-            security_options=SecurityOptions(allowed_file_upload_paths=[f'{local_storage_path}/*']) if source_type == 'LocalStorage' else None,
+            security_options=security_opts,
         ) as nova:
             time.sleep(3)
             

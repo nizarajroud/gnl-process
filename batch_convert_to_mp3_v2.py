@@ -29,7 +29,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str):
         WHERE source_type = ? 
         AND generation_mode = ? 
         AND podcast_theme = ? 
-        AND podcast_subfolder = ? 
+        AND podcast_subtheme = ? 
         AND download_state = 1
         AND conversion_state = 0
     """, (source_type, generation_mode, theme, subfolder))

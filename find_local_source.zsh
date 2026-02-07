@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 
 if [ -z "$1" ]; then
-    echo "Usage: $0 <filename> [generation_mode] [source_type] [podcast_theme] [podcast_subfolder]"
+    echo "Usage: $0 <filename> [generation_mode] [source_type] [podcast_theme] [podcast_subtheme]"
     echo "generation_mode: single (default) or bulk"
     exit 1
 fi

@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def split_pdf(pdf_path: str, pages_per_split: int, name: str, source_type: str = "LocalStorage", podcast_theme: str = "", podcast_subfolder: str = ""):
+def split_pdf(pdf_path: str, pages_per_split: int, name: str, source_type: str = "LocalStorage", podcast_theme: str = "", podcast_subtheme: str = ""):
     """Split PDF into chunks of X pages.
     
     Args:
@@ -20,7 +20,7 @@ def split_pdf(pdf_path: str, pages_per_split: int, name: str, source_type: str =
         name: Name for the inner folder
         source_type: Source type for JSON output
         podcast_theme: Podcast theme for JSON output
-        podcast_subfolder: Podcast subfolder for JSON output
+        podcast_subtheme: Podcast subfolder for JSON output
     """
     pdf_file = Path(pdf_path)
     if not pdf_file.exists():
@@ -28,10 +28,10 @@ def split_pdf(pdf_path: str, pages_per_split: int, name: str, source_type: str =
     
     gnl_processing_path = os.getenv("GNL_PROCESSING_PATH")
     
-    # Create podcast_subfolder
-    subfolder_dir = Path(gnl_processing_path) / podcast_subfolder
+    # Create podcast_subtheme
+    subfolder_dir = Path(gnl_processing_path) / podcast_subtheme
     
-    # Create name folder inside podcast_subfolder
+    # Create name folder inside podcast_subtheme
     name_folder = subfolder_dir / name
     if name_folder.exists():
         shutil.rmtree(name_folder)
@@ -67,12 +67,12 @@ def split_pdf(pdf_path: str, pages_per_split: int, name: str, source_type: str =
         
         files_list.append({
             "fullPath": str(output_file),
-            "parentDir": podcast_subfolder,
+            "parentDir": name,
             "fileName": f"p{part_num}.pdf",
             "downloadState": False,
             "sourceType": source_type,
             "podcastTheme": podcast_theme,
-            "podcastSubfolder": podcast_subfolder
+            "podcastSubfolder": podcast_subtheme
         })
     
     # Close reader to release file handle

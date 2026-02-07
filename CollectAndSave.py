@@ -26,8 +26,8 @@ def collect_and_save(json_input):
     for file in files:
         cursor.execute('''
             INSERT INTO podcast_download 
-            (source_id, source_type, source_path, source_parent, generation_mode, 
-             podcast_name, podcast_theme, podcast_subfolder, generation_state, download_state, 
+            (source_id, source_type, source_path, parent_file, generation_mode, 
+             podcast_name, podcast_theme, podcast_subtheme, generation_state, download_state, 
              conversion_state, combination_state)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
