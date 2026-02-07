@@ -55,15 +55,18 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str):
         # Use Audio-Parts folder
         audio_parts_dir = Path(gnl_processing_path) / subfolder / "Audio-Parts"
         input_file = audio_parts_dir / f"{podcast_name}.m4a"
-        output_file = input_file.with_suffix('.mp3')
+        output_file = audio_parts_dir / f"{podcast_name}.mp3"
         
-        if not input_file.exists():
+        # Check if already converted
+        if output_file.exists() and not input_file.exists():
+            print(f"Already converted: {output_file}")
+        elif not input_file.exists():
             print(f"Error: File not found: {input_file}")
             sys.exit(1)
-        
-        subprocess.run(['ffmpeg', '-i', str(input_file), str(output_file)], check=True)
-        os.remove(input_file)
-        print(f"Converted and removed: {input_file} -> {output_file}")
+        else:
+            subprocess.run(['ffmpeg', '-i', str(input_file), str(output_file)], check=True)
+            os.remove(input_file)
+            print(f"Converted and removed: {input_file} -> {output_file}")
         
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()

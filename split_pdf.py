@@ -11,12 +11,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def split_pdf(pdf_path: str, pages_per_split: int, source_type: str = "LocalStorage", podcast_theme: str = "", podcast_subfolder: str = ""):
+def split_pdf(pdf_path: str, pages_per_split: int, name: str, source_type: str = "LocalStorage", podcast_theme: str = "", podcast_subfolder: str = ""):
     """Split PDF into chunks of X pages.
     
     Args:
         pdf_path: Full absolute path to the PDF file including extension
         pages_per_split: Number of pages per split file
+        name: Name for the inner folder
         source_type: Source type for JSON output
         podcast_theme: Podcast theme for JSON output
         podcast_subfolder: Podcast subfolder for JSON output
@@ -26,20 +27,22 @@ def split_pdf(pdf_path: str, pages_per_split: int, source_type: str = "LocalStor
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
     
     gnl_processing_path = os.getenv("GNL_PROCESSING_PATH")
-    pdf_name = pdf_file.stem
     
-    # Create main folder
-    main_folder = Path(gnl_processing_path) / pdf_name
-    if main_folder.exists():
-        shutil.rmtree(main_folder)
-    main_folder.mkdir(exist_ok=True)
+    # Create podcast_subfolder
+    subfolder_dir = Path(gnl_processing_path) / podcast_subfolder
     
-    # Copy original PDF to main folder
-    shutil.copy2(pdf_file, main_folder / pdf_file.name)
+    # Create name folder inside podcast_subfolder
+    name_folder = subfolder_dir / name
+    if name_folder.exists():
+        shutil.rmtree(name_folder)
+    name_folder.mkdir(parents=True, exist_ok=True)
     
-    # Create subfolders
-    pdf_parts_dir = main_folder / "PDF-Parts"
-    audio_parts_dir = main_folder / "Audio-Parts"
+    # Copy original PDF to name folder
+    shutil.copy2(pdf_file, name_folder / pdf_file.name)
+    
+    # Create subfolders inside name folder
+    pdf_parts_dir = name_folder / "PDF-Parts"
+    audio_parts_dir = name_folder / "Audio-Parts"
     pdf_parts_dir.mkdir(exist_ok=True)
     audio_parts_dir.mkdir(exist_ok=True)
     
@@ -64,7 +67,7 @@ def split_pdf(pdf_path: str, pages_per_split: int, source_type: str = "LocalStor
         
         files_list.append({
             "fullPath": str(output_file),
-            "parentDir": pdf_name,
+            "parentDir": podcast_subfolder,
             "fileName": f"p{part_num}.pdf",
             "downloadState": False,
             "sourceType": source_type,
