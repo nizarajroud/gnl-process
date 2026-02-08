@@ -52,6 +52,10 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, out
         print("Error: GNL_BACKLOG environment variable not set")
         sys.exit(1)
     
+    # Get speed setting
+    default_speed = float(os.getenv('DEFAULT_SPEED', '1'))
+    print(f"Using speed: {default_speed}x")
+    
     # Read from Audio-Parts folder
     audio_parts_path = Path(gnl_processing_path) / subfolder / "Audio-Parts"
     
@@ -81,6 +85,20 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, out
         
         output_path = output_dir / output_file
         
+        # Apply speed adjustment if needed
+        if default_speed != 1:
+            print(f"Adjusting speed to {default_speed}x before combining...")
+            adjusted_files = []
+            for file in mp3_files:
+                adjusted_file = audio_parts_path / f"adjusted_{file.name}"
+                subprocess.run([
+                    "ffmpeg", "-i", str(file), 
+                    "-filter:a", f"atempo={default_speed}", 
+                    str(adjusted_file)
+                ], check=True)
+                adjusted_files.append(adjusted_file)
+            mp3_files = adjusted_files
+        
         # Use ffmpeg to concatenate
         list_file = "concat_list.txt"
         with open(list_file, "w") as f:
@@ -92,11 +110,18 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, out
         os.remove(list_file)
         print(f"Combined {len(mp3_files)} files into {output_path}")
         
+        # Clean up adjusted files if speed was changed
+        if default_speed != 1:
+            for file in mp3_files:
+                if file.name.startswith("adjusted_"):
+                    file.unlink()
+        
         # Move input files to zz folder in Audio-Parts
         zz_folder = audio_parts_path / "zz"
         zz_folder.mkdir(exist_ok=True)
         for file in mp3_files:
-            file.rename(zz_folder / file.name)
+            if not file.name.startswith("adjusted_"):
+                file.rename(zz_folder / file.name)
         print(f"Moved {len(mp3_files)} files to {zz_folder}")
         
         # Mark all records as combined

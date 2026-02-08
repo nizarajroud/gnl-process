@@ -26,13 +26,7 @@ def main(title: str, user_data_dir: str = None, suffix: str = None, subsuffix: s
     
     if headless is None:
         headless_env = os.getenv('HEADLESS')
-        if headless_env == '1':
-            headless = True
-        else:
-            fzf = FzfPrompt()
-            options = ["Visible (you can see the browser)", "Headless (background, faster)"]
-            choice = fzf.prompt(options, "--prompt='Select browser mode: '")
-            headless = choice and "Headless" in choice[0]
+        headless = headless_env == '1'
 
     with NovaAct(
         starting_page=os.getenv('NOTEBOOKLM_URL', 'http://notebooklm.google.com/'),

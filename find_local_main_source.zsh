@@ -6,9 +6,9 @@ if [ -z "$1" ]; then
 fi
 
 LOCAL_STORAGE_PATH=$(grep "^GNL_PROCESSING_PATH=" /home/nizar/workspace/gnl-process/.env | cut -d'=' -f2)
-SEARCH_PATH="$LOCAL_STORAGE_PATH/../../courses"
+SEARCH_PATH="$LOCAL_STORAGE_PATH/../../courses:$LOCAL_STORAGE_PATH/../../exam"
 
-FILE_PATH=$(find "$SEARCH_PATH" -name "$1" -type f 2>/dev/null | head -1)
+FILE_PATH=$(find ${(s.:.)SEARCH_PATH} -name "$1" -type f 2>/dev/null | head -1)
 
 if [ -n "$FILE_PATH" ]; then
     PARENT_DIR=$(dirname "$FILE_PATH")

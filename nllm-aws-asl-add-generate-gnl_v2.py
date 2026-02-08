@@ -63,13 +63,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
     
     if headless is None:
         headless_env = os.getenv('HEADLESS')
-        if headless_env == '1':
-            headless = True
-        else:
-            fzf = FzfPrompt()
-            options = ["Visible (you can see the browser)", "Headless (background, faster)"]
-            choice = fzf.prompt(options, "--prompt='Select browser mode: '")
-            headless = choice and "Headless" in choice[0]
+        headless = headless_env == '1'
 
     local_storage_path = os.getenv('GNL_PROCESSING_PATH', '')
     
@@ -88,6 +82,8 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
     try:
         # For LocalStorage, allow file uploads from the specific file's directory
         security_opts = None
+        upload_success = False
+        
         if source_type == 'LocalStorage':
             full_path = source_path if source_path else f"{local_storage_path}/{sourceIdentifier}"
             file_dir = os.path.dirname(full_path)
@@ -111,6 +107,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                     'Click on "insert" button '
                     'Wait until the source finishes loading'
                 )
+                upload_success = True
             elif source_type == 'GoogleDrive':
                 nova.act(
                     'Click on "+ Create new" button on the right hight corner '
@@ -120,38 +117,77 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                     'Click on "insert" button '
                     'Wait until the source finishes loading'
                 )
+                upload_success = True
             elif source_type == 'LocalStorage':
                 full_path = source_path if source_path else f"{local_storage_path}/{sourceIdentifier}"
-                nova.act(
-                    f'Click on "+ Create new" button '
-                    f'Use agentType to provide the file path {full_path} to the hidden file input element'
-                )
-                time.sleep(5)
+                try:
+                    nova.act(
+                        f'Click on "+ Create new" button '
+                        f'Use agentType to provide the file path {full_path} to the hidden file input element'
+                    )
+                    time.sleep(5)
+                    
+                    # Verify upload by checking for source in the page
+                    print("Verifying upload...")
+                    result = nova.act('Check if a source file is visible in the notebook. Return "yes" if source is loaded, "no" if not.')
+                    print(f"Verification result: {result}")
+                    
+                    if result and 'yes' in str(result).lower():
+                        upload_success = True
+                        print(f"✓ Upload verified: {full_path}")
+                    else:
+                        print(f"⚠ Upload verification failed for {full_path}")
+                        print(f"Result was: {result}")
+                        upload_success = False
+                except Exception as upload_error:
+                    print(f"⚠ Upload failed: {str(upload_error)}")
+                    upload_success = False
             
+            if not upload_success:
+                print("ERROR: Upload was not successful, raising exception")
+                raise Exception("Source upload failed - cannot proceed with audio generation")
+            
+            print("✓ Upload successful, proceeding to audio generation")
+            print("Waiting for source to fully load...")
             time.sleep(30)
             
-            # Wait for page to fully stabilize before attempting audio generation
+            print("Additional stabilization wait...")
             time.sleep(10)
             
-            nova.act(
-                'In the Notebook guide section on the right side, find the Audio Overview card '
-                'Click directly on the "Audio Overview" button inside that card '
-                'Wait until you see "Generating..." text or a progress indicator appear '
-                'The task is complete once the generation process has visibly started'
-            )
+            print("Starting audio generation...")
+            try:
+                nova.act(
+                    'In the Notebook guide section on the right side, find the Audio Overview card '
+                    'Click directly on the "Audio Overview" button inside that card '
+                    'Wait until you see "Generating..." text or a progress indicator appear '
+                    'The task is complete once the generation process has visibly started'
+                )
+                print("✓ Audio generation started")
+            except Exception as audio_error:
+                print(f"⚠ Audio generation failed: {str(audio_error)}")
+                raise
+            
+            print("Waiting after audio generation...")
             time.sleep(5)
             
+            print("Navigating back to notebooks list...")
             nova.act(
                 'Click on the black fingerprint icon in the top left corner'
             )
+            
+            print("Opening edit menu...")
             nova.act(
                 'Click on the kebab menu (three dots) of the first notebook in the list '
                 'Click on "Edit title" option'
-            )        
+            )
+            
+            print(f"Renaming to: {GNL_NAME_VAR}")
             nova.act(
                 f'Replace the notebook title with {GNL_NAME_VAR} '
                 'Click on "Save" button'
-            )               
+            )
+            
+            print("Waiting after rename...")
             time.sleep(3)
             
         print(f"\n✓ Successfully processed record {record_id}")

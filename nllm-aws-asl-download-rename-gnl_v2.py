@@ -56,13 +56,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
     
     if headless is None:
         headless_env = os.getenv('HEADLESS')
-        if headless_env == '1':
-            headless = True
-        else:
-            fzf = FzfPrompt()
-            options = ["Visible (you can see the browser)", "Headless (background, faster)"]
-            choice = fzf.prompt(options, "--prompt='Select browser mode: '")
-            headless = choice and "Headless" in choice[0]
+        headless = headless_env == '1'
 
     record_id, podcast_name = records[0]
     print(f"\nProcessing record {record_id}: {podcast_name}")

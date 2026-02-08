@@ -33,13 +33,7 @@ def main(sourceIdentifier: str, title: str, content_type: str, user_data_dir: st
     
     if headless is None:
         headless_env = os.getenv('HEADLESS')
-        if headless_env == '1':
-            headless = True
-        else:
-            fzf = FzfPrompt()
-            options = ["Visible (you can see the browser)", "Headless (background, faster)"]
-            choice = fzf.prompt(options, "--prompt='Select browser mode: '")
-            headless = choice and "Headless" in choice[0]
+        headless = headless_env == '1'
 
     local_storage_path = os.getenv('GNL_PROCESSING_PATH', '')
     
