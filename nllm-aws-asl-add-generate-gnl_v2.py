@@ -124,7 +124,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                 full_path = source_path if source_path else f"{local_storage_path}/{sourceIdentifier}"
                 nova.act(
                     f'Click on "+ Create new" button '
-                    f'Provide file path {full_path} to the file input'
+                    f'Use agentType to provide the file path {full_path} to the hidden file input element'
                 )
                 time.sleep(5)
             
