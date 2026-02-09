@@ -139,18 +139,44 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                     )
                     time.sleep(5)
                     
-                    # Verify upload by checking for source in the page
-                    print("Verifying upload...")
-                    result = nova.act('Check if a source file is visible in the notebook. Return "yes" if source is loaded, "no" if not.')
-                    print(f"Verification result: {result}")
+                    # Wait for upload to complete with retry logic
+                    print("Waiting for upload to complete...")
+                    upload_success = False
+                    max_attempts = 15
+                    attempt = 0
                     
-                    if result and 'yes' in str(result).lower():
-                        upload_success = True
-                        print(f"✓ Upload verified: {full_path}")
-                    else:
-                        print(f"⚠ Upload verification failed for {full_path}")
-                        print(f"Result was: {result}")
-                        upload_success = False
+                    while not upload_success and attempt < max_attempts:
+                        attempt += 1
+                        print(f"Attempt {attempt}/{max_attempts}: Checking if upload is complete...")
+                        
+                        try:
+                            result = nova.act_get(
+                                'Check if a source file is visible in the notebook. '
+                                'If you see a source file loaded, return "yes". '
+                                'If no source is visible yet, return "no". '
+                                'Do NOT click anything, just observe and return only one word: "yes" or "no".'
+                            )
+                            
+                            print(f"Nova Act returned: {result.response}")
+                            
+                            if result.response and 'yes' in result.response.lower():
+                                upload_success = True
+                                print(f"✓ Upload verified: {full_path}")
+                                break
+                            else:
+                                print(f"Upload still in progress...")
+                                time.sleep(3)
+                                
+                        except Exception as check_error:
+                            if 'ActExceededMaxStepsError' in str(type(check_error).__name__):
+                                print(f"Max steps reached, retrying...")
+                                time.sleep(3)
+                            else:
+                                raise
+                    
+                    if not upload_success:
+                        print(f"⚠ Upload verification failed after {max_attempts} attempts")
+                        
                 except Exception as upload_error:
                     print(f"⚠ Upload failed: {str(upload_error)}")
                     upload_success = False
@@ -160,11 +186,6 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                 raise Exception("Source upload failed - cannot proceed with audio generation")
             
             print("✓ Upload successful, proceeding to audio generation")
-            print("Waiting for source to fully load...")
-            time.sleep(30)
-            
-            print("Additional stabilization wait...")
-            time.sleep(10)
             
             print("Starting audio generation...")
             try:

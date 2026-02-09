@@ -87,9 +87,46 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                 f'Click on the notebook named <{podcast_name}> in the list'
             )
             
+            time.sleep(3)
+            
+            # First check if audio is already complete
+            print("Checking initial audio generation status...")
+            try:
+                initial_check = nova.act_get(
+                    'Look at the Studio section on the right side of the page. '
+                    'Scroll down if needed to see the lower part of the Studio section where generated items appear. '
+                    'In that lower section, check if there is a generated audio item with a play button and a kebab menu (three dots) on the right side '
+                    'If you see "Generating Audio Overview..." with "Come back in a few minutes", return "generating". '
+                    'If you see a generated audio item with a play button and a kebab menu (three dots) on the right side, return "complete". '
+                    'If there is neither generated audio item with a play button and a kebab menu nor "Generating Audio Overview..." with "Come back in a few minutes" , return "missing". '
+                    'IMPORTANT: Do NOT click on the "Audio Overview" button at the top. Only observe the generated items section below. '
+                    'Return only one word: "generating", "complete", or "missing".'
+                )
+                
+                print(f"Initial check returned: {initial_check.response}")
+                
+                if initial_check.response and 'complete' in initial_check.response.lower():
+                    print("✓ Audio already generated!")
+                    generation_complete = True
+                elif initial_check.response and 'missing' in initial_check.response.lower():
+                    print("✗ No audio overview found - generation may not have started")
+                    conn = sqlite3.connect(db_path)
+                    cursor = conn.cursor()
+                    cursor.execute("UPDATE podcast_download SET generation_state = 0 WHERE id = ?", (record_id,))
+                    conn.commit()
+                    conn.close()
+                    raise Exception("Audio overview generation not found")
+                else:
+                    generation_complete = False
+            except Exception as e:
+                if 'ActError' in str(type(e).__name__) or 'ContentDecodingError' in str(e):
+                    print(f"Initial check failed with error, assuming not complete: {e}")
+                    generation_complete = False
+                else:
+                    raise
+            
             print("Waiting for audio generation to complete...")
-            generation_complete = False
-            max_attempts = 15
+            max_attempts = 25
             attempt = 0
             
             while not generation_complete and attempt < max_attempts:
@@ -102,12 +139,14 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                     time.sleep(3)
                     
                     result = nova.act_get(
-                        'Look in the Studio section (the lower half of the page with generated items). '
-                        'Check the audio overview item in that section. '
-                        'If you see "Generating Audio Overview..." message, return "generating". '
-                        'If you see a completed audio overview item with a kebab menu (More button) visible, return "complete". '
-                        'If there is no audio overview item at all, return "missing". '
-                        'Do NOT click anything, just observe and return only one word: "generating", "complete", or "missing".'
+                        'Look at the Studio section on the right side of the page. '
+                        'Scroll down if needed to see the lower part of the Studio section where generated items appear. '
+                        'In that lower section, check if there is a generated audio item with a play button and a kebab menu (three dots) on the right side. '
+                        'If you see "Generating Audio Overview..." with "Come back in a few minutes", return "generating". '
+                        'If you see a generated audio item with a play button and a kebab menu (three dots) on the right side, return "complete". '
+                        'If there is neither generated audio item with a play button and a kebab menu nor "Generating Audio Overview..." with "Come back in a few minutes" , return "missing". '
+                        'IMPORTANT: Do NOT click on the "Audio Overview" button at the top. Only observe the generated items section below. '
+                        'Return only one word: "generating", "complete", or "missing".'
                     )
                     
                     print(f"Nova Act returned: {result.response}")
@@ -127,6 +166,9 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                     if 'ActExceededMaxStepsError' in str(type(e).__name__):
                         print(f"Max steps reached, waiting 1 minute before retry...")
                         time.sleep(60)  # Wait 1 minute
+                    elif 'ActError' in str(type(e).__name__) or 'ContentDecodingError' in str(e):
+                        print(f"Check failed with error, waiting 1 minute before retry: {e}")
+                        time.sleep(60)
                     else:
                         raise
             
@@ -136,8 +178,8 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
             time.sleep(3)
             
             nova.act(
-                'In the Studio section, locate the audio overview item. '
-                'Find and click the kebab menu (three vertical dots or "More" button) on the right side of the audio overview item. '
+                'In the lower half of the Studio section, locate the generated podcast item. '
+                'Find and click the kebab menu (three vertical dots or "More" button) on the right side of the podcast item. '
                 'Then select the Download option from the menu'
             ) 
             
