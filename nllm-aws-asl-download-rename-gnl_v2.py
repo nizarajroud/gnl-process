@@ -30,7 +30,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
     cursor = conn.cursor()
     
     cursor.execute("""
-        SELECT id, podcast_name 
+        SELECT id, podcast_name, parent_file 
         FROM podcast_download 
         WHERE source_type = ? 
         AND generation_mode = ? 
@@ -58,7 +58,19 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
         headless_env = os.getenv('HEADLESS')
         headless = headless_env == '1'
 
-    record_id, podcast_name = records[0]
+    record_id, podcast_name, parent_file = records[0]
+    
+    # Check if already downloaded
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT download_state FROM podcast_download WHERE id = ?", (record_id,))
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result and result[0] == 1:
+        print(f"Record {record_id} already downloaded, skipping")
+        sys.exit(0)
+    
     print(f"\nProcessing record {record_id}: {podcast_name}")
     print(f"Remaining records: {len(records) - 1}")
     
@@ -72,10 +84,60 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
             time.sleep(3)
      
             nova.act(
-                f'Click on the notebook named <{podcast_name}> in the list '
-                'Scroll down to view the second half of the Studio section. '
-                'Then locate the kebab menu (three vertical dots) on the right side of the first audio overview item in that section. '
-                'Click only on the three dots icon, NOT on the audio overview card itself. '
+                f'Click on the notebook named <{podcast_name}> in the list'
+            )
+            
+            print("Waiting for audio generation to complete...")
+            generation_complete = False
+            max_attempts = 15
+            attempt = 0
+            
+            while not generation_complete and attempt < max_attempts:
+                attempt += 1
+                print(f"Attempt {attempt}/{max_attempts}: Checking if generation is complete...")
+                
+                try:
+                    # Refresh the page to get latest status
+                    nova.page.reload()
+                    time.sleep(3)
+                    
+                    result = nova.act_get(
+                        'Look in the Studio section (the lower half of the page with generated items). '
+                        'Check the audio overview item in that section. '
+                        'If you see "Generating Audio Overview..." message, return "generating". '
+                        'If you see a completed audio overview item with a kebab menu (More button) visible, return "complete". '
+                        'If there is no audio overview item at all, return "missing". '
+                        'Do NOT click anything, just observe and return only one word: "generating", "complete", or "missing".'
+                    )
+                    
+                    print(f"Nova Act returned: {result.response}")
+                    
+                    if result.response and 'missing' in result.response.lower():
+                        print("✗ No audio overview found - generation may not have started")
+                        raise Exception("Audio overview generation not found")
+                    elif result.response and 'complete' in result.response.lower():
+                        generation_complete = True
+                        print("✓ Audio generation complete!")
+                        break
+                    else:
+                        print(f"Still generating... waiting 1 minute before next check")
+                        time.sleep(60)  # Wait 1 minute
+                        
+                except Exception as e:
+                    if 'ActExceededMaxStepsError' in str(type(e).__name__):
+                        print(f"Max steps reached, waiting 1 minute before retry...")
+                        time.sleep(60)  # Wait 1 minute
+                    else:
+                        raise
+            
+            if not generation_complete:
+                print("⚠ Max attempts reached, proceeding anyway...")
+            
+            time.sleep(3)
+            
+            nova.act(
+                'In the Studio section, locate the audio overview item. '
+                'Find and click the kebab menu (three vertical dots or "More" button) on the right side of the audio overview item. '
                 'Then select the Download option from the menu'
             ) 
             
@@ -96,12 +158,9 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                 print("Download timeout reached")
                 sys.exit(1)
 
-            # Use Audio-Parts folder in GNL_PROCESSING_PATH
+            # Use GNL_PROCESSING_PATH/Audio-Parts/podcast_subtheme/name
             gnl_processing_path = os.getenv('GNL_PROCESSING_PATH')
-            # Extract parent folder from podcast_name (format: p1, p2, etc.)
-            # The parent folder is the main PDF folder name
-            parent_folder = subfolder  # subfolder contains the PDF name
-            dest_dir = os.path.join(gnl_processing_path, parent_folder, "Audio-Parts")
+            dest_dir = os.path.join(gnl_processing_path, "Audio-Parts", subfolder, parent_file)
             os.makedirs(dest_dir, exist_ok=True)
             
             playwright_folders = glob.glob("/tmp/playwright-artifacts*")

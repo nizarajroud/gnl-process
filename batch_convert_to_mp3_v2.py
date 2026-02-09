@@ -24,7 +24,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str):
     cursor = conn.cursor()
     
     cursor.execute("""
-        SELECT id, podcast_name 
+        SELECT id, podcast_name, parent_file 
         FROM podcast_download 
         WHERE source_type = ? 
         AND generation_mode = ? 
@@ -43,7 +43,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str):
     
     print(f"Found {len(records)} records to process")
     
-    record_id, podcast_name = records[0]
+    record_id, podcast_name, parent_file = records[0]
     print(f"\nProcessing record {record_id}: {podcast_name}")
     print(f"Remaining records: {len(records) - 1}")
     
@@ -52,8 +52,8 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str):
         raise ValueError("GNL_PROCESSING_PATH not found in .env file")
     
     try:
-        # Use Audio-Parts folder
-        audio_parts_dir = Path(gnl_processing_path) / subfolder / "Audio-Parts"
+        # Use GNL_PROCESSING_PATH/Audio-Parts/subfolder/parent_file
+        audio_parts_dir = Path(gnl_processing_path) / "Audio-Parts" / subfolder / parent_file
         input_file = audio_parts_dir / f"{podcast_name}.m4a"
         output_file = audio_parts_dir / f"{podcast_name}.mp3"
         

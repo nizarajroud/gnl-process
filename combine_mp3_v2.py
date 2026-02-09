@@ -23,7 +23,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, out
     cursor = conn.cursor()
     
     cursor.execute("""
-        SELECT id, podcast_name 
+        SELECT id, podcast_name, parent_file 
         FROM podcast_download 
         WHERE source_type = ? 
         AND generation_mode = ? 
@@ -56,73 +56,79 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, out
     default_speed = float(os.getenv('DEFAULT_SPEED', '1'))
     print(f"Using speed: {default_speed}x")
     
-    # Read from Audio-Parts folder
-    audio_parts_path = Path(gnl_processing_path) / subfolder / "Audio-Parts"
+    # Group records by parent_file
+    parent_files = {}
+    for record_id, podcast_name, parent_file in records:
+        if parent_file not in parent_files:
+            parent_files[parent_file] = []
+        parent_files[parent_file].append((record_id, podcast_name))
+    
+    # Read from Audio-Parts folder - GNL_PROCESSING_PATH/Audio-Parts/subfolder/parent_file
+    audio_parts_base = Path(gnl_processing_path) / "Audio-Parts" / subfolder
     
     # Output to GNL_BACKLOG
     output_dir = Path(gnl_backlog) / theme / subfolder
     output_dir.mkdir(parents=True, exist_ok=True)
     
     try:
-        # Create list of files to combine
-        mp3_files = []
-        for record_id, podcast_name in records:
-            mp3_file = audio_parts_path / f"{podcast_name}.mp3"
-            if mp3_file.exists():
-                mp3_files.append(mp3_file)
-            else:
-                print(f"Warning: File not found: {mp3_file}")
-        
-        if not mp3_files:
-            print("No MP3 files found to combine")
-            sys.exit(1)
-        
-        mp3_files.sort()
-        
-        # Ensure output file has .mp3 extension
-        if not output_file.endswith('.mp3'):
-            output_file = f"{output_file}.mp3"
-        
-        output_path = output_dir / output_file
-        
-        # Apply speed adjustment if needed
-        if default_speed != 1:
-            print(f"Adjusting speed to {default_speed}x before combining...")
-            adjusted_files = []
-            for file in mp3_files:
-                adjusted_file = audio_parts_path / f"adjusted_{file.name}"
-                subprocess.run([
-                    "ffmpeg", "-i", str(file), 
-                    "-filter:a", f"atempo={default_speed}", 
-                    str(adjusted_file)
-                ], check=True)
-                adjusted_files.append(adjusted_file)
-            mp3_files = adjusted_files
-        
-        # Use ffmpeg to concatenate
-        list_file = "concat_list.txt"
-        with open(list_file, "w") as f:
-            for file in mp3_files:
-                print(f"Adding: {file.name}")
-                f.write(f"file '{file.absolute()}'\n")
-        
-        subprocess.run(["ffmpeg", "-f", "concat", "-safe", "0", "-i", list_file, "-c", "copy", str(output_path)], check=True)
-        os.remove(list_file)
-        print(f"Combined {len(mp3_files)} files into {output_path}")
-        
-        # Clean up adjusted files if speed was changed
-        if default_speed != 1:
-            for file in mp3_files:
-                if file.name.startswith("adjusted_"):
-                    file.unlink()
-        
-        # Move input files to zz folder in Audio-Parts
-        zz_folder = audio_parts_path / "zz"
-        zz_folder.mkdir(exist_ok=True)
-        for file in mp3_files:
-            if not file.name.startswith("adjusted_"):
-                file.rename(zz_folder / file.name)
-        print(f"Moved {len(mp3_files)} files to {zz_folder}")
+        # Process each parent_file group
+        for parent_file, file_records in parent_files.items():
+            audio_parts_path = audio_parts_base / parent_file
+            
+            # Create list of files to combine
+            mp3_files = []
+            for record_id, podcast_name in file_records:
+                mp3_file = audio_parts_path / f"{podcast_name}.mp3"
+                if mp3_file.exists():
+                    mp3_files.append(mp3_file)
+                else:
+                    print(f"Warning: File not found: {mp3_file}")
+            
+            if not mp3_files:
+                print(f"No MP3 files found for {parent_file}")
+                continue
+            
+            mp3_files.sort()
+            
+            # Ensure output file has .mp3 extension
+            output_filename = output_file
+            if not output_filename.endswith('.mp3'):
+                output_filename = f"{output_filename}.mp3"
+            
+            output_path = output_dir / output_filename
+            
+            # Apply speed adjustment if needed
+            if default_speed != 1:
+                print(f"Adjusting speed to {default_speed}x before combining...")
+                adjusted_files = []
+                for file in mp3_files:
+                    adjusted_file = audio_parts_path / f"adjusted_{file.name}"
+                    # Ensure directory exists
+                    adjusted_file.parent.mkdir(parents=True, exist_ok=True)
+                    subprocess.run([
+                        "ffmpeg", "-y", "-i", str(file), 
+                        "-filter:a", f"atempo={default_speed}", 
+                        str(adjusted_file)
+                    ], check=True)
+                    adjusted_files.append(adjusted_file)
+                mp3_files = adjusted_files
+            
+            # Use ffmpeg to concatenate
+            list_file = "concat_list.txt"
+            with open(list_file, "w") as f:
+                for file in mp3_files:
+                    print(f"Adding: {file.name}")
+                    f.write(f"file '{file.absolute()}'\n")
+            
+            subprocess.run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_file, "-c", "copy", str(output_path)], check=True)
+            os.remove(list_file)
+            print(f"Combined {len(mp3_files)} files into {output_path}")
+            
+            # Clean up adjusted files if speed was changed
+            if default_speed != 1:
+                for file in mp3_files:
+                    if file.name.startswith("adjusted_"):
+                        file.unlink()
         
         # Mark all records as combined
         conn = sqlite3.connect(db_path)

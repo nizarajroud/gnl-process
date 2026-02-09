@@ -16,6 +16,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str):
         sys.exit(1)
     
     script_path = os.path.join(os.path.dirname(__file__), 'nllm-aws-asl-add-generate-gnl_v2.py')
+    # script_path = os.path.join(os.path.dirname(__file__), 'nllm-aws-asl-add-generate-gnl_v2_playwright.py')
     
     while True:
         conn = sqlite3.connect(db_path)

@@ -73,6 +73,18 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
         sys.exit(0)
     
     record_id, source_id, source_path, podcast_name = records[0]
+    
+    # Check if already generated
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT generation_state FROM podcast_download WHERE id = ?", (record_id,))
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result and result[0] == 1:
+        print(f"Record {record_id} already generated, skipping")
+        sys.exit(0)
+    
     print(f"\nProcessing record {record_id}: {podcast_name}")
     print(f"Remaining records: {len(records) - 1}")
     
@@ -157,10 +169,12 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
             print("Starting audio generation...")
             try:
                 nova.act(
-                    'In the Notebook guide section on the right side, find the Audio Overview card '
-                    'Click directly on the "Audio Overview" button inside that card '
-                    'Wait until you see "Generating..." text or a progress indicator appear '
-                    'The task is complete once the generation process has visibly started'
+                    'In the Notebook guide section on the right side, find the Audio Overview card. '
+                    'Click directly on the "Audio Overview" button inside that card. '
+                    'Wait for and verify that a message appears containing both: '
+                    '1) Text indicating generation is in progress (like "Generating Audio Overview...") '
+                    '2) Text telling the user to wait (like "Come back in a few minutes") '
+                    'Confirm you can see this complete status message before considering the task complete.'
                 )
                 print("✓ Audio generation started")
             except Exception as audio_error:
@@ -183,7 +197,8 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
             
             print(f"Renaming to: {GNL_NAME_VAR}")
             nova.act(
-                f'Replace the notebook title with {GNL_NAME_VAR} '
+                f'Clear the title field completely '
+                f'Type exactly: {GNL_NAME_VAR} '
                 'Click on "Save" button'
             )
             

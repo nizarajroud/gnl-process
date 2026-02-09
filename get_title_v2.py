@@ -62,7 +62,19 @@ if __name__ == "__main__":
     cursor.execute(query, params)
     records = cursor.fetchall()
     
+    if not records:
+        print("No records to process (all have generation_state = 1 or podcast_name set)")
+        conn.close()
+        sys.exit(0)
+    
     for record_id, source_id, source_type, parent_file in records:
+        # Check if podcast_name is already set
+        cursor.execute("SELECT podcast_name FROM podcast_download WHERE id = ?", (record_id,))
+        result = cursor.fetchone()
+        if result and result[0]:
+            print(f"Skipping record {record_id}: podcast_name already set")
+            continue
+        
         title = generate_title(source_id, source_type, parent_file)
         cursor.execute("UPDATE podcast_download SET podcast_name = ? WHERE id = ?", (title, record_id))
         print(f"Updated record {record_id}: {title}")

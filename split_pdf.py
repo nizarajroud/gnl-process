@@ -40,25 +40,9 @@ def split_pdf(pdf_path: str, pages_per_split: int = 0, name: str = "", split_mod
     
     gnl_processing_path = os.getenv("GNL_PROCESSING_PATH")
     
-    # Create podcast_subtheme
-    subfolder_dir = Path(gnl_processing_path) / podcast_subtheme
-    
-    # Create name folder inside podcast_subtheme
-    name_folder = subfolder_dir / name
-    if name_folder.exists():
-        shutil.rmtree(name_folder)
-    name_folder.mkdir(parents=True, exist_ok=True)
-    
-    # Copy original PDF to name folder
-    shutil.copy2(pdf_file, name_folder / pdf_file.name)
-    
-    # Create subfolders inside name folder
-    pdf_parts_dir = name_folder / "PDF-Parts"
-    audio_parts_dir = name_folder / "Audio-Parts"
-    pdf_parts_dir.mkdir(exist_ok=True)
-    audio_parts_dir.mkdir(exist_ok=True)
-    
-    output_dir = pdf_parts_dir
+    # Use GNL_PROCESSING_PATH/PDF-Parts/podcast_subtheme/name
+    output_dir = Path(gnl_processing_path) / "PDF-Parts" / podcast_subtheme / name
+    output_dir.mkdir(parents=True, exist_ok=True)
     
     reader = PdfReader(pdf_file)
     total_pages = len(reader.pages)

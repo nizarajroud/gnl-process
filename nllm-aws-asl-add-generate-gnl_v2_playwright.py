@@ -16,7 +16,7 @@ from playwright.sync_api import sync_playwright
 
 load_dotenv()
 
-def main(source_type: str, generation_mode: str, theme: str, subfolder: str, user_data_dir: str = None, headless: bool = False) -> None:
+def main(source_type: str, generation_mode: str, theme: str, subfolder: str, user_data_dir: str = None, headless: bool = None) -> None:
     generation_mode = generation_mode.lower()
     subfolder = subfolder.lower()
     
@@ -47,24 +47,50 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
     
     print(f"Found {len(records)} records to process")
     
+    # Validate content_type parameter
+    valid_types = os.getenv('VALID_CONTENT_TYPES', 'GoogleDrive,WebAndYoutube,LocalStorage').split(',')
+    if source_type not in valid_types:
+        raise ValueError(f"source_type must be one of: {', '.join(valid_types)}")
+    
     if user_data_dir is None:
         user_data_dir = os.getenv('USER_DATA_DIR')
         if user_data_dir is None:
             raise ValueError("USER_DATA_DIR must be provided either as parameter or in .env file")
     
+    if headless is None:
+        headless_env = os.getenv('HEADLESS')
+        headless = headless_env == '1'
+
     local_storage_path = os.getenv('GNL_PROCESSING_PATH', '')
     
     record_id, source_id, source_path, podcast_name = records[0]
+    
+    # Check if already generated
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT generation_state FROM podcast_download WHERE id = ?", (record_id,))
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result and result[0] == 1:
+        print(f"Record {record_id} already generated, skipping")
+        sys.exit(0)
+    
     print(f"\nProcessing record {record_id}: {podcast_name}")
     print(f"Remaining records: {len(records) - 1}")
     
-    full_path = source_path if source_path else f"{local_storage_path}/{source_id}"
+    sourceIdentifier = source_id
+    GNL_NAME_VAR = podcast_name
     
-    if not os.path.exists(full_path):
-        print(f"Error: File not found at {full_path}")
-        sys.exit(1)
+    if source_type == 'LocalStorage':
+        full_path = source_path if source_path else f"{local_storage_path}/{sourceIdentifier}"
+        if not os.path.exists(full_path):
+            print(f"Error: File not found at {full_path}")
+            sys.exit(1)
     
     try:
+        upload_success = False
+        
         with sync_playwright() as p:
             browser = p.chromium.launch_persistent_context(
                 user_data_dir=user_data_dir,
@@ -77,40 +103,78 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
             page.wait_for_load_state('networkidle')
             time.sleep(3)
             
-            # Click "+ Create new" button
-            page.click('text="+ Create new"')
-            time.sleep(2)
+            # Dismiss any overlays by pressing Escape
+            page.keyboard.press('Escape')
+            time.sleep(1)
             
-            # Upload file using file chooser
-            with page.expect_file_chooser() as fc_info:
-                page.click('button:has-text("Upload files")')
-            file_chooser = fc_info.value
-            file_chooser.set_files(full_path)
+            # Click "Create new notebook" button
+            page.click('button[aria-label="Create new notebook"]')
+            time.sleep(3)
             
-            print(f"Uploaded file: {full_path}")
+            # Wait for notebook to be created and file input to exist (hidden is ok)
+            page.wait_for_selector('input[type="file"]', state='attached', timeout=15000)
+            
+            # Upload file by setting file input directly
+            try:
+                file_input = page.locator('input[type="file"]').first
+                file_input.set_input_files(full_path)
+                time.sleep(5)
+                
+                # Verify upload
+                print("Verifying upload...")
+                upload_success = page.locator('text=/source/i').is_visible(timeout=10000)
+                if upload_success:
+                    print(f"✓ Upload verified: {full_path}")
+                else:
+                    print(f"⚠ Upload verification failed for {full_path}")
+            except Exception as upload_error:
+                print(f"⚠ Upload failed: {str(upload_error)}")
+                upload_success = False
+            
+            if not upload_success:
+                print("ERROR: Upload was not successful, raising exception")
+                raise Exception("Source upload failed - cannot proceed with audio generation")
+            
+            print("✓ Upload successful, proceeding to audio generation")
+            print("Waiting for source to fully load...")
             time.sleep(30)
             
-            # Generate audio overview
-            page.click('text="Audio Overview"')
+            print("Additional stabilization wait...")
+            time.sleep(10)
+            
+            print("Starting audio generation...")
+            try:
+                page.click('button[aria-label="Audio Overview"]')
+                print("✓ Audio generation started")
+            except Exception as audio_error:
+                print(f"⚠ Audio generation failed: {str(audio_error)}")
+                raise
+            
+            print("Waiting after audio generation...")
             time.sleep(5)
             
-            # Navigate back to notebooks list
-            page.click('svg[data-icon="fingerprint"]')
+            print("Navigating back to notebooks list...")
+            page.click('a[href="/"]')
             time.sleep(2)
             
-            # Edit title
-            page.click('button[aria-label="More actions"]', timeout=5000)
+            print("Opening edit menu...")
+            page.click('button[aria-label="More"]')
             page.click('text="Edit title"')
             time.sleep(1)
             
-            page.fill('input[type="text"]', podcast_name)
+            print(f"Renaming to: {GNL_NAME_VAR}")
+            page.fill('input[type="text"]', '')
+            page.fill('input[type="text"]', GNL_NAME_VAR)
             page.click('button:has-text("Save")')
-            time.sleep(2)
+            
+            print("Waiting after rename...")
+            time.sleep(3)
             
             browser.close()
             
         print(f"\n✓ Successfully processed record {record_id}")
         
+        # Mark record as processed
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute("UPDATE podcast_download SET generation_state = 1 WHERE id = ?", (record_id,))
