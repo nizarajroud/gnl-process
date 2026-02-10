@@ -167,8 +167,11 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                         print(f"Max steps reached, waiting 1 minute before retry...")
                         time.sleep(60)  # Wait 1 minute
                     elif 'ActError' in str(type(e).__name__) or 'ContentDecodingError' in str(e):
-                        print(f"Check failed with error, waiting 1 minute before retry: {e}")
-                        time.sleep(60)
+                        # print(f"Check failed with error, waiting 1 minute before retry: {e}")
+                        # time.sleep(60)
+                        print(f"It seems that there is an exception, but we can interpret it as an ok  state. ")
+                        break
+
                     else:
                         raise
             

@@ -109,7 +109,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, out
                         "ffmpeg", "-y", "-i", str(file), 
                         "-filter:a", f"atempo={default_speed}", 
                         str(adjusted_file)
-                    ], check=True)
+                    ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     adjusted_files.append(adjusted_file)
                 mp3_files = adjusted_files
             
@@ -120,23 +120,23 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, out
                     print(f"Adding: {file.name}")
                     f.write(f"file '{file.absolute()}'\n")
             
-            subprocess.run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_file, "-c", "copy", str(output_path)], check=True)
+            subprocess.run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_file, "-c", "copy", str(output_path)], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             os.remove(list_file)
             print(f"Combined {len(mp3_files)} files into {output_path}")
+            
+            # Mark records as combined immediately
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            for record_id, _ in file_records:
+                cursor.execute("UPDATE podcast_download SET combination_state = 1 WHERE id = ?", (record_id,))
+            conn.commit()
+            conn.close()
             
             # Clean up adjusted files if speed was changed
             if default_speed != 1:
                 for file in mp3_files:
                     if file.name.startswith("adjusted_"):
                         file.unlink()
-        
-        # Mark all records as combined
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        for record_id, _ in records:
-            cursor.execute("UPDATE podcast_download SET combination_state = 1 WHERE id = ?", (record_id,))
-        conn.commit()
-        conn.close()
         
         print(f"\n✓ Successfully combined {len(records)} records")
         
