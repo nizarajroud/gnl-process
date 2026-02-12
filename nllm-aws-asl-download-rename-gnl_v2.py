@@ -115,7 +115,8 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                     cursor.execute("UPDATE podcast_download SET generation_state = 0 WHERE id = ?", (record_id,))
                     conn.commit()
                     conn.close()
-                    raise Exception("Audio overview generation not found")
+                    print(f"Updated generation_state to 0 for record {record_id}")
+                    sys.exit(0)  # Exit cleanly so batch processor continues
                 else:
                     generation_complete = False
             except Exception as e:

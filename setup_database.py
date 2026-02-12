@@ -17,7 +17,9 @@ cursor.execute('''
         generation_state INTEGER,
         download_state INTEGER,
         conversion_state INTEGER,
-        combination_state INTEGER
+        combination_state INTEGER,
+        split_state INTEGER DEFAULT 0,
+        date TEXT
     )
 ''')
 

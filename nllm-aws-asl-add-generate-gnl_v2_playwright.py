@@ -174,10 +174,10 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
             
         print(f"\n✓ Successfully processed record {record_id}")
         
-        # Mark record as processed
+        # Mark record as processed with current date
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        cursor.execute("UPDATE podcast_download SET generation_state = 1 WHERE id = ?", (record_id,))
+        cursor.execute("UPDATE podcast_download SET generation_state = 1, date = ? WHERE id = ?", (time.strftime("%Y-%m-%d"), record_id))
         conn.commit()
         conn.close()
         
