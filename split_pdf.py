@@ -3,6 +3,7 @@ import fire
 import os
 import json
 import shutil
+import sys
 import time
 import re
 import fitz  # PyMuPDF
@@ -42,6 +43,11 @@ def split_pdf(pdf_path: str, pages_per_split: int = 0, name: str = "", split_mod
     
     # Use GNL_PROCESSING_PATH/PDF-Parts/podcast_subtheme/name
     output_dir = Path(gnl_processing_path) / "PDF-Parts" / podcast_subtheme / name
+    
+    # Remove existing folder if it exists
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+    
     output_dir.mkdir(parents=True, exist_ok=True)
     
     reader = PdfReader(pdf_file)
@@ -49,7 +55,11 @@ def split_pdf(pdf_path: str, pages_per_split: int = 0, name: str = "", split_mod
     
     files_list = []
     
+    print(f"Split mode: {split_mode}", file=sys.stderr, flush=True)
+    
     if split_mode == "Pages":
+        print(f"Total pages: {total_pages}", file=sys.stderr, flush=True)
+        num_chunks = 0
         for start in range(0, total_pages, pages_per_split):
             end = min(start + pages_per_split, total_pages)
             writer = PdfWriter()
@@ -58,6 +68,7 @@ def split_pdf(pdf_path: str, pages_per_split: int = 0, name: str = "", split_mod
                 writer.add_page(reader.pages[page_num])
             
             part_num = (start // pages_per_split) + 1
+            num_chunks = part_num
             output_file = output_dir / f"p{part_num}.pdf"
             with open(output_file, "wb") as f:
                 writer.write(f)
@@ -71,6 +82,8 @@ def split_pdf(pdf_path: str, pages_per_split: int = 0, name: str = "", split_mod
                 "podcastTheme": podcast_theme,
                 "podcastSubfolder": podcast_subtheme
             })
+        
+        split_configuration = f"{num_chunks}ck-{pages_per_split}p"
     
     elif split_mode == "Questions":
         # Close PyPDF2 reader
@@ -108,8 +121,11 @@ def split_pdf(pdf_path: str, pages_per_split: int = 0, name: str = "", split_mod
         if not unique_positions:
             raise ValueError("No questions found in PDF")
         
+        print(f"Total questions found: {len(unique_positions)}", file=sys.stderr, flush=True)
+        
         # Split into chunks
         part_num = 1
+        num_chunks = 0
         for i in range(0, len(unique_positions), question_parSplit):
             chunk_questions = unique_positions[i:i + question_parSplit]
             start_q_num, start_page, start_y = chunk_questions[0]
@@ -159,8 +175,10 @@ def split_pdf(pdf_path: str, pages_per_split: int = 0, name: str = "", split_mod
                 "podcastSubfolder": podcast_subtheme
             })
             
+            num_chunks = part_num
             part_num += 1
         
+        split_configuration = f"{num_chunks}ck-{question_parSplit}q"
         doc.close()
     
     # Close reader to release file handle (only for Pages mode)
@@ -170,6 +188,7 @@ def split_pdf(pdf_path: str, pages_per_split: int = 0, name: str = "", split_mod
     # Output JSON
     output = {
         "mode": "bulk",
+        "splitConfiguration": split_configuration,
         "files": files_list
     }
     print(json.dumps(output))
