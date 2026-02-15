@@ -30,14 +30,15 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
     cursor = conn.cursor()
     
     cursor.execute("""
-        SELECT id, podcast_name, parent_file 
-        FROM podcast_download 
-        WHERE source_type = ? 
-        AND generation_mode = ? 
-        AND podcast_theme = ? 
-        AND podcast_subtheme = ? 
-        AND generation_state = 1
-        AND download_state = 0
+        SELECT pd.id, pd.podcast_name, pc.parent_file
+        FROM podcast_download pd
+        JOIN parent_configuration pc ON pd.parent_configuration_id = pc.id
+        WHERE pc.source_type = ? 
+        AND pc.generation_mode = ? 
+        AND pc.podcast_theme = ? 
+        AND pc.podcast_subtheme = ? 
+        AND pd.generation_state = 1
+        AND pd.download_state = 0
     """, (source_type, generation_mode, theme, subfolder))
     
     records = cursor.fetchall()
