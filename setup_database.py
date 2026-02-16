@@ -14,7 +14,9 @@ cursor.execute('''
         podcast_subtheme TEXT,
         split_configuration TEXT,
         generation_mode TEXT,
-        combination_state INTEGER DEFAULT 0
+        combination_state INTEGER DEFAULT 0,
+        daily_quota_remaining INTEGER DEFAULT 20,
+        quota_date TEXT
     )
 ''')
 

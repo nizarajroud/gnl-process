@@ -13,6 +13,7 @@ import sys
 import sqlite3
 from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
+from daily_quota import check_and_update_quota, decrement_quota
 
 load_dotenv()
 
@@ -24,6 +25,13 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
     if not os.path.exists(db_path):
         print(f"Error: Database not found at {db_path}")
         sys.exit(1)
+    
+    # Check daily quota
+    remaining_quota = check_and_update_quota(db_path)
+    if remaining_quota <= 0:
+        print(f"❌ Daily quota exhausted (0/20). Try again tomorrow.")
+        sys.exit(1)
+    print(f"📊 Daily quota: {remaining_quota}/20 remaining")
     
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -181,6 +189,11 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
         cursor.execute("UPDATE podcast_download SET generation_state = 1, date = ? WHERE id = ?", (time.strftime("%Y-%m-%d"), record_id))
         conn.commit()
         conn.close()
+        
+        # Decrement daily quota
+        decrement_quota(db_path, 1)
+        remaining = check_and_update_quota(db_path)
+        print(f"📊 Daily quota updated: {remaining}/20 remaining")
         
     except Exception as e:
         print(f"\n✗ Failed to process record {record_id}: {str(e)}")
