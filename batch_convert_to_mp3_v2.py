@@ -24,14 +24,15 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str):
     cursor = conn.cursor()
     
     cursor.execute("""
-        SELECT id, podcast_name, parent_file 
-        FROM podcast_download 
-        WHERE source_type = ? 
-        AND generation_mode = ? 
-        AND podcast_theme = ? 
-        AND podcast_subtheme = ? 
-        AND download_state = 1
-        AND conversion_state = 0
+        SELECT pd.id, pd.podcast_name, pc.parent_file
+        FROM podcast_download pd
+        JOIN parent_configuration pc ON pd.parent_configuration_id = pc.id
+        WHERE pc.source_type = ? 
+        AND pc.generation_mode = ? 
+        AND pc.podcast_theme = ? 
+        AND pc.podcast_subtheme = ? 
+        AND pd.download_state = 1
+        AND pd.conversion_state = 0
     """, (source_type, generation_mode, theme, subfolder))
     
     records = cursor.fetchall()
@@ -64,7 +65,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str):
             print(f"Error: File not found: {input_file}")
             sys.exit(1)
         else:
-            subprocess.run(['ffmpeg', '-i', str(input_file), str(output_file)], check=True)
+            subprocess.run(['ffmpeg', '-y', '-i', str(input_file), str(output_file)], check=True)
             os.remove(input_file)
             print(f"Converted and removed: {input_file} -> {output_file}")
         

@@ -33,33 +33,36 @@ def collect_and_save(json_input):
     if generation_mode == 'single' and not files:
         files = [data]
     
+    # Extract parent configuration data from first file
     split_configuration = data.get('splitConfiguration', '')
+    parent_file = files[0].get('parentDir', '') if files else ''
+    source_path = files[0].get('fullPath', '') if files else ''
+    source_type = files[0].get('sourceType', '') if files else ''
+    podcast_theme = files[0].get('podcastTheme', '') if files else ''
+    podcast_subtheme = files[0].get('podcastSubfolder', '') if files else ''
     
+    # Insert into parent_configuration table
+    cursor.execute('''
+        INSERT INTO parent_configuration 
+        (parent_file, source_path, source_type, podcast_theme, podcast_subtheme, 
+         split_configuration, generation_mode, combination_state)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+    ''', (parent_file, source_path, source_type, podcast_theme, podcast_subtheme, 
+          split_configuration, generation_mode))
+    
+    parent_config_id = cursor.lastrowid
+    
+    # Insert files into podcast_download table
     for file in files:
         cursor.execute('''
             INSERT INTO podcast_download 
-            (source_id, source_type, source_path, parent_file, generation_mode, 
-             podcast_name, podcast_theme, podcast_subtheme, generation_state, download_state, 
-             conversion_state, combination_state, split_configuration)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            file.get('fileName', ''),
-            file.get('sourceType', ''),
-            file.get('fullPath', ''),
-            file.get('parentDir', ''),
-            generation_mode,
-            '',
-            file.get('podcastTheme', ''),
-            file.get('podcastSubfolder', ''),
-            0,
-            0,
-            0,
-            0,
-            split_configuration
-        ))
+            (parent_configuration_id, source_id, podcast_name, generation_state, 
+             download_state, conversion_state, date)
+            VALUES (?, ?, '', 0, 0, 0, NULL)
+        ''', (parent_config_id, file.get('fileName', '')))
     
     conn.commit()
-    print(f"Inserted {cursor.rowcount} records")
+    print(f"Inserted {len(files)} records into podcast_download and 1 parent configuration")
     conn.close()
 
 if __name__ == '__main__':

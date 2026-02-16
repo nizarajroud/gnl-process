@@ -1,11 +1,21 @@
+#!/usr/bin/env python3
+"""Restructure database to split columns between parent_configuration and podcast_download."""
 import sqlite3
 
 conn = sqlite3.connect('gnl.db')
 cursor = conn.cursor()
 
-# Create parent_configuration table
+# Backup existing data
+cursor.execute("SELECT * FROM podcast_download")
+old_data = cursor.fetchall()
+
+# Drop both tables
+cursor.execute("DROP TABLE IF EXISTS podcast_download")
+cursor.execute("DROP TABLE IF EXISTS parent_configuration")
+
+# Create new parent_configuration table
 cursor.execute('''
-    CREATE TABLE IF NOT EXISTS parent_configuration (
+    CREATE TABLE parent_configuration (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         parent_file TEXT,
         source_path TEXT,
@@ -18,9 +28,9 @@ cursor.execute('''
     )
 ''')
 
-# Create podcast_download table
+# Create new podcast_download table
 cursor.execute('''
-    CREATE TABLE IF NOT EXISTS podcast_download (
+    CREATE TABLE podcast_download (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         parent_configuration_id INTEGER,
         source_id TEXT,
@@ -33,7 +43,8 @@ cursor.execute('''
     )
 ''')
 
+print("Restructured database with split columns")
+print(f"Note: {len(old_data)} old records need to be re-imported")
+
 conn.commit()
 conn.close()
-
-print("Database created successfully with parent_configuration and podcast_download tables")

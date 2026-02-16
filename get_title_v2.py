@@ -43,20 +43,23 @@ if __name__ == "__main__":
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    query = "SELECT id, source_id, source_type, parent_file FROM podcast_download WHERE (podcast_name IS NULL OR podcast_name = '') AND generation_state = 0"
+    query = """SELECT pd.id, pd.source_id, pc.source_type, pc.parent_file 
+               FROM podcast_download pd
+               JOIN parent_configuration pc ON pd.parent_configuration_id = pc.id
+               WHERE (pd.podcast_name IS NULL OR pd.podcast_name = '') AND pd.generation_state = 0"""
     params = []
     
     if source_type:
-        query += " AND source_type = ?"
+        query += " AND pc.source_type = ?"
         params.append(source_type)
     if generation_mode:
-        query += " AND generation_mode = ?"
+        query += " AND pc.generation_mode = ?"
         params.append(generation_mode)
     if podcast_theme:
-        query += " AND podcast_theme = ?"
+        query += " AND pc.podcast_theme = ?"
         params.append(podcast_theme)
     if podcast_subtheme:
-        query += " AND podcast_subtheme = ?"
+        query += " AND pc.podcast_subtheme = ?"
         params.append(podcast_subtheme)
     
     cursor.execute(query, params)

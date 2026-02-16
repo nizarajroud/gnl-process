@@ -241,3 +241,7 @@ pydub               # Audio processing
 **ffmpeg not found**: Install with `apt install ffmpeg` or `brew install ffmpeg`
 **NovaAct errors**: Verify API key and Chrome profile path
 **File upload fails**: Check `LOCAL_STORAGE_PATH` and security options
+
+
+
+python formatPdfFromUdemy.py /mnt/d/PERSONAL/SKILLS/Technical/ACQUIRED_SKILLS/AWS/AIP-C01/assets/pdf-formatting/word/Stephane-udemy-2.docx
