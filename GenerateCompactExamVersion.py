@@ -3,16 +3,36 @@
 import fire
 import fitz  # PyMuPDF
 import re
+import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
-def extract_compact_exam(pdf_path: str):
-    """Extract questions, options, and correct answers from PDF."""
-    pdf_file = Path(pdf_path)
-    if not pdf_file.exists():
+def extract_compact_exam(pdf_filename: str):
+    """Extract questions, options, and correct answers from PDF.
+    
+    Args:
+        pdf_filename: Name of the PDF file (without path)
+    """
+    # Get GNL_PROCESSING_PATH from environment
+    gnl_processing_path = os.getenv('GNL_PROCESSING_PATH')
+    if not gnl_processing_path:
+        raise ValueError("GNL_PROCESSING_PATH not found in .env file")
+    
+    # Construct input path: GNL_PROCESSING_PATH/../pdf-formatting/pdf/filename
+    base_path = Path(gnl_processing_path).parent
+    pdf_path = base_path / "pdf-formatting" / "pdf" / pdf_filename
+    
+    if not pdf_path.exists():
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
     
-    doc = fitz.open(pdf_path)
+    # Construct output path: GNL_PROCESSING_PATH/../Anki-generation/
+    output_dir = base_path / "Anki-generation"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    doc = fitz.open(str(pdf_path))
     full_text = ""
     
     # Extract all text from PDF
@@ -46,34 +66,21 @@ def extract_compact_exam(pdf_path: str):
         lines = content_before_answer.split('\n')
         lines = [l.strip() for l in lines if l.strip()]
         
-        # Find where options start - look for a pattern of 3-4 consecutive short lines
-        # that look like service names (Amazon/AWS prefix or capitalized words)
-        question_text = []
-        options = []
-        options_start_idx = None
+        # Find the last question mark - everything before is question, everything after is options
+        last_question_idx = -1
+        for idx, line in enumerate(lines):
+            if '?' in line:
+                last_question_idx = idx
         
-        # Scan for where options likely start
-        for idx in range(len(lines)):
-            # Check if this could be the start of options
-            # Options are typically 3-4 consecutive lines with AWS/Amazon or short capitalized text
-            if idx + 2 < len(lines):
-                potential_options = lines[idx:idx+4]
-                # Check if these look like options (short, AWS/Amazon pattern)
-                if all(len(opt) < 80 and 
-                       (opt.startswith('Amazon ') or opt.startswith('AWS ') or 
-                        re.match(r'^[A-Z][a-z]+\s+[A-Z]', opt) or
-                        re.match(r'^[A-Z][a-zA-Z\s]+$', opt))
-                       for opt in potential_options[:3]):
-                    options_start_idx = idx
-                    break
-        
-        if options_start_idx is not None:
-            question_text = lines[:options_start_idx]
-            options = lines[options_start_idx:]
+        if last_question_idx == -1:
+            # No question mark found, assume last line is question
+            question_text = lines[:-1] if len(lines) > 1 else lines
+            options = lines[-1:] if len(lines) > 1 else []
         else:
-            # Fallback: last 4 lines are likely options
-            question_text = lines[:-4] if len(lines) > 4 else lines
-            options = lines[-4:] if len(lines) > 4 else []
+            # Question is everything up to and including the line with ?
+            question_text = lines[:last_question_idx + 1]
+            # Options are all remaining lines
+            options = lines[last_question_idx + 1:]
         
         # Build question text (front of card)
         front_text = f"<div style='text-align: left;'><b>Question {question_num}:</b><br><br>"
@@ -97,19 +104,24 @@ def extract_compact_exam(pdf_path: str):
                 back_text += f"- {option}<br>"
         back_text += "</div>"
         
-        # Add to Anki format: Front TAB Back (single line)
+        # Add to Anki format: Front TAB Back
         output_lines.append(f"{front_text}\t{back_text}")
     
     # Save to text file for Anki import
-    output_file = pdf_file.with_suffix('.txt')
+    output_file = output_dir / pdf_path.with_suffix('.txt').name
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write('\n'.join(output_lines))
     
     print(f"Anki cards saved to: {output_file}")
-    print(f"Import into Anki with:")
-    print(f"  - Card type: Basic (and reversed card)")
-    print(f"  - Fields separated by: Tab")
-    print(f"  - Allow HTML in fields: Yes")
+    print(f"\nImport into Anki:")
+    print(f"  1. Create a deck with your desired name")
+    print(f"  2. File → Import → Select {output_file.name}")
+    print(f"  3. Type: Basic")
+    print(f"  4. Deck: Select your created deck")
+    print(f"  5. Fields separated by: Tab")
+    print(f"  6. Field 1 → Front, Field 2 → Back")
+    print(f"  7. Allow HTML in fields: Yes")
+    print(f"  8. Import")
     return str(output_file)
 
 
