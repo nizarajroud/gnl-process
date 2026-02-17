@@ -75,46 +75,41 @@ def extract_compact_exam(pdf_path: str):
             question_text = lines[:-4] if len(lines) > 4 else lines
             options = lines[-4:] if len(lines) > 4 else []
         
-        # Build output - Version 1: No highlighting
-        output_lines.append(f"Question {question_num}:")
-        output_lines.append(' '.join(question_text))
-        
-        # Add options without highlighting
+        # Build question text (front of card)
+        front_text = f"<div style='text-align: left;'><b>Question {question_num}:</b><br><br>"
+        front_text += ' '.join(question_text) + "<br><br>"
         for option in options:
-            output_lines.append(f"- {option}")
+            front_text += f"- {option}<br>"
+        front_text += "</div>"
         
-        output_lines.append("")
-        output_lines.append("=" * 70)
-        output_lines.append("")
-        
-        # Build output - Version 2: With correct answer highlighted
-        output_lines.append(f"Question {question_num}:")
-        output_lines.append(' '.join(question_text))
-        
-        # Add options with correct answer in bold
+        # Build answer text (back of card - with correct answer highlighted)
+        back_text = f"<div style='text-align: left;'><b>Question {question_num}:</b><br><br>"
+        back_text += ' '.join(question_text) + "<br><br>"
         for option in options:
-            # Bold the correct answer (check if option contains or matches correct answer)
             is_correct = False
             if correct_answer:
-                # Check exact match or if correct answer is contained in option
                 if option == correct_answer or correct_answer in option or option in correct_answer:
                     is_correct = True
             
             if is_correct:
-                output_lines.append(f"- **{option}**")
+                back_text += f"- <b>{option}</b><br>"
             else:
-                output_lines.append(f"- {option}")
+                back_text += f"- {option}<br>"
+        back_text += "</div>"
         
-        output_lines.append("")
-        output_lines.append("=" * 70)
-        output_lines.append("")
+        # Add to Anki format: Front TAB Back (single line)
+        output_lines.append(f"{front_text}\t{back_text}")
     
-    # Save to markdown file
-    output_file = pdf_file.with_suffix('.md')
+    # Save to text file for Anki import
+    output_file = pdf_file.with_suffix('.txt')
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write('\n'.join(output_lines))
     
-    print(f"Compact exam version saved to: {output_file}")
+    print(f"Anki cards saved to: {output_file}")
+    print(f"Import into Anki with:")
+    print(f"  - Card type: Basic (and reversed card)")
+    print(f"  - Fields separated by: Tab")
+    print(f"  - Allow HTML in fields: Yes")
     return str(output_file)
 
 

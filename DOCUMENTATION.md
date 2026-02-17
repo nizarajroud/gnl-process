@@ -245,3 +245,12 @@ pydub               # Audio processing
 
 
 python formatPdfFromUdemy.py /mnt/d/PERSONAL/SKILLS/Technical/ACQUIRED_SKILLS/AWS/AIP-C01/assets/pdf-formatting/word/Stephane-udemy-2.docx
+
+1. Open Anki
+2. File → Import
+3. Select the generated .txt file
+4. Set:
+   - Type: "Basique+"
+   - Fields separated by: Tab
+   - Allow HTML in fields: Yes
+5. Import
