@@ -108,19 +108,51 @@ def extract_to_markdown(filename: str, base_path: Path):
         options = []
         current_option = []
         
+        # Common option-starting patterns
+        option_starters = ['Configure', 'Implement', 'Switch', 'Use', 'Create', 'Enable', 'Set', 
+                          'Deploy', 'Migrate', 'Apply', 'Standard', 'Semantic', 'Hierarchical', 
+                          'Multimodal', 'Fine-tune', 'Amazon ', 'AWS ']
+        
         for line in options_lines:
-            if line and line[0].isupper() and (
-                any(line.startswith(verb) for verb in ['Configure', 'Implement', 'Switch', 'Use', 'Create', 'Enable', 'Set', 'Deploy', 'Migrate', 'Apply']) or
-                line.startswith('Amazon ') or 
-                line.startswith('AWS ') or
-                (not current_option and len(line) > 5)
-            ):
-                if current_option:
-                    options.append(' '.join(current_option))
-                current_option = [line]
+            # Check if line contains multiple options (look for pattern: "text. Word" where Word starts option)
+            # Split by ". " followed by capital letter that starts a known pattern
+            potential_splits = []
+            for starter in option_starters:
+                # Find all occurrences of ". Starter" in the line
+                pattern = r'\.\s+(' + re.escape(starter) + r'[^.]*)'
+                matches = list(re.finditer(pattern, line))
+                for match in matches:
+                    potential_splits.append(match.start() + 1)  # Position after the period
+            
+            if potential_splits:
+                # Sort split positions
+                potential_splits = sorted(set(potential_splits))
+                # Split the line at these positions
+                parts = []
+                last_pos = 0
+                for pos in potential_splits:
+                    parts.append(line[last_pos:pos].strip())
+                    last_pos = pos
+                parts.append(line[last_pos:].strip())
+                
+                # Process each part as a separate option
+                for part in parts:
+                    if part and len(part) > 5:
+                        if current_option:
+                            options.append(' '.join(current_option))
+                        current_option = [part]
             else:
-                if current_option:
-                    current_option.append(line)
+                # Normal processing
+                if line and line[0].isupper() and (
+                    any(line.startswith(verb) for verb in option_starters) or
+                    (not current_option and len(line) > 5)
+                ):
+                    if current_option:
+                        options.append(' '.join(current_option))
+                    current_option = [line]
+                else:
+                    if current_option:
+                        current_option.append(line)
         
         if current_option:
             options.append(' '.join(current_option))
