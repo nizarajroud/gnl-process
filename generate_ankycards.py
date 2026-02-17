@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate compact exam version from PDF with questions."""
+"""Generate Anki flashcards from PDF exam - complete workflow."""
 import fire
 import fitz  # PyMuPDF
 import re
@@ -12,32 +12,56 @@ from weasyprint import HTML
 load_dotenv()
 
 
-def extract_compact_exam(filename: str):
-    """Extract questions, options, and correct answers from PDF.
+def generate_anki_cards(filename: str):
+    """Complete workflow: PDF → Markdown → PDF compact → Anki cards.
     
     Args:
-        filename: Name of the file without extension (e.g., 'exam' not 'exam.pdf')
+        filename: Name of the file without extension (e.g., 'exam')
     """
     # Get GNL_PROCESSING_PATH from environment
     gnl_processing_path = os.getenv('GNL_PROCESSING_PATH')
     if not gnl_processing_path:
         raise ValueError("GNL_PROCESSING_PATH not found in .env file")
     
-    # Construct input path: GNL_PROCESSING_PATH/../pdf-formatting/pdf/filename.pdf
     base_path = Path(gnl_processing_path).parent
-    pdf_path = base_path / "pdf-formatting" / "pdf" / f"{filename}.pdf"
     
+    # Step 1: Extract from PDF to Markdown
+    print(f"Step 1: Extracting questions from PDF...")
+    markdown_file = extract_to_markdown(filename, base_path)
+    print(f"✓ Markdown saved: {markdown_file}")
+    
+    # Step 2: Generate PDF from Markdown
+    print(f"\nStep 2: Generating compact PDF...")
+    pdf_file = generate_compact_pdf(filename, base_path, markdown_file)
+    print(f"✓ PDF saved: {pdf_file}")
+    
+    # Step 3: Generate Anki cards from Markdown
+    print(f"\nStep 3: Generating Anki flashcards...")
+    anki_file = generate_anki_from_markdown(filename, base_path, markdown_file)
+    print(f"✓ Anki cards saved: {anki_file}")
+    
+    print(f"\n{'='*60}")
+    print(f"✓ Complete! All files generated:")
+    print(f"  - Markdown: {markdown_file}")
+    print(f"  - PDF: {pdf_file}")
+    print(f"  - Anki: {anki_file}")
+    print(f"{'='*60}")
+
+
+def extract_to_markdown(filename: str, base_path: Path):
+    """Extract questions from PDF to Markdown."""
+    # Input: PDF
+    pdf_path = base_path / "pdf-formatting" / "pdf" / f"{filename}.pdf"
     if not pdf_path.exists():
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
     
-    # Construct output path: GNL_PROCESSING_PATH/../Anki-generation/markdown/
+    # Output: Markdown
     output_dir = base_path / "Anki-generation" / "markdown"
     output_dir.mkdir(parents=True, exist_ok=True)
     
     doc = fitz.open(str(pdf_path))
     full_text = ""
     
-    # Extract all text from PDF
     for page in doc:
         full_text += page.get_text()
     
@@ -55,7 +79,6 @@ def extract_compact_exam(filename: str):
         question_header = questions[i].strip()
         question_content = questions[i + 1].strip()
         
-        # Extract question number
         question_num = re.search(r'\d+', question_header).group()
         
         # Find CORRECT answer
@@ -118,36 +141,23 @@ def extract_compact_exam(filename: str):
         
         output_lines.append("\n")
     
-    # Save to markdown file
+    # Save markdown
     output_file = output_dir / f"{filename}.md"
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(''.join(output_lines))
     
-    print(f"Compact exam version saved to: {output_file}")
-    
-    # Generate PDF from the markdown (save to compact-exam-versions)
-    pdf_file = generate_pdf_from_markdown_internal(output_file, filename, base_path)
-    print(f"PDF version saved to: {pdf_file}")
-    
     return str(output_file)
 
 
-def generate_pdf_from_markdown_internal(markdown_path: Path, filename: str, base_path: Path):
-    """Convert Markdown compact exam to PDF (internal function).
-    
-    Args:
-        markdown_path: Path object to the markdown file
-        filename: Base filename without extension
-        base_path: Base path for output
-    """
-    # Read markdown file
-    with open(markdown_path, 'r', encoding='utf-8') as f:
+def generate_compact_pdf(filename: str, base_path: Path, markdown_file: str):
+    """Generate compact PDF from Markdown."""
+    # Read markdown
+    with open(markdown_file, 'r', encoding='utf-8') as f:
         md_content = f.read()
     
-    # Convert markdown to HTML
+    # Convert to HTML
     html_content = markdown.markdown(md_content)
     
-    # Add CSS styling
     styled_html = f"""
     <!DOCTYPE html>
     <html>
@@ -175,7 +185,7 @@ def generate_pdf_from_markdown_internal(markdown_path: Path, filename: str, base
     </html>
     """
     
-    # Generate PDF in compact-exam-versions folder
+    # Generate PDF
     pdf_output_dir = base_path / "pdf-formatting" / "compact-exam-versions"
     pdf_output_dir.mkdir(parents=True, exist_ok=True)
     output_pdf = pdf_output_dir / f"{filename}.pdf"
@@ -184,30 +194,86 @@ def generate_pdf_from_markdown_internal(markdown_path: Path, filename: str, base
     return str(output_pdf)
 
 
-def generate_pdf_from_markdown(filename: str):
-    """Convert Markdown compact exam to PDF.
+def generate_anki_from_markdown(filename: str, base_path: Path, markdown_file: str):
+    """Generate Anki flashcards from Markdown."""
+    # Read markdown
+    with open(markdown_file, 'r', encoding='utf-8') as f:
+        content = f.read()
     
-    Args:
-        filename: Name of the file without extension (e.g., 'exam')
-    """
-    # Get GNL_PROCESSING_PATH from environment
-    gnl_processing_path = os.getenv('GNL_PROCESSING_PATH')
-    if not gnl_processing_path:
-        raise ValueError("GNL_PROCESSING_PATH not found in .env file")
+    # Split by **Question pattern
+    question_blocks = re.split(r'(\*\*Question\s+\d+:\*\*)', content)
     
-    # Construct input path
-    base_path = Path(gnl_processing_path).parent
-    markdown_path = base_path / "pdf-formatting" / "compact-exam-versions" / f"{filename}.md"
+    output_lines = []
     
-    if not markdown_path.exists():
-        raise FileNotFoundError(f"Markdown file not found: {markdown_path}")
+    for i in range(1, len(question_blocks), 2):
+        if i + 1 >= len(question_blocks):
+            break
+        
+        question_header = question_blocks[i]
+        question_content = question_blocks[i + 1]
+        question_block = question_header + question_content
+        
+        if not question_block.strip():
+            continue
+        
+        lines = [l.strip() for l in question_block.strip().split('\n') if l.strip()]
+        
+        if not lines:
+            continue
+        
+        # Extract question number
+        question_line = lines[0]
+        question_match = re.match(r'\*\*Question\s+(\d+):\*\*', question_line)
+        if not question_match:
+            continue
+        
+        question_num = question_match.group(1)
+        
+        # Find options
+        question_text_lines = []
+        options = []
+        
+        in_options = False
+        for line in lines[1:]:
+            if line.startswith('- '):
+                in_options = True
+                option_text = line[2:].replace('**', '')
+                is_bold = '**' in line
+                options.append((option_text, is_bold))
+            elif not in_options:
+                question_text_lines.append(line)
+        
+        question_text = ' '.join(question_text_lines)
+        
+        # Build front card (no highlighting)
+        front_text = f"<div style='text-align: left;'><b>Question {question_num}:</b><br><br>"
+        front_text += question_text + "<br><br>"
+        for option_text, _ in options:
+            front_text += f"- {option_text}<br>"
+        front_text += "</div>"
+        
+        # Build back card (with correct answer highlighted)
+        back_text = f"<div style='text-align: left;'><b>Question {question_num}:</b><br><br>"
+        back_text += question_text + "<br><br>"
+        for option_text, is_bold in options:
+            if is_bold:
+                back_text += f"- <b>{option_text}</b><br>"
+            else:
+                back_text += f"- {option_text}<br>"
+        back_text += "</div>"
+        
+        output_lines.append(f"{front_text}\t{back_text}")
     
-    # Generate PDF
-    output_pdf = generate_pdf_from_markdown_internal(markdown_path)
+    # Save Anki file
+    output_dir = base_path / "Anki-generation" / "anki"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_file = output_dir / f"{filename}.txt"
     
-    print(f"PDF generated: {output_pdf}")
-    return output_pdf
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(output_lines))
+    
+    return str(output_file)
 
 
 if __name__ == "__main__":
-    fire.Fire(extract_compact_exam)
+    fire.Fire(generate_anki_cards)

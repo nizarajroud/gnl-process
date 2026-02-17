@@ -246,6 +246,10 @@ pydub               # Audio processing
 
 python formatPdfFromUdemy.py /mnt/d/PERSONAL/SKILLS/Technical/ACQUIRED_SKILLS/AWS/AIP-C01/assets/pdf-formatting/word/Stephane-udemy-2.docx
 
+
+ python generate_ankycards.py Vladimir-Raykov-udemy-4
+
+
 1. Open Anki
 2. File → Import
 3. Select the generated .txt file
