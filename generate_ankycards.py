@@ -4,6 +4,7 @@ import fire
 import fitz  # PyMuPDF
 import re
 import os
+import subprocess
 import markdown
 from pathlib import Path
 from dotenv import load_dotenv
@@ -27,7 +28,7 @@ def generate_anki_cards(filename: str):
     
     # Step 1: Extract from PDF to Markdown
     print(f"Step 1: Extracting questions from PDF...")
-    markdown_file = extract_to_markdown(filename, base_path)
+    markdown_file, unmatched_questions = extract_to_markdown(filename, base_path)
     print(f"✓ Markdown saved: {markdown_file}")
     
     # Step 2: Generate PDF from Markdown
@@ -46,6 +47,17 @@ def generate_anki_cards(filename: str):
     print(f"  - PDF: {pdf_file}")
     print(f"  - Anki: {anki_file}")
     print(f"{'='*60}")
+    
+    if unmatched_questions:
+        pdf_windows_path = str(base_path / 'pdf-formatting' / 'pdf' / f'{filename}.pdf').replace('/mnt/d/', 'D:/')
+        print(f"\n⚠ RECAP - Questions with unmatched correct answers:")
+        print(f"  File: {filename}.pdf")
+        print(f"  Path: {pdf_windows_path}")
+        for q_num in unmatched_questions:
+            print(f"  - Question {q_num}")
+        # print(f"\n  Opening PDF...")
+        # subprocess.run(['cmd.exe', '/c', 'start', '', pdf_windows_path], check=False)
+        print(f"{'='*60}")
 
 
 def extract_to_markdown(filename: str, base_path: Path):
@@ -71,6 +83,7 @@ def extract_to_markdown(filename: str, base_path: Path):
     questions = re.split(r'(Question\s+\d+)', full_text)
     
     output_lines = []
+    unmatched_questions = []
     
     for i in range(1, len(questions), 2):
         if i + 1 >= len(questions):
@@ -161,15 +174,20 @@ def extract_to_markdown(filename: str, base_path: Path):
         output_lines.append(f"**Question {question_num}:**\n")
         output_lines.append(' '.join(question_text) + "\n\n")
         
+        found_correct = False
         for option in options:
             is_correct = False
             if correct_answer and (option == correct_answer or correct_answer in option or option in correct_answer):
                 is_correct = True
+                found_correct = True
             
             if is_correct:
                 output_lines.append(f"- **{option}**\n")
             else:
                 output_lines.append(f"- {option}\n")
+        
+        if correct_answer and not found_correct:
+            unmatched_questions.append(question_num)
         
         output_lines.append("\n")
     
@@ -178,7 +196,7 @@ def extract_to_markdown(filename: str, base_path: Path):
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(''.join(output_lines))
     
-    return str(output_file)
+    return str(output_file), unmatched_questions
 
 
 def generate_compact_pdf(filename: str, base_path: Path, markdown_file: str):
