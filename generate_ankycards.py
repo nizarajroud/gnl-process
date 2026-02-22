@@ -6,6 +6,8 @@ import re
 import os
 import subprocess
 import markdown
+import json
+import base64
 from pathlib import Path
 from dotenv import load_dotenv
 from weasyprint import HTML
@@ -61,7 +63,7 @@ def generate_anki_cards(filename: str):
 
 
 def extract_to_markdown(filename: str, base_path: Path):
-    """Extract questions from PDF to Markdown."""
+    """Extract questions from PDF to Markdown using Bedrock API key."""
     # Input: PDF
     pdf_path = base_path / "pdf-formatting" / "pdf" / f"{filename}.pdf"
     if not pdf_path.exists():
@@ -71,132 +73,97 @@ def extract_to_markdown(filename: str, base_path: Path):
     output_dir = base_path / "Anki-generation" / "markdown"
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    doc = fitz.open(str(pdf_path))
-    full_text = ""
+    # Read PDF as bytes
+    with open(pdf_path, 'rb') as f:
+        pdf_bytes = f.read()
+    pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
     
-    for page in doc:
-        full_text += page.get_text()
+    # Get Bedrock config
+    model_id = os.getenv('MOEDL_INFERENCE_ID', 'global.anthropic.claude-opus-4-5-20251101-v1:0')
+    api_key = os.getenv('AWS_BEARER_TOKEN_BEDROCK', '')
+    aws_region = os.getenv('AWS_REGION', 'us-east-1')
     
-    doc.close()
+    # Don't decode - use the API key directly
+    if not api_key:
+        raise Exception("AWS_BEARER_TOKEN_BEDROCK not found in .env file")
     
-    # Split by questions
-    questions = re.split(r'(Question\s+\d+)', full_text)
+    # Prepare prompt
+    prompt = """You are a text extraction tool. Your ONLY job is to find and mark options based on keywords.
+
+STRICT RULES - DO NOT DEVIATE:
+1. Search the PDF for the exact keywords "CORRECT:" and "INCORRECT:" before each option
+2. Bold EVERY option that has "CORRECT:" before it (use **text** format)
+3. Do NOT bold options that have "INCORRECT:" before them
+4. Do NOT use your knowledge or reasoning to determine answers
+5. Do NOT analyze the question content
+6. ONLY look for the literal keywords "CORRECT:" and "INCORRECT:"
+7. If a question has multiple options with "CORRECT:", bold ALL of them
+
+Your task is pure keyword matching, not comprehension.
+
+Output format:
+**Question N:**
+[Question text exactly as written]
+
+- Option text (when you see INCORRECT: before it)
+- **Option text** (when you see CORRECT: before it)
+- **Another option** (when you see CORRECT: before it)
+
+Extract all questions now using ONLY keyword matching:"""
+
+    # Prepare request
+    payload = {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "document": {
+                            "format": "pdf",
+                            "name": "Exam Questions",
+                            "source": {
+                                "bytes": pdf_base64
+                            }
+                        }
+                    },
+                    {
+                        "text": prompt
+                    }
+                ]
+            }
+        ],
+        "inferenceConfig": {
+            "maxTokens": 64000,
+            "temperature": 0.1
+        }
+    }
     
-    output_lines = []
-    unmatched_questions = []
+    # Call Bedrock API
+    import requests
     
-    for i in range(1, len(questions), 2):
-        if i + 1 >= len(questions):
-            break
-            
-        question_header = questions[i].strip()
-        question_content = questions[i + 1].strip()
-        
-        question_num = re.search(r'\d+', question_header).group()
-        
-        # Find CORRECT answer
-        correct_match = re.search(r'CORRECT:\s*(.+?)(?:\n|$)', question_content)
-        correct_answer = correct_match.group(1).strip() if correct_match else None
-        
-        # Split content before CORRECT/INCORRECT
-        content_before_answer = re.split(r'CORRECT:|INCORRECT:', question_content)[0]
-        
-        lines = content_before_answer.split('\n')
-        lines = [l.strip() for l in lines if l.strip()]
-        
-        # Find the last question mark
-        last_question_idx = -1
-        for idx, line in enumerate(lines):
-            if '?' in line:
-                last_question_idx = idx
-        
-        if last_question_idx == -1:
-            continue
-        
-        # Question text
-        question_text = lines[:last_question_idx + 1]
-        options_lines = lines[last_question_idx + 1:]
-        
-        # Group options
-        options = []
-        current_option = []
-        
-        # Common option-starting patterns
-        option_starters = ['Configure', 'Implement', 'Switch', 'Use', 'Create', 'Enable', 'Set', 
-                          'Deploy', 'Migrate', 'Apply', 'Standard', 'Semantic', 'Hierarchical', 
-                          'Multimodal', 'Fine-tune', 'Amazon ', 'AWS ']
-        
-        for line in options_lines:
-            # Check if line contains multiple options (look for pattern: "text. Word" where Word starts option)
-            # Split by ". " followed by capital letter that starts a known pattern
-            potential_splits = []
-            for starter in option_starters:
-                # Find all occurrences of ". Starter" in the line
-                pattern = r'\.\s+(' + re.escape(starter) + r'[^.]*)'
-                matches = list(re.finditer(pattern, line))
-                for match in matches:
-                    potential_splits.append(match.start() + 1)  # Position after the period
-            
-            if potential_splits:
-                # Sort split positions
-                potential_splits = sorted(set(potential_splits))
-                # Split the line at these positions
-                parts = []
-                last_pos = 0
-                for pos in potential_splits:
-                    parts.append(line[last_pos:pos].strip())
-                    last_pos = pos
-                parts.append(line[last_pos:].strip())
-                
-                # Process each part as a separate option
-                for part in parts:
-                    if part and len(part) > 5:
-                        if current_option:
-                            options.append(' '.join(current_option))
-                        current_option = [part]
-            else:
-                # Normal processing
-                if line and line[0].isupper() and (
-                    any(line.startswith(verb) for verb in option_starters) or
-                    (not current_option and len(line) > 5)
-                ):
-                    if current_option:
-                        options.append(' '.join(current_option))
-                    current_option = [line]
-                else:
-                    if current_option:
-                        current_option.append(line)
-        
-        if current_option:
-            options.append(' '.join(current_option))
-        
-        # Build markdown output
-        output_lines.append(f"**Question {question_num}:**\n")
-        output_lines.append(' '.join(question_text) + "\n\n")
-        
-        found_correct = False
-        for option in options:
-            is_correct = False
-            if correct_answer and (option == correct_answer or correct_answer in option or option in correct_answer):
-                is_correct = True
-                found_correct = True
-            
-            if is_correct:
-                output_lines.append(f"- **{option}**\n")
-            else:
-                output_lines.append(f"- {option}\n")
-        
-        if correct_answer and not found_correct:
-            unmatched_questions.append(question_num)
-        
-        output_lines.append("\n")
+    url = f"https://bedrock-runtime.{aws_region}.amazonaws.com/model/{model_id}/converse"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
     
-    # Save markdown
-    output_file = output_dir / f"{filename}.md"
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(''.join(output_lines))
+    response = requests.post(url, json=payload, headers=headers)
     
-    return str(output_file), unmatched_questions
+    if response.status_code == 200:
+        result = response.json()
+        markdown_content = result['output']['message']['content'][0]['text']
+        
+        # Save markdown
+        output_file = output_dir / f"{filename}.md"
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(markdown_content)
+        
+        return str(output_file), []
+    else:
+        print(f"Request URL: {url}")
+        print(f"Payload keys: {list(payload.keys())}")
+        print(f"Document name in payload: {payload['messages'][0]['content'][0]['document']['name']}")
+        raise Exception(f"Bedrock API error: {response.status_code} - {response.text}")
 
 
 def generate_compact_pdf(filename: str, base_path: Path, markdown_file: str):
