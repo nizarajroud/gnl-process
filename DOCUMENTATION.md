@@ -258,3 +258,5 @@ python formatPdfFromUdemy.py /mnt/d/PERSONAL/SKILLS/Technical/ACQUIRED_SKILLS/AW
    - Fields separated by: Tab
    - Allow HTML in fields: Yes
 5. Import
+
+python convert_and_combine_with_speed.py 'D:\DAILY_TASKS\JANVIER\test\wv'

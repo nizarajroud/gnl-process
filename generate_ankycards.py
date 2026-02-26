@@ -15,11 +15,11 @@ from weasyprint import HTML
 load_dotenv()
 
 
-def generate_anki_cards(filename: str):
-    """Complete workflow: PDF → Markdown → PDF compact → Anki cards.
+def generate_anki_cards(foldername: str):
+    """Complete workflow: PDF splits → Markdown → PDF compact → Anki cards.
     
     Args:
-        filename: Name of the file without extension (e.g., 'exam')
+        foldername: Name of the folder containing PDF splits (e.g., 'exam')
     """
     # Get GNL_PROCESSING_PATH from environment
     gnl_processing_path = os.getenv('GNL_PROCESSING_PATH')
@@ -28,19 +28,19 @@ def generate_anki_cards(filename: str):
     
     base_path = Path(gnl_processing_path).parent
     
-    # Step 1: Extract from PDF to Markdown
-    print(f"Step 1: Extracting questions from PDF...")
-    markdown_file, unmatched_questions = extract_to_markdown(filename, base_path)
+    # Step 1: Extract from PDF splits to Markdown
+    print(f"Step 1: Extracting questions from PDF splits...")
+    markdown_file, unmatched_questions = extract_to_markdown(foldername, base_path)
     print(f"✓ Markdown saved: {markdown_file}")
     
     # Step 2: Generate PDF from Markdown
     print(f"\nStep 2: Generating compact PDF...")
-    pdf_file = generate_compact_pdf(filename, base_path, markdown_file)
+    pdf_file = generate_compact_pdf(foldername, base_path, markdown_file)
     print(f"✓ PDF saved: {pdf_file}")
     
     # Step 3: Generate Anki cards from Markdown
     print(f"\nStep 3: Generating Anki flashcards...")
-    anki_file = generate_anki_from_markdown(filename, base_path, markdown_file)
+    anki_file = generate_anki_from_markdown(foldername, base_path, markdown_file)
     print(f"✓ Anki cards saved: {anki_file}")
     
     print(f"\n{'='*60}")
@@ -51,9 +51,9 @@ def generate_anki_cards(filename: str):
     print(f"{'='*60}")
     
     if unmatched_questions:
-        pdf_windows_path = str(base_path / 'pdf-formatting' / 'pdf' / f'{filename}.pdf').replace('/mnt/d/', 'D:/')
+        pdf_windows_path = str(Path(os.getenv('GNL_PROCESSING_PATH')) / 'PDF-Parts' / 'exam' / foldername).replace('/mnt/d/', 'D:/')
         print(f"\n⚠ RECAP - Questions with unmatched correct answers:")
-        print(f"  File: {filename}.pdf")
+        print(f"  Folder: {foldername}")
         print(f"  Path: {pdf_windows_path}")
         for q_num in unmatched_questions:
             print(f"  - Question {q_num}")
@@ -62,28 +62,30 @@ def generate_anki_cards(filename: str):
         print(f"{'='*60}")
 
 
-def extract_to_markdown(filename: str, base_path: Path):
-    """Extract questions from PDF to Markdown using Bedrock API key."""
-    # Input: PDF
-    pdf_path = base_path / "pdf-formatting" / "pdf" / f"{filename}.pdf"
-    if not pdf_path.exists():
-        raise FileNotFoundError(f"PDF not found: {pdf_path}")
+def extract_to_markdown(foldername: str, base_path: Path):
+    """Extract questions from PDF splits to Markdown using Bedrock API key."""
+    # Input: PDF splits folder
+    splits_folder = Path(os.getenv('GNL_PROCESSING_PATH')) / "PDF-Parts" / "exam" / foldername
+    if not splits_folder.exists():
+        raise FileNotFoundError(f"Splits folder not found: {splits_folder}")
+    
+    # Get all PDF splits (q1.pdf, q2.pdf, etc.) in order
+    pdf_splits = sorted(splits_folder.glob("q*.pdf"), key=lambda x: int(x.stem[1:]))
+    
+    if not pdf_splits:
+        raise FileNotFoundError(f"No PDF splits found in: {splits_folder}")
+    
+    print(f"Found {len(pdf_splits)} PDF splits to process...")
     
     # Output: Markdown
     output_dir = base_path / "Anki-generation" / "markdown"
     output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Read PDF as bytes
-    with open(pdf_path, 'rb') as f:
-        pdf_bytes = f.read()
-    pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
     
     # Get Bedrock config
     model_id = os.getenv('MOEDL_INFERENCE_ID', 'global.anthropic.claude-opus-4-5-20251101-v1:0')
     api_key = os.getenv('AWS_BEARER_TOKEN_BEDROCK', '')
     aws_region = os.getenv('AWS_REGION', 'us-east-1')
     
-    # Don't decode - use the API key directly
     if not api_key:
         raise Exception("AWS_BEARER_TOKEN_BEDROCK not found in .env file")
     
@@ -110,60 +112,71 @@ Output format:
 - **Another option** (when you see CORRECT: before it)
 
 Extract all questions now using ONLY keyword matching:"""
-
-    # Prepare request
-    payload = {
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "document": {
-                            "format": "pdf",
-                            "name": "Exam Questions",
-                            "source": {
-                                "bytes": pdf_base64
+    
+    # Process each split and collect markdown
+    all_markdown = []
+    
+    for i, pdf_split in enumerate(pdf_splits, 1):
+        print(f"  Processing {pdf_split.name}...")
+        
+        # Read PDF as bytes
+        with open(pdf_split, 'rb') as f:
+            pdf_bytes = f.read()
+        
+        # Prepare request
+        payload = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "document": {
+                                "format": "pdf",
+                                "name": "Exam Questions",
+                                "source": {
+                                    "bytes": base64.b64encode(pdf_bytes).decode('utf-8')
+                                }
                             }
+                        },
+                        {
+                            "text": prompt
                         }
-                    },
-                    {
-                        "text": prompt
-                    }
-                ]
+                    ]
+                }
+            ],
+            "inferenceConfig": {
+                "maxTokens": 64000,
+                "temperature": 0.1
             }
-        ],
-        "inferenceConfig": {
-            "maxTokens": 64000,
-            "temperature": 0.1
         }
-    }
-    
-    # Call Bedrock API
-    import requests
-    
-    url = f"https://bedrock-runtime.{aws_region}.amazonaws.com/model/{model_id}/converse"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
-    }
-    
-    response = requests.post(url, json=payload, headers=headers)
-    
-    if response.status_code == 200:
-        result = response.json()
-        markdown_content = result['output']['message']['content'][0]['text']
         
-        # Save markdown
-        output_file = output_dir / f"{filename}.md"
-        with open(output_file, 'w', encoding='utf-8') as f:
-            f.write(markdown_content)
+        # Call Bedrock API
+        import requests
         
-        return str(output_file), []
-    else:
-        print(f"Request URL: {url}")
-        print(f"Payload keys: {list(payload.keys())}")
-        print(f"Document name in payload: {payload['messages'][0]['content'][0]['document']['name']}")
-        raise Exception(f"Bedrock API error: {response.status_code} - {response.text}")
+        url = f"https://bedrock-runtime.{aws_region}.amazonaws.com/model/{model_id}/converse"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+        
+        response = requests.post(url, json=payload, headers=headers)
+        
+        if response.status_code == 200:
+            result = response.json()
+            markdown_content = result['output']['message']['content'][0]['text']
+            all_markdown.append(markdown_content)
+        else:
+            raise Exception(f"Bedrock API error for {pdf_split.name}: {response.status_code} - {response.text}")
+    
+    # Combine all markdown
+    combined_markdown = "\n\n".join(all_markdown)
+    
+    # Save markdown
+    output_file = output_dir / f"{foldername}.md"
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(combined_markdown)
+    
+    return str(output_file), []
 
 
 def generate_compact_pdf(filename: str, base_path: Path, markdown_file: str):
