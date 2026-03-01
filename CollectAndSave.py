@@ -36,7 +36,7 @@ def collect_and_save(json_input):
     # Extract parent configuration data from first file
     split_configuration = data.get('splitConfiguration', '')
     parent_file = files[0].get('parentDir', '') if files else ''
-    source_path = files[0].get('fullPath', '') if files else ''
+    source_path = os.path.dirname(files[0].get('fullPath', '')) if files else ''
     source_type = files[0].get('sourceType', '') if files else ''
     podcast_theme = files[0].get('podcastTheme', '') if files else ''
     podcast_subtheme = files[0].get('podcastSubfolder', '') if files else ''

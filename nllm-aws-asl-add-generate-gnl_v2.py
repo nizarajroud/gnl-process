@@ -106,7 +106,8 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
         upload_success = False
         
         if source_type == 'LocalStorage':
-            full_path = source_path if source_path else f"{local_storage_path}/{sourceIdentifier}"
+            # Build full path: source_path is now the folder, source_id is the filename
+            full_path = f"{source_path}/{sourceIdentifier}"
             file_dir = os.path.dirname(full_path)
             security_opts = SecurityOptions(allowed_file_upload_paths=[f'{file_dir}/*'])
         
@@ -140,7 +141,8 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                 )
                 upload_success = True
             elif source_type == 'LocalStorage':
-                full_path = source_path if source_path else f"{local_storage_path}/{sourceIdentifier}"
+                # Build full path: source_path is the folder, source_id is the filename
+                full_path = f"{source_path}/{sourceIdentifier}"
                 try:
                     nova.act(
                         f'Click on "+ Create new" button '

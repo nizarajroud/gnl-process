@@ -81,6 +81,8 @@ def extract_keywords(filename: str, batch_size: int = 15):
 
 For EACH question, output in this exact format:
 **Question N:**
+Main Idea Problem: [brief generic description of the problem/requirement]
+Main Idea Solution: [brief generic description of the solution approach]
 Main Topic: [single concise topic]
 Keywords:
 [keyword 1]
@@ -88,6 +90,8 @@ Keywords:
 ...
 
 Rules:
+- Main idea problem should be a brief, generic statement of what needs to be achieved or the challenge
+- Main idea solution should be a brief, generic statement of the approach or solution
 - Main topic should be 2-5 words describing the primary subject
 - Keywords should be specific technical terms, services, or concepts
 - List 5-10 keywords, one per line
@@ -174,12 +178,18 @@ def upload_to_notion(results: list, api_key: str, page_id: str, filename: str):
             # Parse content
             lines = [l.strip() for l in question_content.strip().split('\n') if l.strip()]
             
+            main_idea_problem = ""
+            main_idea_solution = ""
             main_topic = ""
             keywords = []
             
             in_keywords = False
             for line in lines:
-                if line.startswith('Main Topic:'):
+                if line.startswith('Main Idea Problem:'):
+                    main_idea_problem = line.replace('Main Idea Problem:', '').strip()
+                elif line.startswith('Main Idea Solution:'):
+                    main_idea_solution = line.replace('Main Idea Solution:', '').strip()
+                elif line.startswith('Main Topic:'):
                     main_topic = line.replace('Main Topic:', '').strip()
                 elif line == 'Keywords:':
                     in_keywords = True
@@ -198,6 +208,34 @@ def upload_to_notion(results: list, api_key: str, page_id: str, filename: str):
                     }]
                 }
             })
+            
+            # Add main idea problem as bulleted list item (italic)
+            if main_idea_problem:
+                content_blocks.append({
+                    "object": "block",
+                    "type": "bulleted_list_item",
+                    "bulleted_list_item": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": main_idea_problem},
+                            "annotations": {"italic": True}
+                        }]
+                    }
+                })
+            
+            # Add main idea solution as bulleted list item (italic with arrow)
+            if main_idea_solution:
+                content_blocks.append({
+                    "object": "block",
+                    "type": "bulleted_list_item",
+                    "bulleted_list_item": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": f"⇒ {main_idea_solution}"},
+                            "annotations": {"italic": True}
+                        }]
+                    }
+                })
             
             # Add keywords as to-do list
             if keywords:

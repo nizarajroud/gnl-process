@@ -132,21 +132,31 @@ def clean_dojo_document(input_path, output_path):
             in_select_section = False
         
         if re.search(r'Hence, the correct answers? (?:are|is):', line, re.IGNORECASE):
-            # Check following lines for step-by-step answers (only for Select and order)
+            # Extract inline answer if present
             match = re.search(r'Hence, the correct answers? (?:are|is):\s*(.+)', line, re.IGNORECASE)
             if match:
                 answer_text = match.group(1).strip()
                 if answer_text:
+                    # Remove explanation text that starts with common patterns
+                    # Stop at phrases like "This is", "It uses", "It provides", etc.
+                    explanation_patterns = [
+                        r'\.\s+(This|It|The|By|Using|With|For|In|To|As|Because|Since|Therefore|Thus|Hence)\s+',
+                        r'\.\s+[A-Z][a-z]+\s+(is|are|provides|ensures|allows|enables|helps|supports)'
+                    ]
+                    for pattern in explanation_patterns:
+                        split_match = re.search(pattern, answer_text)
+                        if split_match:
+                            answer_text = answer_text[:split_match.start() + 1].strip()
+                            break
                     correct_answers.append(answer_text)
             
-            # Only extract steps for "Select and order" questions
-            if in_select_section:
-                for j in range(i + 1, min(i + 10, len(lines_list))):
-                    next_line = lines_list[j].strip()
-                    if re.match(r'^[–-]\s*Step\s+\d+:', next_line):
-                        correct_answers.append(next_line)
-                    elif next_line and not next_line.startswith(('–', '-', 'The option')):
-                        break
+            # Check following lines for multi-line answers (lines starting with "–" or "-")
+            for j in range(i + 1, min(i + 10, len(lines_list))):
+                next_line = lines_list[j].strip()
+                if re.match(r'^[–-]\s*', next_line) and not next_line.startswith('- '):
+                    correct_answers.append(next_line)
+                elif next_line and not next_line.startswith(('–', '-', 'The option')):
+                    break
     
     # Mark options that match correct answers as bold
     marked_lines = []
@@ -166,9 +176,35 @@ def clean_dojo_document(input_path, output_path):
             for answer in correct_answers:
                 # Clean the answer text (remove "– Step N:" prefix for matching)
                 clean_answer = re.sub(r'^[–-]\s*Step\s+\d+:\s*', '', answer).strip()
-                if clean_answer.lower() in option_text.lower() or option_text.lower() in clean_answer.lower():
-                    matched_answer = answer
-                    break
+                # Also remove the "–" prefix if present
+                clean_answer = re.sub(r'^[–-]\s*', '', clean_answer).strip()
+                
+                # Match logic depends on question type
+                if clean_answer and option_text:
+                    if in_select_and_order:
+                        # For Select and order: use partial match (first 50 chars)
+                        if clean_answer[:50].lower() in option_text.lower() or option_text[:50].lower() in clean_answer.lower():
+                            matched_answer = answer
+                            break
+                    else:
+                        # For regular questions: require very close match (90% similarity)
+                        # Normalize whitespace for comparison
+                        clean_ans_normalized = ' '.join(clean_answer.split())
+                        opt_normalized = ' '.join(option_text.split())
+                        
+                        # Check if they're nearly identical (allowing for minor differences)
+                        if clean_ans_normalized.lower() == opt_normalized.lower():
+                            matched_answer = answer
+                            break
+                        # Or if one is a complete substring of the other with high overlap
+                        elif len(clean_ans_normalized) > 50 and len(opt_normalized) > 50:
+                            if clean_ans_normalized.lower() in opt_normalized.lower() or opt_normalized.lower() in clean_ans_normalized.lower():
+                                # Check overlap percentage
+                                shorter = min(len(clean_ans_normalized), len(opt_normalized))
+                                longer = max(len(clean_ans_normalized), len(opt_normalized))
+                                if shorter / longer > 0.8:  # 80% overlap
+                                    matched_answer = answer
+                                    break
             
             if matched_answer:
                 # Check if we're in a select and order section and extract step number
