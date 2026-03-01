@@ -15,12 +15,18 @@ from weasyprint import HTML
 load_dotenv()
 
 
-def generate_anki_cards(foldername: str):
+def generate_anki_cards(foldername: str, origin: str = 'udemy'):
     """Complete workflow: PDF splits → Markdown → PDF compact → Anki cards.
     
     Args:
         foldername: Name of the folder containing PDF splits (e.g., 'exam')
+        origin: Source of the exam - 'udemy' or 'dojo' (default: 'udemy')
     """
+    if origin.lower() not in ['udemy', 'dojo']:
+        raise ValueError("origin must be 'udemy' or 'dojo'")
+    
+    origin = origin.lower()
+    
     # Get GNL_PROCESSING_PATH from environment
     gnl_processing_path = os.getenv('GNL_PROCESSING_PATH')
     if not gnl_processing_path:
@@ -28,37 +34,57 @@ def generate_anki_cards(foldername: str):
     
     base_path = Path(gnl_processing_path).parent
     
-    # Step 1: Extract from PDF splits to Markdown
-    print(f"Step 1: Extracting questions from PDF splits...")
-    markdown_file, unmatched_questions = extract_to_markdown(foldername, base_path)
-    print(f"✓ Markdown saved: {markdown_file}")
-    
-    # Step 2: Generate PDF from Markdown
-    print(f"\nStep 2: Generating compact PDF...")
-    pdf_file = generate_compact_pdf(foldername, base_path, markdown_file)
-    print(f"✓ PDF saved: {pdf_file}")
-    
-    # Step 3: Generate Anki cards from Markdown
-    print(f"\nStep 3: Generating Anki flashcards...")
-    anki_file = generate_anki_from_markdown(foldername, base_path, markdown_file)
-    print(f"✓ Anki cards saved: {anki_file}")
-    
-    print(f"\n{'='*60}")
-    print(f"✓ Complete! All files generated:")
-    print(f"  - Markdown: {markdown_file}")
-    print(f"  - PDF: {pdf_file}")
-    print(f"  - Anki: {anki_file}")
-    print(f"{'='*60}")
-    
-    if unmatched_questions:
-        pdf_windows_path = str(Path(os.getenv('GNL_PROCESSING_PATH')) / 'PDF-Parts' / 'exam' / foldername).replace('/mnt/d/', 'D:/')
-        print(f"\n⚠ RECAP - Questions with unmatched correct answers:")
-        print(f"  Folder: {foldername}")
-        print(f"  Path: {pdf_windows_path}")
-        for q_num in unmatched_questions:
-            print(f"  - Question {q_num}")
-        # print(f"\n  Opening PDF...")
-        # subprocess.run(['cmd.exe', '/c', 'start', '', pdf_windows_path], check=False)
+    if origin == 'udemy':
+        # Step 1: Extract from PDF splits to Markdown
+        print(f"Step 1: Extracting questions from PDF splits...")
+        markdown_file, unmatched_questions = extract_to_markdown(foldername, base_path)
+        print(f"✓ Markdown saved: {markdown_file}")
+        
+        # Step 2: Generate PDF from Markdown
+        print(f"\nStep 2: Generating compact PDF...")
+        pdf_file = generate_compact_pdf(foldername, base_path, markdown_file)
+        print(f"✓ PDF saved: {pdf_file}")
+        
+        # Step 3: Generate Anki cards from Markdown
+        print(f"\nStep 3: Generating Anki flashcards...")
+        anki_file = generate_anki_from_markdown(foldername, base_path, markdown_file)
+        print(f"✓ Anki cards saved: {anki_file}")
+        
+        print(f"\n{'='*60}")
+        print(f"✓ Complete! All files generated:")
+        print(f"  - Markdown: {markdown_file}")
+        print(f"  - PDF: {pdf_file}")
+        print(f"  - Anki: {anki_file}")
+        print(f"{'='*60}")
+        
+        if unmatched_questions:
+            pdf_windows_path = str(Path(os.getenv('GNL_PROCESSING_PATH')) / 'PDF-Parts' / 'exam' / foldername).replace('/mnt/d/', 'D:/')
+            print(f"\n⚠ RECAP - Questions with unmatched correct answers:")
+            print(f"  Folder: {foldername}")
+            print(f"  Path: {pdf_windows_path}")
+            for q_num in unmatched_questions:
+                print(f"  - Question {q_num}")
+            print(f"{'='*60}")
+    else:
+        # Dojo processing - start from existing markdown
+        print("Dojo processing: Using existing markdown file...")
+        
+        # Markdown file should already exist
+        markdown_file = str(base_path / "Anki-generation" / "markdown" / f"{foldername}.md")
+        
+        if not Path(markdown_file).exists():
+            raise FileNotFoundError(f"Markdown file not found: {markdown_file}")
+        
+        print(f"✓ Using markdown: {markdown_file}")
+        
+        # Generate Anki cards from Markdown
+        print(f"\nGenerating Anki flashcards...")
+        anki_file = generate_anki_from_markdown(foldername, base_path, markdown_file)
+        print(f"✓ Anki cards saved: {anki_file}")
+        
+        print(f"\n{'='*60}")
+        print(f"✓ Complete! Anki cards generated from existing markdown")
+        print(f"  - Anki: {anki_file}")
         print(f"{'='*60}")
 
 

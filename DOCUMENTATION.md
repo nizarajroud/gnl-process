@@ -244,11 +244,15 @@ pydub               # Audio processing
 
 
 
-python formatPdfFromUdemy.py /mnt/d/PERSONAL/SKILLS/Technical/ACQUIRED_SKILLS/AWS/AIP-C01/assets/pdf-formatting/word/Stephane-udemy-2.docx
 
+python formatPdfFromUdemy.py Dojo-Timed-Mode-Diagnostic-Test dojo
+python formatPdfFromUdemy.py Dojo-Timed-Mode-Diagnostic-Test udemy
 
- python generate_ankycards.py Vladimir-Raykov-udemy-4
+ python generate_ankycards.py Vladimir-Raykov-udemy-4 udemy 
+python generate_ankycards.py Dojo-Timed-Mode-Diagnostic-Test dojo
 
+ python GenerateCompactExamVersion.py Vladimir-Raykov-udemy-4 udemy
+ python GenerateCompactExamVersion.py Dojo-Timed-Mode-Diagnostic-Test dojo
 
 1. Open Anki
 2. File → Import
@@ -260,3 +264,5 @@ python formatPdfFromUdemy.py /mnt/d/PERSONAL/SKILLS/Technical/ACQUIRED_SKILLS/AW
 5. Import
 
 python convert_and_combine_with_speed.py 'D:\DAILY_TASKS\JANVIER\test\wv'
+
+python extract_keywords.py Vladimir-Raykov-udemy-4 

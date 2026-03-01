@@ -12,12 +12,18 @@ from weasyprint import HTML
 load_dotenv()
 
 
-def extract_compact_exam(filename: str):
+def extract_compact_exam(filename: str, origin: str = 'udemy'):
     """Extract questions, options, and correct answers from PDF.
     
     Args:
         filename: Name of the file without extension (e.g., 'exam' not 'exam.pdf')
+        origin: Source of the exam - 'udemy' or 'dojo' (default: 'udemy')
     """
+    if origin.lower() not in ['udemy', 'dojo']:
+        raise ValueError("origin must be 'udemy' or 'dojo'")
+    
+    origin = origin.lower()
+    
     # Get GNL_PROCESSING_PATH from environment
     gnl_processing_path = os.getenv('GNL_PROCESSING_PATH')
     if not gnl_processing_path:
@@ -34,6 +40,16 @@ def extract_compact_exam(filename: str):
     output_dir = base_path / "Anki-generation" / "markdown"
     output_dir.mkdir(parents=True, exist_ok=True)
     
+    if origin == 'udemy':
+        output_file = extract_udemy_exam(pdf_path, output_dir, filename, base_path)
+    else:
+        output_file = extract_dojo_exam(pdf_path, output_dir, filename, base_path)
+    
+    return str(output_file)
+
+
+def extract_udemy_exam(pdf_path: Path, output_dir: Path, filename: str, base_path: Path):
+    """Extract Udemy exam format."""
     doc = fitz.open(str(pdf_path))
     full_text = ""
     
@@ -129,7 +145,81 @@ def extract_compact_exam(filename: str):
     pdf_file = generate_pdf_from_markdown_internal(output_file, filename, base_path)
     print(f"PDF version saved to: {pdf_file}")
     
-    return str(output_file)
+    return output_file
+
+
+def extract_dojo_exam(pdf_path: Path, output_dir: Path, filename: str, base_path: Path):
+    """Extract Dojo exam format - read from Word document to preserve formatting."""
+    from docx import Document
+    
+    # Read from Word document instead of PDF to preserve formatting
+    word_path = base_path / "pdf-formatting" / "word" / f"{filename}.docx"
+    
+    if not word_path.exists():
+        raise FileNotFoundError(f"Word document not found: {word_path}")
+    
+    doc = Document(str(word_path))
+    
+    output_lines = []
+    skip_content = False
+    prev_was_list_item = False
+    
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        
+        # Check if we hit "Explanations:" - start skipping
+        if text == "Explanations:":
+            skip_content = True
+            continue
+        
+        # Check if we hit a new question - stop skipping
+        if re.match(r'^Question\s+\d+:', text):
+            skip_content = False
+            # Add blank line before question if previous was a list item
+            if prev_was_list_item:
+                output_lines.append("\n")
+                prev_was_list_item = False
+        
+        # Skip if we're in explanations section
+        if skip_content:
+            continue
+        
+        # Skip empty paragraphs
+        if not text:
+            continue
+        
+        # Check if paragraph is bold
+        is_bold = any(run.bold for run in para.runs if run.text.strip())
+        
+        # Check if this is a list item
+        if text.startswith('- '):
+            if is_bold:
+                # Bold list item - extract text after "- " and make it bold
+                option_text = text[2:]
+                output_lines.append(f"- **{option_text}**\n")
+            else:
+                output_lines.append(f"{text}\n")
+            prev_was_list_item = True
+        else:
+            # Regular paragraph
+            if is_bold:
+                output_lines.append(f"**{text}**\n\n")
+            else:
+                output_lines.append(f"{text}\n\n")
+            prev_was_list_item = False
+    
+    # Save to markdown file
+    output_file = output_dir / f"{filename}.md"
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(''.join(output_lines))
+    
+    print(f"Compact exam version saved to: {output_file}")
+    
+    # Generate PDF from the markdown
+    pdf_file = generate_pdf_from_markdown_internal(output_file, filename, base_path)
+    print(f"PDF version saved to: {pdf_file}")
+    
+    return output_file
 
 
 def generate_pdf_from_markdown_internal(markdown_path: Path, filename: str, base_path: Path):

@@ -7,6 +7,7 @@ import json
 import requests
 from pathlib import Path
 from dotenv import load_dotenv
+from notion_client import Client
 
 load_dotenv()
 
@@ -131,6 +132,111 @@ Rules:
         f.write('\n\n'.join(all_results))
     
     print(f"\n✓ Keywords extracted and saved to: {output_file}")
+    
+    # Upload to Notion
+    notion_api_key = os.getenv('NOTION_API_KEY')
+    notion_page_id = os.getenv('NOTION_PAGE_ID')
+    
+    if notion_api_key and notion_page_id:
+        print(f"\nUploading to Notion...")
+        upload_to_notion(all_results, notion_api_key, notion_page_id, filename)
+        print(f"✓ Content uploaded to Notion page")
+    else:
+        print(f"\n⚠ Skipping Notion upload (NOTION_API_KEY or NOTION_PAGE_ID not set)")
+
+
+def upload_to_notion(results: list, api_key: str, page_id: str, filename: str):
+    """Upload extracted keywords to Notion page."""
+    notion = Client(auth=api_key)
+    
+    blocks = []
+    
+    # Parse each batch result and collect content blocks
+    content_blocks = []
+    for batch_result in results:
+        # Split by question blocks
+        question_sections = re.split(r'(\*\*Question\s+\d+:\*\*)', batch_result)
+        
+        for i in range(1, len(question_sections), 2):
+            if i + 1 >= len(question_sections):
+                break
+            
+            question_header = question_sections[i]
+            question_content = question_sections[i + 1]
+            
+            # Extract question number
+            q_match = re.match(r'\*\*Question\s+(\d+):\*\*', question_header)
+            if not q_match:
+                continue
+            
+            question_num = q_match.group(1)
+            
+            # Parse content
+            lines = [l.strip() for l in question_content.strip().split('\n') if l.strip()]
+            
+            main_topic = ""
+            keywords = []
+            
+            in_keywords = False
+            for line in lines:
+                if line.startswith('Main Topic:'):
+                    main_topic = line.replace('Main Topic:', '').strip()
+                elif line == 'Keywords:':
+                    in_keywords = True
+                elif in_keywords and line:
+                    keywords.append(line)
+            
+            # Add question with main topic (bold)
+            content_blocks.append({
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {"content": f"Question {question_num}: {main_topic}"},
+                        "annotations": {"bold": True}
+                    }]
+                }
+            })
+            
+            # Add keywords as to-do list
+            if keywords:
+                for keyword in keywords:
+                    content_blocks.append({
+                        "object": "block",
+                        "type": "to_do",
+                        "to_do": {
+                            "rich_text": [{
+                                "type": "text",
+                                "text": {"content": keyword}
+                            }],
+                            "checked": False
+                        }
+                    })
+    
+    # Create toggle with filename containing all content
+    toggle_block = {
+        "object": "block",
+        "type": "toggle",
+        "toggle": {
+            "rich_text": [{
+                "type": "text",
+                "text": {"content": filename},
+                "annotations": {"bold": True}
+            }],
+            "children": content_blocks[:100]  # Notion limit: 100 children per block
+        }
+    }
+    
+    # Append toggle to page
+    response = notion.blocks.children.append(block_id=page_id, children=[toggle_block])
+    
+    # If more than 100 content blocks, append remaining to the toggle
+    if len(content_blocks) > 100:
+        toggle_id = response['results'][0]['id']
+        for i in range(100, len(content_blocks), 100):
+            batch = content_blocks[i:i+100]
+            notion.blocks.children.append(block_id=toggle_id, children=batch)
 
 
 if __name__ == "__main__":
