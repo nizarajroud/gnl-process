@@ -81,7 +81,7 @@ def extract_keywords(filename: str, batch_size: int = 15):
 
 For EACH question, output in this exact format:
 **Question N:**
-Main Idea Problem: [brief generic description of the problem/requirement]
+Main Idea Problem: [brief question format describing what needs to be achieved, e.g., "How to optimize token consumption?"]
 Main Idea Solution: [brief generic description of the solution approach]
 Main Topic: [single concise topic]
 Keywords:
@@ -90,7 +90,7 @@ Keywords:
 ...
 
 Rules:
-- Main idea problem should be a brief, generic statement of what needs to be achieved or the challenge
+- Main idea problem should be a brief question (starting with How/What/When/Why) describing the challenge
 - Main idea solution should be a brief, generic statement of the approach or solution
 - Main topic should be 2-5 words describing the primary subject
 - Keywords should be specific technical terms, services, or concepts

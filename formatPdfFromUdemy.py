@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 def clean_dojo_document(input_path, output_path):
     """Remove References sections from Dojo documents."""
     doc = Document(input_path)
@@ -115,51 +116,15 @@ def clean_dojo_document(input_path, output_path):
     
     text = '\n'.join(result_lines)
     
-    # Find correct answers and mark them in options
+    # Use Bedrock to extract correct answers for each question
+    print("Extracting correct answers using Bedrock...")
     lines_list = text.split('\n')
-    correct_answers = []
-    
-    # Track if we're in a "Select and order" section
-    in_select_section = False
-    
-    # Extract correct answers from "Hence, the correct answer" patterns
-    for i, line in enumerate(lines_list):
-        # Check if this is a "Select and order" question
-        if re.search(r'Select and order', line, re.IGNORECASE):
-            in_select_section = True
-        # Reset when we hit a new question
-        elif re.match(r'^Question\s+\d+:', line.strip()):
-            in_select_section = False
-        
-        if re.search(r'Hence, the correct answers? (?:are|is):', line, re.IGNORECASE):
-            # Extract inline answer if present
-            match = re.search(r'Hence, the correct answers? (?:are|is):\s*(.+)', line, re.IGNORECASE)
-            if match:
-                answer_text = match.group(1).strip()
-                if answer_text:
-                    # Remove explanation text that starts with common patterns
-                    # Stop at phrases like "This is", "It uses", "It provides", etc.
-                    explanation_patterns = [
-                        r'\.\s+(This|It|The|By|Using|With|For|In|To|As|Because|Since|Therefore|Thus|Hence)\s+',
-                        r'\.\s+[A-Z][a-z]+\s+(is|are|provides|ensures|allows|enables|helps|supports)'
-                    ]
-                    for pattern in explanation_patterns:
-                        split_match = re.search(pattern, answer_text)
-                        if split_match:
-                            answer_text = answer_text[:split_match.start() + 1].strip()
-                            break
-                    correct_answers.append(answer_text)
-            
-            # Check following lines for multi-line answers (lines starting with "–" or "-")
-            for j in range(i + 1, min(i + 10, len(lines_list))):
-                next_line = lines_list[j].strip()
-                if re.match(r'^[–-]\s*', next_line) and not next_line.startswith('- '):
-                    correct_answers.append(next_line)
-                elif next_line and not next_line.startswith(('–', '-', 'The option')):
-                    break
+    correct_answers_map = {}  # Use highlight_correct_options.py instead
+    print(f"Bedrock extracted answers for {len(correct_answers_map)} questions")
     
     # Mark options that match correct answers as bold
     marked_lines = []
+    current_question = None
     in_select_and_order = False
     
     for line in lines_list:
@@ -167,58 +132,37 @@ def clean_dojo_document(input_path, output_path):
         if re.search(r'Select and order', line, re.IGNORECASE):
             in_select_and_order = True
             marked_lines.append(("normal", line))
+        # Track current question
+        elif re.match(r'^Question\s+\d+:', line.strip()):
+            q_match = re.search(r'Question\s+(\d+):', line)
+            if q_match:
+                current_question = q_match.group(1)
+            in_select_and_order = False
+            marked_lines.append(("normal", line))
         # Check if this is an option line (starts with "- ")
         elif line.strip().startswith("- "):
             option_text = line.strip()[2:]  # Remove "- " prefix
             
-            # Check if this option matches any correct answer
-            matched_answer = None
-            for answer in correct_answers:
-                # Clean the answer text (remove "– Step N:" prefix for matching)
-                clean_answer = re.sub(r'^[–-]\s*Step\s+\d+:\s*', '', answer).strip()
-                # Also remove the "–" prefix if present
-                clean_answer = re.sub(r'^[–-]\s*', '', clean_answer).strip()
+            # Check if this option is in the correct answers for current question
+            matched = False
+            if current_question and current_question in correct_answers_map:
+                correct_answers = correct_answers_map[current_question]
                 
-                # Match logic depends on question type
-                if clean_answer and option_text:
-                    if in_select_and_order:
-                        # For Select and order: use partial match (first 50 chars)
-                        if clean_answer[:50].lower() in option_text.lower() or option_text[:50].lower() in clean_answer.lower():
-                            matched_answer = answer
-                            break
-                    else:
-                        # For regular questions: require very close match (90% similarity)
-                        # Normalize whitespace for comparison
-                        clean_ans_normalized = ' '.join(clean_answer.split())
-                        opt_normalized = ' '.join(option_text.split())
-                        
-                        # Check if they're nearly identical (allowing for minor differences)
-                        if clean_ans_normalized.lower() == opt_normalized.lower():
-                            matched_answer = answer
-                            break
-                        # Or if one is a complete substring of the other with high overlap
-                        elif len(clean_ans_normalized) > 50 and len(opt_normalized) > 50:
-                            if clean_ans_normalized.lower() in opt_normalized.lower() or opt_normalized.lower() in clean_ans_normalized.lower():
-                                # Check overlap percentage
-                                shorter = min(len(clean_ans_normalized), len(opt_normalized))
-                                longer = max(len(clean_ans_normalized), len(opt_normalized))
-                                if shorter / longer > 0.8:  # 80% overlap
-                                    matched_answer = answer
-                                    break
+                for correct_ans in correct_answers:
+                    # Normalize for comparison
+                    opt_normalized = ' '.join(option_text.split()).lower()
+                    ans_normalized = ' '.join(correct_ans.split()).lower()
+                    
+                    # Check for match
+                    if opt_normalized == ans_normalized or \
+                       (len(opt_normalized) > 50 and len(ans_normalized) > 50 and \
+                        (opt_normalized in ans_normalized or ans_normalized in opt_normalized) and \
+                        min(len(opt_normalized), len(ans_normalized)) / max(len(opt_normalized), len(ans_normalized)) > 0.8):
+                        matched = True
+                        break
             
-            if matched_answer:
-                # Check if we're in a select and order section and extract step number
-                if in_select_and_order:
-                    step_match = re.search(r'Step\s+(\d+)', matched_answer, re.IGNORECASE)
-                    if step_match:
-                        step_num = step_match.group(1)
-                        # Remove existing "Step N:" prefix if present
-                        clean_option = re.sub(r'^Step\s+\d+:\s*', '', option_text, flags=re.IGNORECASE)
-                        marked_lines.append(("option_bold", f"- Step {step_num}: {clean_option}"))
-                    else:
-                        marked_lines.append(("option_bold", line))
-                else:
-                    marked_lines.append(("option_bold", line))
+            if matched:
+                marked_lines.append(("option_bold", line))
             else:
                 marked_lines.append(("option", line))
         else:
@@ -351,12 +295,22 @@ if __name__ == "__main__":
     
     base_path = Path(gnl_processing_path).parent
     
-    # Build input path
-    input_file = base_path / "pdf-formatting" / "word" / f"{filename}.docx"
+    # Build input path from origin folder
+    origin_file = base_path / "pdf-formatting" / "origin" / f"{filename}.docx"
     
-    if not input_file.exists():
-        print(f"Error: File not found: {input_file}")
+    if not origin_file.exists():
+        print(f"Error: File not found: {origin_file}")
         sys.exit(1)
+    
+    # Copy to word folder for processing
+    word_folder = base_path / "pdf-formatting" / "word"
+    word_folder.mkdir(parents=True, exist_ok=True)
+    input_file = word_folder / f"{filename}.docx"
+    
+    import shutil
+    shutil.copy2(origin_file, input_file)
+    print(f"Copied from origin folder: {origin_file}")
+    print(f"Processing copy: {input_file}")
     
     # Process document based on origin
     if origin == 'udemy':
@@ -373,23 +327,14 @@ if __name__ == "__main__":
         print("Document cleaned for Dojo format (References removed)")
     
     # Convert to PDF
-    pdf_folder = base_path / "pdf-formatting" / "pdf"
-    pdf_folder.mkdir(parents=True, exist_ok=True)
+    exam_folder = Path(gnl_processing_path) / ".." / ".." / "exam"
+    exam_folder.mkdir(parents=True, exist_ok=True)
     
-    # Use LibreOffice to convert to PDF
+    # Use LibreOffice to convert to PDF directly to exam folder
     subprocess.run([
         "libreoffice", "--headless", "--convert-to", "pdf",
-        "--outdir", str(pdf_folder), str(input_file)
+        "--outdir", str(exam_folder), str(input_file)
     ], check=True)
     
-    pdf_file = pdf_folder / input_file.with_suffix('.pdf').name
+    pdf_file = exam_folder / input_file.with_suffix('.pdf').name
     print(f"PDF saved to: {pdf_file}")
-    
-    # For Dojo mode, copy PDF to exam folder
-    if origin == 'dojo':
-        exam_folder = Path(gnl_processing_path) / ".." / ".." / "exam"
-        
-        import shutil
-        dest_file = exam_folder / pdf_file.name
-        shutil.copy2(pdf_file, dest_file)
-        print(f"PDF copied to: {dest_file}")

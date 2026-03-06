@@ -266,3 +266,4 @@ python generate_ankycards.py Dojo-Timed-Mode-Diagnostic-Test dojo
 python convert_and_combine_with_speed.py 'D:\DAILY_TASKS\JANVIER\test\wv'
 
 python extract_keywords.py Vladimir-Raykov-udemy-4 
+python combine_mp3_simple.py "G:\Mon Drive\GNL-BACKLOG\AIP\exam\Lu"
