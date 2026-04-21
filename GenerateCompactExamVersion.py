@@ -49,90 +49,68 @@ def extract_compact_exam(filename: str, origin: str = 'udemy'):
 
 
 def extract_udemy_exam(pdf_path: Path, output_dir: Path, filename: str, base_path: Path):
-    """Extract Udemy exam format."""
-    doc = fitz.open(str(pdf_path))
-    full_text = ""
+    """Extract Udemy exam format - read from Word document to preserve formatting."""
+    from docx import Document
     
-    # Extract all text from PDF
-    for page in doc:
-        full_text += page.get_text()
+    # Read from Word document instead of PDF to preserve formatting
+    word_path = base_path / "pdf-formatting" / "word" / f"{filename}.docx"
     
-    doc.close()
+    if not word_path.exists():
+        raise FileNotFoundError(f"Word document not found: {word_path}")
     
-    # Split by questions
-    questions = re.split(r'(Question\s+\d+)', full_text)
+    doc = Document(str(word_path))
     
     output_lines = []
+    skip_section = False
+    prev_was_list_item = False
     
-    for i in range(1, len(questions), 2):
-        if i + 1 >= len(questions):
-            break
-            
-        question_header = questions[i].strip()
-        question_content = questions[i + 1].strip()
+    for para in doc.paragraphs:
+        text = para.text.strip()
         
-        # Extract question number
-        question_num = re.search(r'\d+', question_header).group()
-        
-        # Find CORRECT answer
-        correct_match = re.search(r'CORRECT:\s*(.+?)(?:\n|$)', question_content)
-        correct_answer = correct_match.group(1).strip() if correct_match else None
-        
-        # Split content before CORRECT/INCORRECT
-        content_before_answer = re.split(r'CORRECT:|INCORRECT:', question_content)[0]
-        
-        lines = content_before_answer.split('\n')
-        lines = [l.strip() for l in lines if l.strip()]
-        
-        # Find the last question mark
-        last_question_idx = -1
-        for idx, line in enumerate(lines):
-            if '?' in line:
-                last_question_idx = idx
-        
-        if last_question_idx == -1:
+        # Skip Udemy-specific patterns
+        if any(pattern in text for pattern in ['Ignoré', 'Bonne réponse', 'Sélection correcte', 'Explication générale']):
             continue
         
-        # Question text
-        question_text = lines[:last_question_idx + 1]
-        options_lines = lines[last_question_idx + 1:]
+        # Check if we hit "Correct option(s):" or "Incorrect option(s):" - start skipping entire section
+        if re.match(r'^(Correct|Incorrect)\s+options?:', text, re.IGNORECASE):
+            skip_section = True
+            continue
         
-        # Group options
-        options = []
-        current_option = []
+        # Check if we hit a new question - stop skipping
+        if re.match(r'^Question\s+\d+:', text):
+            skip_section = False
+            # Add blank line before question if previous was a list item
+            if prev_was_list_item:
+                output_lines.append("\n")
+                prev_was_list_item = False
         
-        for line in options_lines:
-            if line and line[0].isupper() and (
-                any(line.startswith(verb) for verb in ['Configure', 'Implement', 'Switch', 'Use', 'Create', 'Enable', 'Set', 'Deploy', 'Migrate', 'Apply']) or
-                line.startswith('Amazon ') or 
-                line.startswith('AWS ') or
-                (not current_option and len(line) > 5)
-            ):
-                if current_option:
-                    options.append(' '.join(current_option))
-                current_option = [line]
+        # Skip if we're in a section to remove
+        if skip_section:
+            continue
+        
+        # Skip empty paragraphs
+        if not text:
+            continue
+        
+        # Check if paragraph is bold
+        is_bold = any(run.bold for run in para.runs if run.text.strip())
+        
+        # Check if this is a list item
+        if text.startswith('- '):
+            if is_bold:
+                # Bold list item - extract text after "- " and make it bold
+                option_text = text[2:]
+                output_lines.append(f"- **{option_text}**\n")
             else:
-                if current_option:
-                    current_option.append(line)
-        
-        if current_option:
-            options.append(' '.join(current_option))
-        
-        # Build markdown output
-        output_lines.append(f"**Question {question_num}:**\n")
-        output_lines.append(' '.join(question_text) + "\n\n")
-        
-        for option in options:
-            is_correct = False
-            if correct_answer and (option == correct_answer or correct_answer in option or option in correct_answer):
-                is_correct = True
-            
-            if is_correct:
-                output_lines.append(f"- **{option}**\n")
+                output_lines.append(f"{text}\n")
+            prev_was_list_item = True
+        else:
+            # Regular paragraph
+            if is_bold:
+                output_lines.append(f"**{text}**\n\n")
             else:
-                output_lines.append(f"- {option}\n")
-        
-        output_lines.append("\n")
+                output_lines.append(f"{text}\n\n")
+            prev_was_list_item = False
     
     # Save to markdown file
     output_file = output_dir / f"{filename}.md"

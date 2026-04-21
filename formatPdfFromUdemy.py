@@ -212,63 +212,155 @@ def clean_dojo_document(input_path, output_path):
 
 
 def clean_word_for_anki(input_path, output_path):
-    # Charger le document
     doc = Document(input_path)
-    
-    # Get filename without extension
     filename = Path(input_path).stem
     
-    # Extraire tout le texte du document
     full_text = []
     for para in doc.paragraphs:
         full_text.append(para.text)
     
     text = "\n".join(full_text)
 
-    # 1. Nettoyage (Suppressions par vide)
-    # On gère les termes spécifiques et les patterns "via -... retour ligne"
+    # Remove Udemy-specific patterns
     patterns_to_remove = [
         r"\[ \]", 
         r"Ignoré.*?\n",
         r"Bonne réponse", 
         r"Sélection correcte", 
         r"Explication générale",
-        r"via -.*?\n" # Equivalent de via -*^13 (caractères génériques)
+        r"via -.*?\n"
     ]
     
     for p in patterns_to_remove:
         text = re.sub(p, "", text)
 
-    # 2. Remplacements complexes (Regex)
     # Replace title section with filename
     text = re.sub(r"\[Unofficial\].*?Tentative \d+\s*\n", filename + "\n", text, flags=re.DOTALL)
     
-    # Références:*^13Question -> Question
-    text = re.sub(r"References:.*?\nQuestion", "Question", text, flags=re.IGNORECASE)
-    text = re.sub(r"Reference:.*?\nQuestion", "Question", text, flags=re.IGNORECASE)
+    # Remove References sections (from Dojo logic)
+    text = re.sub(r"References?:.*?(?=Question|\Z)", "", text, flags=re.DOTALL | re.IGNORECASE)
     
-    # Remove Ressources/Domaine sections before Question
+    # Remove Ressources/Domaine sections
     text = re.sub(r"Ressources\s*\nDomaine\s*\n.*?\n(?=Question)", "", text, flags=re.IGNORECASE)
 
-    # 3. Formatage final
-    # Remplacer double saut de ligne par un simple (^p^p -> ^p)
+    # Remove multiple blank lines
     text = re.sub(r"\n\s*\n", "\n", text)
-    
-    # Remove any existing separator lines
     text = re.sub(r"={50,}\n?", "", text)
 
-    # Sauvegarder dans un nouveau document ou fichier texte
+    # Renumber questions sequentially (from Dojo logic)
+    lines = text.split('\n')
+    result_lines = []
+    question_counter = 0
+    seen_questions = set()
+    
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+        
+        if re.match(r'^\d+\.\s*Question$', stripped):
+            question_counter += 1
+            result_lines.append(f"Question {question_counter}:")
+            i += 1
+        elif re.match(r'^Question$', stripped):
+            question_counter += 1
+            result_lines.append(f"Question {question_counter}:")
+            i += 1
+        elif re.match(r'^Question\s+\d+', stripped):
+            # Matches "Question N" with or without colon, with or without text after
+            question_counter += 1
+            result_lines.append(f"Question {question_counter}:")
+            # Extract text after "Question N:" or "Question N"
+            rest = re.sub(r'^Question\s+\d+:?\s*', '', stripped, flags=re.IGNORECASE)
+            if rest:
+                result_lines.append(rest)
+            i += 1
+        elif re.search(r'Select and order', stripped, re.IGNORECASE):
+            result_lines.append(line)
+            i += 1
+            
+            options = []
+            seen_options = set()
+            while i < len(lines) and not lines[i].strip().startswith("Incorrect"):
+                if lines[i].strip():
+                    option_text = lines[i].strip()
+                    if option_text not in seen_options:
+                        options.append(option_text)
+                        seen_options.add(option_text)
+                i += 1
+            
+            for option in options:
+                result_lines.append(f"- {option}")
+            
+            result_lines.append("Explanations:")
+            
+            if i < len(lines) and lines[i].strip().startswith("Incorrect"):
+                i += 1
+        elif re.match(r'^Correct\s+options?:', stripped, re.IGNORECASE):
+            # Find last question mark before this line
+            last_question_idx = -1
+            for j in range(len(result_lines) - 1, -1, -1):
+                if '?' in result_lines[j]:
+                    last_question_idx = j
+                    break
+            
+            if last_question_idx != -1:
+                # Extract options between question mark and this line
+                options = []
+                for j in range(last_question_idx + 1, len(result_lines)):
+                    if result_lines[j].strip():
+                        options.append(result_lines[j].strip())
+                
+                # Remove option lines
+                result_lines = result_lines[:last_question_idx + 1]
+                
+                # Add as bullet list
+                for option in options:
+                    if not option.startswith('- '):
+                        result_lines.append(f"- {option}")
+                    else:
+                        result_lines.append(option)
+            
+            # Keep the Correct option line
+            result_lines.append(line)
+            i += 1
+        else:
+            result_lines.append(line)
+            i += 1
+    
+    text = '\n'.join(result_lines)
+
+    # Save to new document
     new_doc = Document()
     for i, line in enumerate(text.split('\n')):
         para = new_doc.add_paragraph()
-        # First line (filename) - bold and centered
         if i == 0:
             run = para.add_run(line)
             run.bold = True
-            para.alignment = 1  # 1 = center
-        # Check if line starts with "Question" followed by space and number
-        elif re.match(r'^Question\s+\d+', line):
+            para.alignment = 1
+        elif re.match(r'^Question\s+\d+:', line.strip()):
             para.add_run(line).bold = True
+        elif line.strip() == "Explanations:":
+            para.add_run(line).bold = True
+        elif re.match(r'^(Correct|Incorrect)\s+options?:', line.strip(), re.IGNORECASE):
+            run = para.add_run(line)
+            run.bold = True
+        elif re.search(r'Hence, the correct answers? (?:are|is):', line, re.IGNORECASE):
+            match = re.search(r'(Hence, the correct answers? (?:are|is):)', line, re.IGNORECASE)
+            if match:
+                before = line[:match.start()]
+                pattern = match.group(1)
+                after = line[match.end():]
+                
+                if before:
+                    para.add_run(before)
+                run = para.add_run(pattern)
+                run.bold = True
+                run.underline = True
+                if after:
+                    para.add_run(after)
+            else:
+                para.add_run(line)
         else:
             para.add_run(line)
     

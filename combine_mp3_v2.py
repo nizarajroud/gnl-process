@@ -64,8 +64,8 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, out
             parent_files[parent_file] = []
         parent_files[parent_file].append((record_id, podcast_name))
     
-    # Read from Audio-Parts folder - GNL_PROCESSING_PATH/Audio-Parts/subfolder/parent_file
-    audio_parts_base = Path(gnl_processing_path) / "Audio-Parts" / subfolder
+    # Read from AUDIO_PARTS_FOLDER/subfolder/parent_file
+    audio_parts_base = Path(os.getenv("AUDIO_PARTS_FOLDER", "Audio-Parts")) / subfolder
     
     # Output to GNL_BACKLOG
     output_dir = Path(gnl_backlog) / theme / subfolder

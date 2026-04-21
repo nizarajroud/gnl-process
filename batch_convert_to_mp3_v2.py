@@ -53,8 +53,8 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str):
         raise ValueError("GNL_PROCESSING_PATH not found in .env file")
     
     try:
-        # Use GNL_PROCESSING_PATH/Audio-Parts/subfolder/parent_file
-        audio_parts_dir = Path(gnl_processing_path) / "Audio-Parts" / subfolder / parent_file
+        # Use AUDIO_PARTS_FOLDER/subfolder/parent_file
+        audio_parts_dir = Path(os.getenv("AUDIO_PARTS_FOLDER", "Audio-Parts")) / subfolder / parent_file
         input_file = audio_parts_dir / f"{podcast_name}.m4a"
         output_file = audio_parts_dir / f"{podcast_name}.mp3"
         

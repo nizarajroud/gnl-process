@@ -205,9 +205,8 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                 print("Download timeout reached")
                 sys.exit(1)
 
-            # Use GNL_PROCESSING_PATH/Audio-Parts/podcast_subtheme/name
-            gnl_processing_path = os.getenv('GNL_PROCESSING_PATH')
-            dest_dir = os.path.join(gnl_processing_path, "Audio-Parts", subfolder, parent_file)
+            # Use AUDIO_PARTS_FOLDER/podcast_subtheme/name
+            dest_dir = os.path.join(os.getenv("AUDIO_PARTS_FOLDER", "Audio-Parts"), subfolder, parent_file)
             os.makedirs(dest_dir, exist_ok=True)
             
             playwright_folders = glob.glob("/tmp/playwright-artifacts*")

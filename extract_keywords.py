@@ -82,7 +82,7 @@ def extract_keywords(filename: str, batch_size: int = 15):
 For EACH question, output in this exact format:
 **Question N:**
 Main Idea Problem: [brief question format describing what needs to be achieved, e.g., "How to optimize token consumption?"]
-Main Idea Solution: [brief generic description of the solution approach]
+Main Idea Solution: The solution is to [brief generic description of the solution approach]
 Main Topic: [single concise topic]
 Keywords:
 [keyword 1]
@@ -91,7 +91,7 @@ Keywords:
 
 Rules:
 - Main idea problem should be a brief question (starting with How/What/When/Why) describing the challenge
-- Main idea solution should be a brief, generic statement of the approach or solution
+- Main idea solution MUST start with "The solution is to" followed by a brief, generic statement of the approach or solution
 - Main topic should be 2-5 words describing the primary subject
 - Keywords should be specific technical terms, services, or concepts
 - List 5-10 keywords, one per line
@@ -149,14 +149,81 @@ Rules:
         print(f"\n⚠ Skipping Notion upload (NOTION_API_KEY or NOTION_PAGE_ID not set)")
 
 
+def cluster_keywords_with_bedrock(keywords: list, api_key: str):
+    """Cluster keywords by category using Bedrock."""
+    model_id = os.getenv('MOEDL_INFERENCE_ID', 'global.anthropic.claude-opus-4-5-20251101-v1:0')
+    aws_region = os.getenv('AWS_REGION', 'us-east-1')
+    
+    keywords_text = '\n'.join(keywords)
+    
+    prompt = f"""Group these keywords into clusters based on similar context or category.
+
+Keywords:
+{keywords_text}
+
+Rules:
+- Group related keywords together (e.g., networking concepts, security concepts, AI/ML concepts)
+- Each cluster should be on one line with keywords separated by " - "
+- Format: keyword1 - keyword2 - keyword3
+- One cluster per line
+- Order clusters by relevance/importance
+
+Example output:
+VPC endpoint - Network isolation - Security groups
+RAG - Embeddings - Vector database
+Fine-tuning - Model training - Hyperparameters
+
+Output the clustered keywords now:"""
+    
+    payload = {
+        "messages": [
+            {
+                "role": "user",
+                "content": [{"text": prompt}]
+            }
+        ],
+        "inferenceConfig": {
+            "maxTokens": 4000,
+            "temperature": 0.1
+        }
+    }
+    
+    url = f"https://bedrock-runtime.{aws_region}.amazonaws.com/model/{model_id}/converse"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        
+        if response.status_code == 200:
+            result = response.json()
+            clustered_text = result['output']['message']['content'][0]['text']
+            # Split by lines and clean up
+            clusters = [line.strip() for line in clustered_text.strip().split('\n') if line.strip()]
+            return clusters
+        else:
+            print(f"  ⚠ Clustering API error: {response.status_code} - {response.text[:200]}")
+            return keywords
+    except Exception as e:
+        print(f"  ⚠ Clustering exception: {str(e)}")
+        return keywords
+
+
 def upload_to_notion(results: list, api_key: str, page_id: str, filename: str):
     """Upload extracted keywords to Notion page."""
     notion = Client(auth=api_key)
     
+    # Get Bedrock API key for clustering
+    bedrock_api_key = os.getenv('AWS_BEARER_TOKEN_BEDROCK', '')
+    
     blocks = []
     
     # Parse each batch result and collect content blocks
-    content_blocks = []
+    question_blocks = []  # For questions/problems/solutions
+    all_keywords = []  # Collect all keywords here
+    
     for batch_result in results:
         # Split by question blocks
         question_sections = re.split(r'(\*\*Question\s+\d+:\*\*)', batch_result)
@@ -196,63 +263,104 @@ def upload_to_notion(results: list, api_key: str, page_id: str, filename: str):
                 elif in_keywords and line:
                     keywords.append(line)
             
-            # Add question with main topic (bold)
-            content_blocks.append({
+            # Collect keywords for later
+            all_keywords.extend(keywords)
+            
+            # Add main topic as bulleted list item (bold)
+            main_topic_block = {
                 "object": "block",
-                "type": "paragraph",
-                "paragraph": {
+                "type": "bulleted_list_item",
+                "bulleted_list_item": {
                     "rich_text": [{
                         "type": "text",
-                        "text": {"content": f"Question {question_num}: {main_topic}"},
+                        "text": {"content": main_topic},
                         "annotations": {"bold": True}
-                    }]
+                    }],
+                    "children": []
                 }
-            })
+            }
             
-            # Add main idea problem as bulleted list item (italic)
+            # Add main idea problem as nested child (indented)
             if main_idea_problem:
-                content_blocks.append({
+                main_topic_block["bulleted_list_item"]["children"].append({
                     "object": "block",
                     "type": "bulleted_list_item",
                     "bulleted_list_item": {
                         "rich_text": [{
                             "type": "text",
-                            "text": {"content": main_idea_problem},
-                            "annotations": {"italic": True}
+                            "text": {"content": main_idea_problem}
                         }]
                     }
                 })
             
-            # Add main idea solution as bulleted list item (italic with arrow)
+            # Add main idea solution as nested child (indented, with arrow)
             if main_idea_solution:
-                content_blocks.append({
+                main_topic_block["bulleted_list_item"]["children"].append({
                     "object": "block",
                     "type": "bulleted_list_item",
                     "bulleted_list_item": {
                         "rich_text": [{
                             "type": "text",
-                            "text": {"content": f"⇒ {main_idea_solution}"},
-                            "annotations": {"italic": True}
+                            "text": {"content": f"⇒ {main_idea_solution}"}
                         }]
                     }
                 })
             
-            # Add keywords as to-do list
-            if keywords:
-                for keyword in keywords:
-                    content_blocks.append({
-                        "object": "block",
-                        "type": "to_do",
-                        "to_do": {
-                            "rich_text": [{
-                                "type": "text",
-                                "text": {"content": keyword}
-                            }],
-                            "checked": False
-                        }
-                    })
+            question_blocks.append(main_topic_block)
     
-    # Create toggle with filename containing all content
+    # Add separator before keywords section
+    question_blocks.append({
+        "object": "block",
+        "type": "divider",
+        "divider": {}
+    })
+    
+    # Add "Keywords" header
+    question_blocks.append({
+        "object": "block",
+        "type": "heading_2",
+        "heading_2": {
+            "rich_text": [{
+                "type": "text",
+                "text": {"content": "Keywords"},
+                "annotations": {"bold": True}
+            }]
+        }
+    })
+    
+    # Add all keywords as bulleted list (remove duplicates and AWS services, cluster by category)
+    if all_keywords:
+        seen = set()
+        unique_keywords = []
+        for keyword in all_keywords:
+            keyword_lower = keyword.lower()
+            # Skip AWS services (starting with Amazon or AWS)
+            if keyword.startswith('Amazon ') or keyword.startswith('AWS '):
+                continue
+            if keyword_lower not in seen:
+                seen.add(keyword_lower)
+                unique_keywords.append(keyword)
+        
+        print(f"  Clustering {len(unique_keywords)} unique keywords...")
+        
+        # Cluster keywords using Bedrock
+        if unique_keywords:
+            clustered_keywords = cluster_keywords_with_bedrock(unique_keywords, bedrock_api_key)
+            print(f"  Created {len(clustered_keywords)} clusters")
+            
+            for cluster in clustered_keywords:
+                question_blocks.append({
+                    "object": "block",
+                    "type": "bulleted_list_item",
+                    "bulleted_list_item": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": cluster}
+                        }]
+                    }
+                })
+    
+    # Upload questions to main page in a toggle
     toggle_block = {
         "object": "block",
         "type": "toggle",
@@ -262,18 +370,18 @@ def upload_to_notion(results: list, api_key: str, page_id: str, filename: str):
                 "text": {"content": filename},
                 "annotations": {"bold": True}
             }],
-            "children": content_blocks[:100]  # Notion limit: 100 children per block
+            "children": question_blocks[:100]  # Notion limit: 100 children per block
         }
     }
     
-    # Append toggle to page
+    # Append toggle to main page
     response = notion.blocks.children.append(block_id=page_id, children=[toggle_block])
     
-    # If more than 100 content blocks, append remaining to the toggle
-    if len(content_blocks) > 100:
+    # If more than 100 question blocks, append remaining to the toggle
+    if len(question_blocks) > 100:
         toggle_id = response['results'][0]['id']
-        for i in range(100, len(content_blocks), 100):
-            batch = content_blocks[i:i+100]
+        for i in range(100, len(question_blocks), 100):
+            batch = question_blocks[i:i+100]
             notion.blocks.children.append(block_id=toggle_id, children=batch)
 
 

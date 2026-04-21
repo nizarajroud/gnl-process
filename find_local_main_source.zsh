@@ -6,7 +6,8 @@ if [ -z "$1" ]; then
 fi
 
 LOCAL_STORAGE_PATH=$(grep "^GNL_PROCESSING_PATH=" /home/nizar/workspace/gnl-process/.env | cut -d'=' -f2)
-SEARCH_PATH="$LOCAL_STORAGE_PATH/../../courses:$LOCAL_STORAGE_PATH/../../exam"
+LOCAL_SEARCH_PATHS=$(grep "^LOCAL_SEARCH_PATHS=" /home/nizar/workspace/gnl-process/.env | cut -d'=' -f2)
+SEARCH_PATH=$(echo "$LOCAL_SEARCH_PATHS" | tr ':' '\n' | while read p; do echo "$LOCAL_STORAGE_PATH/$p"; done | paste -sd:)
 
 FILE_PATH=$(find ${(s.:.)SEARCH_PATH} -name "$1" -type f 2>/dev/null | head -1)
 

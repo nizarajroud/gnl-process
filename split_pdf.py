@@ -40,9 +40,10 @@ def split_pdf(pdf_path: str, pages_per_split: int = 0, name: str = "", split_mod
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
     
     gnl_processing_path = os.getenv("GNL_PROCESSING_PATH")
-    
-    # Use GNL_PROCESSING_PATH/PDF-Parts/podcast_subtheme/name
-    output_dir = Path(gnl_processing_path) / "PDF-Parts" / podcast_subtheme / name
+    pdf_parts_folder = os.getenv("PDF_PARTS_FOLDER", "PDF-Parts")
+
+    # Use PDF_PARTS_FOLDER/podcast_subtheme/name
+    output_dir = Path(pdf_parts_folder) / podcast_subtheme / name
     
     # Remove existing folder if it exists
     if output_dir.exists():
