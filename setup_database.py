@@ -35,7 +35,26 @@ cursor.execute('''
     )
 ''')
 
+# Create crawled_links table
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS crawled_links (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_url TEXT NOT NULL,
+        link_url TEXT NOT NULL,
+        link_title TEXT,
+        domain TEXT,
+        podcast_theme TEXT NOT NULL,
+        podcast_subtheme TEXT,
+        state TEXT DEFAULT 'pending',
+        podcast_download_id INTEGER,
+        crawl_date TEXT NOT NULL,
+        injected_date TEXT,
+        UNIQUE(link_url, podcast_theme, podcast_subtheme),
+        FOREIGN KEY (podcast_download_id) REFERENCES podcast_download(id)
+    )
+''')
+
 conn.commit()
 conn.close()
 
-print("Database created successfully with parent_configuration and podcast_download tables")
+print("Database created successfully with parent_configuration, podcast_download and crawled_links tables")
