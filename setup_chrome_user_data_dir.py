@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Set up a user_data_dir for logged in websites.
+"""Set up a user_data_dir for logged in WebAndYoutubes.
 
 See README for more details.
 
@@ -37,8 +37,8 @@ def main(user_data_dir: str = None) -> None:
     
     os.makedirs(user_data_dir, exist_ok=True)
 
-    with NovaAct(starting_page="https://nova.amazon.com/act", user_data_dir=user_data_dir, clone_user_data_dir=False):
-        input("Log into your websites, then press enter...")
+    with NovaAct(starting_page="https://nova.amazon.com/act", user_data_dir=user_data_dir, clone_user_data_dir=False, headless=False):
+        input("Log into your WebAndYoutubes, then press enter...")
 
     print(f"User data dir saved to {user_data_dir=}")
 

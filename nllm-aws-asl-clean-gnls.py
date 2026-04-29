@@ -34,10 +34,7 @@ def main(user_data_dir: str = None, headless: bool = None) -> None:
             raise ValueError("USER_DATA_DIR must be provided either as parameter or in .env file")
     
     if headless is None:
-        fzf = FzfPrompt()
-        options = ["Visible (you can see the browser)", "Headless (background, faster)"]
-        choice = fzf.prompt(options, "--prompt='Select browser mode: '")
-        headless = choice and "Headless" in choice[0]
+        headless = os.getenv('HEADLESS', '0') == '1'
 
     with NovaAct(
         starting_page="http://notebooklm.google.com/",

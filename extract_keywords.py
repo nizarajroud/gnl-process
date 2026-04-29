@@ -1,0 +1,389 @@
+#!/usr/bin/env python3
+"""Extract main topic and keywords from markdown questions using Bedrock."""
+import fire
+import re
+import os
+import json
+import requests
+from pathlib import Path
+from dotenv import load_dotenv
+from notion_client import Client
+
+load_dotenv()
+
+
+def extract_keywords(filename: str, batch_size: int = 15):
+    """Extract main topic and keywords for each question in markdown file.
+    
+    Args:
+        filename: Name of the file (e.g., 'Vladimir-Raykov-udemy-4')
+        batch_size: Number of questions to process per API call (default: 15)
+    """
+    # Get GNL_PROCESSING_PATH from environment
+    gnl_processing_path = os.getenv('GNL_PROCESSING_PATH')
+    if not gnl_processing_path:
+        raise ValueError("GNL_PROCESSING_PATH not found in .env file")
+    
+    base_path = Path(gnl_processing_path).parent
+    
+    # Build path to markdown file
+    markdown_file = base_path / "Anki-generation" / "markdown" / f"{filename}.md"
+    
+    if not markdown_file.exists():
+        raise FileNotFoundError(f"Markdown file not found: {markdown_file}")
+    
+    print(f"Processing: {markdown_file}")
+    
+    # Read markdown
+    with open(markdown_file, 'r', encoding='utf-8') as f:
+        content = f.read()
+    
+    # Get Bedrock config
+    model_id = os.getenv('MOEDL_INFERENCE_ID', 'global.anthropic.claude-opus-4-5-20251101-v1:0')
+    api_key = os.getenv('AWS_BEARER_TOKEN_BEDROCK', '')
+    aws_region = os.getenv('AWS_REGION', 'us-east-1')
+    
+    if not api_key:
+        raise Exception("AWS_BEARER_TOKEN_BEDROCK not found in .env file")
+    
+    # Split by questions
+    question_blocks = re.split(r'(\*\*Question\s+\d+:\*\*)', content)
+    
+    questions = []
+    for i in range(1, len(question_blocks), 2):
+        if i + 1 >= len(question_blocks):
+            break
+        
+        question_header = question_blocks[i]
+        question_content = question_blocks[i + 1]
+        question_block = question_header + question_content
+        
+        if question_block.strip():
+            questions.append(question_block)
+    
+    print(f"Found {len(questions)} questions. Processing in batches of {batch_size}...")
+    
+    all_results = []
+    
+    # Process in batches
+    for batch_start in range(0, len(questions), batch_size):
+        batch_end = min(batch_start + batch_size, len(questions))
+        batch = questions[batch_start:batch_end]
+        
+        print(f"Processing questions {batch_start + 1}-{batch_end}...")
+        
+        # Combine batch into single prompt
+        batch_text = "\n\n---\n\n".join(batch)
+        
+        prompt = f"""Extract the main topic and keywords for EACH question below.
+
+{batch_text}
+
+For EACH question, output in this exact format:
+**Question N:**
+Main Idea Problem: [brief question format describing what needs to be achieved, e.g., "How to optimize token consumption?"]
+Main Idea Solution: The solution is to [brief generic description of the solution approach]
+Main Topic: [single concise topic]
+Keywords:
+[keyword 1]
+[keyword 2]
+...
+
+Rules:
+- Main idea problem should be a brief question (starting with How/What/When/Why) describing the challenge
+- Main idea solution MUST start with "The solution is to" followed by a brief, generic statement of the approach or solution
+- Main topic should be 2-5 words describing the primary subject
+- Keywords should be specific technical terms, services, or concepts
+- List 5-10 keywords, one per line
+- Process ALL questions in the batch"""
+        
+        # Call Bedrock API
+        payload = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [{"text": prompt}]
+                }
+            ],
+            "inferenceConfig": {
+                "maxTokens": 16000,
+                "temperature": 0.1
+            }
+        }
+        
+        url = f"https://bedrock-runtime.{aws_region}.amazonaws.com/model/{model_id}/converse"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+        
+        response = requests.post(url, json=payload, headers=headers)
+        
+        if response.status_code == 200:
+            result = response.json()
+            extracted = result['output']['message']['content'][0]['text']
+            all_results.append(extracted)
+        else:
+            print(f"  Error: {response.status_code} - {response.text}")
+            all_results.append(f"Error processing batch {batch_start + 1}-{batch_end}")
+    
+    # Save results
+    output_dir = base_path / "KeyWords-extraction"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_file = output_dir / f"keywords_{filename}.md"
+    
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write('\n\n'.join(all_results))
+    
+    print(f"\n✓ Keywords extracted and saved to: {output_file}")
+    
+    # Upload to Notion
+    notion_api_key = os.getenv('NOTION_API_KEY')
+    notion_page_id = os.getenv('NOTION_PAGE_ID')
+    
+    if notion_api_key and notion_page_id:
+        print(f"\nUploading to Notion...")
+        upload_to_notion(all_results, notion_api_key, notion_page_id, filename)
+        print(f"✓ Content uploaded to Notion page")
+    else:
+        print(f"\n⚠ Skipping Notion upload (NOTION_API_KEY or NOTION_PAGE_ID not set)")
+
+
+def cluster_keywords_with_bedrock(keywords: list, api_key: str):
+    """Cluster keywords by category using Bedrock."""
+    model_id = os.getenv('MOEDL_INFERENCE_ID', 'global.anthropic.claude-opus-4-5-20251101-v1:0')
+    aws_region = os.getenv('AWS_REGION', 'us-east-1')
+    
+    keywords_text = '\n'.join(keywords)
+    
+    prompt = f"""Group these keywords into clusters based on similar context or category.
+
+Keywords:
+{keywords_text}
+
+Rules:
+- Group related keywords together (e.g., networking concepts, security concepts, AI/ML concepts)
+- Each cluster should be on one line with keywords separated by " - "
+- Format: keyword1 - keyword2 - keyword3
+- One cluster per line
+- Order clusters by relevance/importance
+
+Example output:
+VPC endpoint - Network isolation - Security groups
+RAG - Embeddings - Vector database
+Fine-tuning - Model training - Hyperparameters
+
+Output the clustered keywords now:"""
+    
+    payload = {
+        "messages": [
+            {
+                "role": "user",
+                "content": [{"text": prompt}]
+            }
+        ],
+        "inferenceConfig": {
+            "maxTokens": 4000,
+            "temperature": 0.1
+        }
+    }
+    
+    url = f"https://bedrock-runtime.{aws_region}.amazonaws.com/model/{model_id}/converse"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        
+        if response.status_code == 200:
+            result = response.json()
+            clustered_text = result['output']['message']['content'][0]['text']
+            # Split by lines and clean up
+            clusters = [line.strip() for line in clustered_text.strip().split('\n') if line.strip()]
+            return clusters
+        else:
+            print(f"  ⚠ Clustering API error: {response.status_code} - {response.text[:200]}")
+            return keywords
+    except Exception as e:
+        print(f"  ⚠ Clustering exception: {str(e)}")
+        return keywords
+
+
+def upload_to_notion(results: list, api_key: str, page_id: str, filename: str):
+    """Upload extracted keywords to Notion page."""
+    notion = Client(auth=api_key)
+    
+    # Get Bedrock API key for clustering
+    bedrock_api_key = os.getenv('AWS_BEARER_TOKEN_BEDROCK', '')
+    
+    blocks = []
+    
+    # Parse each batch result and collect content blocks
+    question_blocks = []  # For questions/problems/solutions
+    all_keywords = []  # Collect all keywords here
+    
+    for batch_result in results:
+        # Split by question blocks
+        question_sections = re.split(r'(\*\*Question\s+\d+:\*\*)', batch_result)
+        
+        for i in range(1, len(question_sections), 2):
+            if i + 1 >= len(question_sections):
+                break
+            
+            question_header = question_sections[i]
+            question_content = question_sections[i + 1]
+            
+            # Extract question number
+            q_match = re.match(r'\*\*Question\s+(\d+):\*\*', question_header)
+            if not q_match:
+                continue
+            
+            question_num = q_match.group(1)
+            
+            # Parse content
+            lines = [l.strip() for l in question_content.strip().split('\n') if l.strip()]
+            
+            main_idea_problem = ""
+            main_idea_solution = ""
+            main_topic = ""
+            keywords = []
+            
+            in_keywords = False
+            for line in lines:
+                if line.startswith('Main Idea Problem:'):
+                    main_idea_problem = line.replace('Main Idea Problem:', '').strip()
+                elif line.startswith('Main Idea Solution:'):
+                    main_idea_solution = line.replace('Main Idea Solution:', '').strip()
+                elif line.startswith('Main Topic:'):
+                    main_topic = line.replace('Main Topic:', '').strip()
+                elif line == 'Keywords:':
+                    in_keywords = True
+                elif in_keywords and line:
+                    keywords.append(line)
+            
+            # Collect keywords for later
+            all_keywords.extend(keywords)
+            
+            # Add main topic as bulleted list item (bold)
+            main_topic_block = {
+                "object": "block",
+                "type": "bulleted_list_item",
+                "bulleted_list_item": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {"content": main_topic},
+                        "annotations": {"bold": True}
+                    }],
+                    "children": []
+                }
+            }
+            
+            # Add main idea problem as nested child (indented)
+            if main_idea_problem:
+                main_topic_block["bulleted_list_item"]["children"].append({
+                    "object": "block",
+                    "type": "bulleted_list_item",
+                    "bulleted_list_item": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": main_idea_problem}
+                        }]
+                    }
+                })
+            
+            # Add main idea solution as nested child (indented, with arrow)
+            if main_idea_solution:
+                main_topic_block["bulleted_list_item"]["children"].append({
+                    "object": "block",
+                    "type": "bulleted_list_item",
+                    "bulleted_list_item": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": f"⇒ {main_idea_solution}"}
+                        }]
+                    }
+                })
+            
+            question_blocks.append(main_topic_block)
+    
+    # Add separator before keywords section
+    question_blocks.append({
+        "object": "block",
+        "type": "divider",
+        "divider": {}
+    })
+    
+    # Add "Keywords" header
+    question_blocks.append({
+        "object": "block",
+        "type": "heading_2",
+        "heading_2": {
+            "rich_text": [{
+                "type": "text",
+                "text": {"content": "Keywords"},
+                "annotations": {"bold": True}
+            }]
+        }
+    })
+    
+    # Add all keywords as bulleted list (remove duplicates and AWS services, cluster by category)
+    if all_keywords:
+        seen = set()
+        unique_keywords = []
+        for keyword in all_keywords:
+            keyword_lower = keyword.lower()
+            # Skip AWS services (starting with Amazon or AWS)
+            if keyword.startswith('Amazon ') or keyword.startswith('AWS '):
+                continue
+            if keyword_lower not in seen:
+                seen.add(keyword_lower)
+                unique_keywords.append(keyword)
+        
+        print(f"  Clustering {len(unique_keywords)} unique keywords...")
+        
+        # Cluster keywords using Bedrock
+        if unique_keywords:
+            clustered_keywords = cluster_keywords_with_bedrock(unique_keywords, bedrock_api_key)
+            print(f"  Created {len(clustered_keywords)} clusters")
+            
+            for cluster in clustered_keywords:
+                question_blocks.append({
+                    "object": "block",
+                    "type": "bulleted_list_item",
+                    "bulleted_list_item": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": cluster}
+                        }]
+                    }
+                })
+    
+    # Upload questions to main page in a toggle
+    toggle_block = {
+        "object": "block",
+        "type": "toggle",
+        "toggle": {
+            "rich_text": [{
+                "type": "text",
+                "text": {"content": filename},
+                "annotations": {"bold": True}
+            }],
+            "children": question_blocks[:100]  # Notion limit: 100 children per block
+        }
+    }
+    
+    # Append toggle to main page
+    response = notion.blocks.children.append(block_id=page_id, children=[toggle_block])
+    
+    # If more than 100 question blocks, append remaining to the toggle
+    if len(question_blocks) > 100:
+        toggle_id = response['results'][0]['id']
+        for i in range(100, len(question_blocks), 100):
+            batch = question_blocks[i:i+100]
+            notion.blocks.children.append(block_id=toggle_id, children=batch)
+
+
+if __name__ == "__main__":
+    fire.Fire(extract_keywords)

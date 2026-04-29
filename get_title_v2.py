@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""Generate podcast titles from database records with empty podcast_name."""
+
+import sqlite3
+import os
+import re
+import sys
+from datetime import datetime
+
+def generate_title(source_id: str, source_type: str, parent_file: str) -> str:
+    base_title = os.path.splitext(source_id)[0]
+    
+    if source_type in ["GoogleDrive", "LocalStorage"]:
+        if parent_file:
+            return f"{base_title}-{parent_file}"
+        return base_title
+    else:  # WebAndYoutube
+        url = source_id.split('?')[0].split('#')[0].rstrip('/')
+        parts = [p for p in url.split('/') if p]
+        if parts:
+            last_part = parts[-1]
+            title = re.sub(r'[^a-zA-Z0-9]', '-', last_part).strip('-')
+            base_title = title[:50] if title else "webpage"
+        else:
+            base_title = "webpage"
+        
+        if parent_file:
+            base_title = f"{base_title}-{parent_file}"
+        
+        now = datetime.now()
+        return f"{now.day:02d}-{now.month:02d}-{base_title}"
+
+if __name__ == "__main__":
+    source_type = sys.argv[1] if len(sys.argv) > 1 else None
+    generation_mode = sys.argv[2].lower() if len(sys.argv) > 2 else None
+    podcast_theme = sys.argv[3] if len(sys.argv) > 3 else None
+    podcast_subtheme = sys.argv[4].lower() if len(sys.argv) > 4 else None
+    
+    db_path = os.path.join(os.path.dirname(__file__), 'gnl.db')
+    if not os.path.exists(db_path):
+        print(f"Error: Database not found at {db_path}")
+        sys.exit(1)
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    query = """SELECT pd.id, pd.source_id, pc.source_type, pc.parent_file 
+               FROM podcast_download pd
+               JOIN parent_configuration pc ON pd.parent_configuration_id = pc.id
+               WHERE (pd.podcast_name IS NULL OR pd.podcast_name = '') AND pd.generation_state = 0"""
+    params = []
+    
+    if source_type:
+        query += " AND pc.source_type = ?"
+        params.append(source_type)
+    if generation_mode:
+        query += " AND pc.generation_mode = ?"
+        params.append(generation_mode)
+    if podcast_theme:
+        query += " AND pc.podcast_theme = ?"
+        params.append(podcast_theme)
+    if podcast_subtheme:
+        query += " AND pc.podcast_subtheme = ?"
+        params.append(podcast_subtheme)
+    
+    cursor.execute(query, params)
+    records = cursor.fetchall()
+    
+    if not records:
+        print("No records to process (all have generation_state = 1 or podcast_name set)")
+        conn.close()
+        sys.exit(0)
+    
+    for record_id, source_id, source_type, parent_file in records:
+        # Check if podcast_name is already set
+        cursor.execute("SELECT podcast_name FROM podcast_download WHERE id = ?", (record_id,))
+        result = cursor.fetchone()
+        if result and result[0]:
+            print(f"Skipping record {record_id}: podcast_name already set")
+            continue
+        
+        title = generate_title(source_id, source_type, parent_file)
+        cursor.execute("UPDATE podcast_download SET podcast_name = ? WHERE id = ?", (title, record_id))
+        print(f"Updated record {record_id}: {title}")
+    
+    conn.commit()
+    conn.close()
