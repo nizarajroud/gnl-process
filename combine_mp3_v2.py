@@ -7,6 +7,7 @@ import sqlite3
 from pathlib import Path
 from dotenv import load_dotenv
 import subprocess
+import re
 
 load_dotenv()
 
@@ -89,7 +90,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, out
                 print(f"No MP3 files found for {parent_file}")
                 continue
             
-            mp3_files.sort()
+            mp3_files.sort(key=lambda f: int(re.search(r'\d+', f.stem).group()) if re.search(r'\d+', f.stem) else 0)
             
             # Ensure output file has .mp3 extension
             output_filename = output_file
@@ -114,16 +115,31 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, out
                     adjusted_files.append(adjusted_file)
                 mp3_files = adjusted_files
             
-            # Use ffmpeg to concatenate
+            # Write to local temp first, then move to cloud
+            import tempfile
+            local_tmp = Path(tempfile.gettempdir()) / output_filename
+
+            # Use ffmpeg to concatenate locally
             list_file = "concat_list.txt"
             with open(list_file, "w") as f:
                 for file in mp3_files:
                     print(f"Adding: {file.name}")
                     f.write(f"file '{file.absolute()}'\n")
             
-            subprocess.run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_file, "-c", "copy", str(output_path)], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_file, "-c", "copy", str(local_tmp)], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             os.remove(list_file)
-            print(f"Combined {len(mp3_files)} files into {output_path}")
+            print(f"Combined {len(mp3_files)} files into local: {local_tmp}")
+
+            # Remove existing file on cloud if present, then move
+            if output_path.exists():
+                output_path.unlink()
+                print(f"Removed existing file on cloud: {output_path}")
+            
+            import shutil
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(str(local_tmp), str(output_path))
+            os.remove(str(local_tmp))
+            print(f"Moved to cloud: {output_path}")
             
             # Mark parent configuration as combined
             conn = sqlite3.connect(db_path)

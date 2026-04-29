@@ -15,6 +15,7 @@ load_dotenv()
 
 
 def split_pdf(pdf_path: str, pages_per_split: int = 0, name: str = "", split_mode: str = "Pages", question_parSplit: int = 3, source_type: str = "LocalStorage", podcast_theme: str = "", podcast_subtheme: str = ""):
+    podcast_subtheme = podcast_subtheme.lower()
     """Split PDF into chunks.
     
     Args:

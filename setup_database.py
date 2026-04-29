@@ -35,26 +35,34 @@ cursor.execute('''
     )
 ''')
 
-# Create crawled_links table
+# Create crawl_source table
 cursor.execute('''
-    CREATE TABLE IF NOT EXISTS crawled_links (
+    CREATE TABLE IF NOT EXISTS crawl_source (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        source_url TEXT NOT NULL,
-        link_url TEXT NOT NULL,
-        link_title TEXT,
-        domain TEXT,
-        podcast_theme TEXT NOT NULL,
-        podcast_subtheme TEXT,
-        state TEXT DEFAULT 'pending',
-        podcast_download_id INTEGER,
-        crawl_date TEXT NOT NULL,
-        injected_date TEXT,
-        UNIQUE(link_url, podcast_theme, podcast_subtheme),
-        FOREIGN KEY (podcast_download_id) REFERENCES podcast_download(id)
+        theme TEXT,
+        subtheme TEXT,
+        crawl_source_url TEXT NOT NULL,
+        UNIQUE(crawl_source_url, theme, subtheme)
+    )
+''')
+
+# Create crawl_item table
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS crawl_item (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        crawl_source_id INTEGER NOT NULL,
+        url_hash TEXT NOT NULL,
+        crawl_item_url TEXT NOT NULL,
+        post_date TEXT,
+        headline TEXT,
+        processed_state TEXT DEFAULT 'False',
+        aggregation_state TEXT DEFAULT 'False',
+        FOREIGN KEY (crawl_source_id) REFERENCES crawl_source(id),
+        UNIQUE(url_hash, crawl_source_id)
     )
 ''')
 
 conn.commit()
 conn.close()
 
-print("Database created successfully with parent_configuration, podcast_download and crawled_links tables")
+print("Database created successfully with parent_configuration, podcast_download, crawl_source and crawl_item tables")

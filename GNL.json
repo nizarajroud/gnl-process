@@ -1,11 +1,11 @@
 [
   {
-    "updatedAt": "2026-04-27T09:10:14.278Z",
-    "createdAt": "2025-12-29T23:19:21.737Z",
-    "id": "jQ9zKZRa4JbOgEdG",
+    "updatedAt": "2026-04-28T10:35:23.988Z",
+    "createdAt": "2026-04-27T09:45:26.612Z",
+    "id": "Jp4HFw5LYwnktOR2jvr0U",
     "name": "GNL",
     "description": null,
-    "active": true,
+    "active": false,
     "isArchived": false,
     "nodes": [
       {
@@ -15,26 +15,11 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          5104,
-          1184
+          10544,
+          2688
         ],
-        "id": "e9093448-1d26-4388-ab33-fd867d2c362d",
+        "id": "ddbe66d2-3b70-44df-b326-3da2167abd02",
         "name": "Clean All podcasts",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/get_title.py {{ $json.src }} {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json.Subfolder }}"
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          5456,
-          2080
-        ],
-        "id": "fdb68fa3-b86a-4674-b9b7-332292e548eb",
-        "name": "Generate title",
         "executeOnce": true,
         "retryOnFail": true
       },
@@ -45,10 +30,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          4240,
-          1168
+          9680,
+          2672
         ],
-        "id": "8550b829-c85a-4640-9d85-e6484fd56619",
+        "id": "e15c99f4-7406-4b87-935c-6b5336135622",
         "name": "remove the lock on chrome",
         "executeOnce": true,
         "retryOnFail": true
@@ -60,36 +45,13 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          4672,
-          1184
+          10112,
+          2688
         ],
-        "id": "e945176a-be31-45a1-92b0-5e13e1958f1d",
+        "id": "a39e03c1-12d5-43df-b70a-b63538229612",
         "name": "configure chrome profile",
         "executeOnce": true,
         "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "formFields": {
-            "values": [
-              {
-                "fieldName": "sourceIdentifier",
-                "fieldLabel": "sourceIdentifier",
-                "fieldType": "file"
-              }
-            ]
-          },
-          "options": {}
-        },
-        "type": "n8n-nodes-base.form",
-        "typeVersion": 2.4,
-        "position": [
-          4768,
-          2128
-        ],
-        "id": "a81520a6-9365-4d74-b98d-05bcca64247f",
-        "name": "GoogleDrive",
-        "webhookId": "567c93c4-bd2c-41bc-882b-f141ec9b4055"
       },
       {
         "parameters": {
@@ -100,17 +62,17 @@
               {
                 "fieldLabel": "Type",
                 "fieldType": "dropdown",
-                "defaultValue": "WebAndYoutube",
+                "defaultValue": "What's New Report",
                 "fieldOptions": {
                   "values": [
                     {
                       "option": "WebAndYoutube"
                     },
                     {
-                      "option": "GoogleDrive"
+                      "option": "LocalStorage"
                     },
                     {
-                      "option": "LocalStorage"
+                      "option": "What's New Report"
                     }
                   ]
                 },
@@ -124,9 +86,6 @@
                   "values": [
                     {
                       "option": "AWS"
-                    },
-                    {
-                      "option": "AIP"
                     },
                     {
                       "option": "MISC"
@@ -157,12 +116,12 @@
         "type": "n8n-nodes-base.formTrigger",
         "typeVersion": 2.2,
         "position": [
-          3872,
-          2128
+          9168,
+          3424
         ],
-        "id": "4b3ca35f-928d-47ce-91ed-7ee6fd96348b",
+        "id": "2ff9b58a-2cb4-4f69-a7f0-8f3e5277a50b",
         "name": "MainForm",
-        "webhookId": "e8ce0cf2-1f71-4e37-8a6f-5a891a46df8f",
+        "webhookId": "a42b67fa-3d7e-4824-9fe1-ef6c189e6e6d",
         "alwaysOutputData": true
       },
       {
@@ -201,9 +160,9 @@
                   },
                   "conditions": [
                     {
-                      "id": "fcd1c228-50c8-45ce-a7c7-470f121a86c2",
+                      "id": "40e6cbe1-ee28-4f49-a162-1cd0e137bb91",
                       "leftValue": "={{ $('MainForm').item.json.Type }}",
-                      "rightValue": "GoogleDrive",
+                      "rightValue": "LocalStorage",
                       "operator": {
                         "type": "string",
                         "operation": "equals"
@@ -223,9 +182,9 @@
                   },
                   "conditions": [
                     {
-                      "id": "40e6cbe1-ee28-4f49-a162-1cd0e137bb91",
+                      "id": "aggregate-cond",
                       "leftValue": "={{ $('MainForm').item.json.Type }}",
-                      "rightValue": "LocalStorage",
+                      "rightValue": "What's New Report",
                       "operator": {
                         "type": "string",
                         "operation": "equals"
@@ -242,91 +201,11 @@
         "type": "n8n-nodes-base.switch",
         "typeVersion": 3.4,
         "position": [
-          4544,
-          2112
+          9552,
+          3392
         ],
-        "id": "e1cbf000-7dd5-4dbd-85cc-48d27483e73e",
+        "id": "21e7c195-0c47-436f-8547-515c927eac14",
         "name": "Switch"
-      },
-      {
-        "parameters": {
-          "assignments": {
-            "assignments": [
-              {
-                "id": "39eed507-6cca-4d32-9c95-efa1a1e62229",
-                "name": "src",
-                "value": "={{ \n  $('MainForm').first().json.Type === 'WebAndYoutube' \n    ? $('WebAndYoutube').first().json.sourceIdentifier \n    : $('MainForm').first().json.Type === 'LocalStorage'\n      ? $('LocalStorage').item.json.sourceIdentifier[0].filename\n      : $('MainForm').first().json.Type === 'GoogleDrive'\n        ? $('GoogleDrive').item.json.sourceIdentifier[0].filename\n        : null\n}}",
-                "type": "string"
-              }
-            ]
-          },
-          "options": {}
-        },
-        "type": "n8n-nodes-base.set",
-        "typeVersion": 3.4,
-        "position": [
-          5264,
-          2096
-        ],
-        "id": "7dbcb78e-8299-49b0-a742-1d1dfd3928c1",
-        "name": "Edit Fields"
-      },
-      {
-        "parameters": {
-          "formFields": {
-            "values": [
-              {
-                "fieldName": "sourceIdentifier",
-                "fieldLabel": "sourceIdentifier",
-                "requiredField": true
-              }
-            ]
-          },
-          "options": {}
-        },
-        "type": "n8n-nodes-base.form",
-        "typeVersion": 2.4,
-        "position": [
-          4768,
-          1936
-        ],
-        "id": "18142700-720e-43f8-9f1d-ee2e06f7c260",
-        "name": "WebAndYoutube",
-        "webhookId": "946e504d-82b9-4249-95af-117a6578b12b"
-      },
-      {
-        "parameters": {
-          "conditions": {
-            "options": {
-              "caseSensitive": true,
-              "leftValue": "",
-              "typeValidation": "strict",
-              "version": 3
-            },
-            "conditions": [
-              {
-                "id": "9aeb8066-ec93-4ed8-921c-656715fd8763",
-                "leftValue": "={{ $('MainForm').item.json['Generation Mode'] }}",
-                "rightValue": "Single",
-                "operator": {
-                  "type": "string",
-                  "operation": "equals",
-                  "name": "filter.operator.equals"
-                }
-              }
-            ],
-            "combinator": "and"
-          },
-          "options": {}
-        },
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 2.3,
-        "position": [
-          4992,
-          2128
-        ],
-        "id": "5bf81357-3e39-4172-9bea-f4c04aa407a2",
-        "name": "If"
       },
       {
         "parameters": {
@@ -335,10 +214,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          5696,
-          2384
+          10784,
+          3088
         ],
-        "id": "fd9d69db-2486-4dd9-9b5f-52efc9a904d8",
+        "id": "f871b61c-1aec-418d-9c52-9e5d7badc0c2",
         "name": "CollectAndSave",
         "executeOnce": true,
         "retryOnFail": true
@@ -350,10 +229,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          4096,
-          2128
+          9392,
+          3424
         ],
-        "id": "2240a019-ec3b-478b-8a73-b9ac678c6ccc",
+        "id": "868eef14-5620-480d-960a-cfec4bdea750",
         "name": "mount g-drive",
         "executeOnce": true,
         "retryOnFail": true
@@ -365,10 +244,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          6192,
-          2336
+          11136,
+          3088
         ],
-        "id": "11f529e7-a739-4315-b0d9-b42e82a918ec",
+        "id": "0c63741e-1f87-4972-96e5-d51878ffdbda",
         "name": "Generate Bulk Podcasts",
         "executeOnce": true,
         "retryOnFail": true
@@ -380,10 +259,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          5952,
-          2320
+          10944,
+          3088
         ],
-        "id": "2699be5e-0997-4551-adaf-05495ed978cd",
+        "id": "b9efedb6-3236-438a-8f7a-5a192ffe70d9",
         "name": "Generate bulk titles",
         "executeOnce": true,
         "retryOnFail": true
@@ -395,10 +274,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          6432,
-          2176
+          11328,
+          3184
         ],
-        "id": "84d68602-0a17-443f-aed2-a58cf6fa0bec",
+        "id": "03323c96-8825-42fb-84d5-b15f3927c8a7",
         "name": "download Bulk Podcasts",
         "executeOnce": true,
         "retryOnFail": true
@@ -410,10 +289,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          6656,
-          2048
+          11568,
+          3184
         ],
-        "id": "fbc38c42-5bb2-4ecb-ae8a-c02ed28d62ad",
+        "id": "5449fa4e-0dad-41aa-a695-b5a4c4ce7b7d",
         "name": "convert Bulk Podcasts",
         "executeOnce": true,
         "retryOnFail": true
@@ -425,10 +304,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          5456,
-          2432
+          10624,
+          3088
         ],
-        "id": "b32ce07f-5c7b-454e-9bd4-903ee8fab1d9",
+        "id": "6b87f46c-0a56-489f-93af-7e40981fc433",
         "name": "split pdf",
         "executeOnce": true,
         "retryOnFail": true
@@ -489,10 +368,10 @@
         "type": "n8n-nodes-base.form",
         "typeVersion": 2.4,
         "position": [
-          4768,
-          2320
+          10064,
+          3184
         ],
-        "id": "5fce30ed-a164-4247-a0db-dbe0238f19e4",
+        "id": "87458a24-9376-4573-a690-31a79a040d31",
         "name": "LocalStorage1",
         "webhookId": "567c93c4-bd2c-41bc-882b-f141ec9b4055"
       },
@@ -503,10 +382,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          4992,
-          2320
+          10256,
+          3184
         ],
-        "id": "800d5c46-11f9-4752-a6cd-7252e4861887",
+        "id": "b6380021-035e-48e9-b44e-7b610981bdb0",
         "name": "find_local_main_source",
         "executeOnce": true,
         "retryOnFail": true
@@ -518,10 +397,10 @@
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
         "position": [
-          5216,
-          2320
+          10432,
+          3184
         ],
-        "id": "a425f92d-6c35-44c6-adc0-3255f51eaf75",
+        "id": "d8c6a1d2-b49c-4077-b9ea-57d3c754a800",
         "name": "Code in JavaScript"
       },
       {
@@ -531,10 +410,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          6848,
-          2320
+          11760,
+          3184
         ],
-        "id": "b9ec54ec-28ca-4489-947f-134dd41c5a24",
+        "id": "b2548e54-49ea-4a35-bb8d-22d7904a799f",
         "name": "combine Bulk Podcasts",
         "executeOnce": true,
         "retryOnFail": true
@@ -546,10 +425,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          4544,
-          2736
+          9984,
+          4240
         ],
-        "id": "1e85f417-7033-4b0e-8655-cb5bc86c7c93",
+        "id": "e4dd399f-6363-44b8-8257-fbab45abd0be",
         "name": "highlight_correct_options",
         "executeOnce": true,
         "retryOnFail": true
@@ -561,10 +440,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          5216,
-          2656
+          10656,
+          4160
         ],
-        "id": "783131c3-3f61-41be-86b7-4523af5e22ea",
+        "id": "8409fa9c-c650-4c8c-a7e8-78b4957f236e",
         "name": "generate_ankycards",
         "executeOnce": true,
         "retryOnFail": true
@@ -576,10 +455,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          4064,
-          2656
+          9504,
+          4160
         ],
-        "id": "b1369d79-3892-4297-ac25-83091579e009",
+        "id": "edc5e5d3-3a15-4a52-b513-a8554dd65b53",
         "name": "formatPdfFromUdemy",
         "executeOnce": true,
         "retryOnFail": true
@@ -591,10 +470,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          4848,
-          2736
+          10288,
+          4240
         ],
-        "id": "928c6ca4-50f5-4012-8ed5-f30c2d366cca",
+        "id": "0a4fc946-5a89-4c4b-b7da-9476f339b97d",
         "name": "GenerateCompactExamVersion",
         "executeOnce": true,
         "retryOnFail": true
@@ -606,10 +485,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          5216,
-          2832
+          10656,
+          4336
         ],
-        "id": "22e5375a-88a7-4ab3-b0c7-977d0a3c3c94",
+        "id": "73784171-0b41-445f-9df3-e1901e00c34c",
         "name": "extract_keywords",
         "executeOnce": true,
         "retryOnFail": true
@@ -621,10 +500,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          4560,
-          2544
+          10000,
+          4048
         ],
-        "id": "02334f54-feae-4fe5-9a7e-a5bca6934aa9",
+        "id": "38358869-1110-4453-af1f-6468555dc881",
         "name": "you can start the worflow of gnl",
         "executeOnce": true,
         "retryOnFail": true
@@ -636,10 +515,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          5504,
-          1200
+          10944,
+          2704
         ],
-        "id": "c0cadeef-818f-41fb-8362-57c1b6546a00",
+        "id": "415e6a64-77d2-4280-a386-84093addf2fd",
         "name": "combine_mp3_simple",
         "executeOnce": true,
         "retryOnFail": true
@@ -649,19 +528,68 @@
           "formFields": {
             "values": [
               {
-                "fieldName": "url",
-                "fieldLabel": "URL to crawl",
+                "fieldName": "month",
+                "fieldLabel": "Mois",
+                "fieldType": "dropdown",
+                "defaultValue": "04",
+                "fieldOptions": {
+                  "values": [
+                    {
+                      "option": "01 - Janvier"
+                    },
+                    {
+                      "option": "02 - Février"
+                    },
+                    {
+                      "option": "03 - Mars"
+                    },
+                    {
+                      "option": "04 - Avril"
+                    },
+                    {
+                      "option": "05 - Mai"
+                    },
+                    {
+                      "option": "06 - Juin"
+                    },
+                    {
+                      "option": "07 - Juillet"
+                    },
+                    {
+                      "option": "08 - Août"
+                    },
+                    {
+                      "option": "09 - Septembre"
+                    },
+                    {
+                      "option": "10 - Octobre"
+                    },
+                    {
+                      "option": "11 - Novembre"
+                    },
+                    {
+                      "option": "12 - Décembre"
+                    }
+                  ]
+                },
                 "requiredField": true
               },
               {
                 "fieldName": "subtheme",
-                "fieldLabel": "Subtheme (e.g. solutions, exam)",
+                "fieldLabel": "Subtheme",
+                "fieldType": "dropdown",
+                "defaultValue": "aws-whats-new",
+                "fieldOptions": {
+                  "values": [
+                    {
+                      "option": "aws-whats-new"
+                    },
+                    {
+                      "option": "aws-solutions-lib"
+                    }
+                  ]
+                },
                 "requiredField": true
-              },
-              {
-                "fieldName": "filter",
-                "fieldLabel": "URL filter (optional, e.g. .pdf)",
-                "requiredField": false
               }
             ]
           },
@@ -670,115 +598,30 @@
         "type": "n8n-nodes-base.form",
         "typeVersion": 2.4,
         "position": [
-          4992,
-          1936
+          10064,
+          3472
         ],
-        "id": "crawl-form-001",
-        "name": "CrawlForm",
-        "webhookId": "crawl-form-webhook-001"
+        "id": "18c485d2-f23e-4a31-831f-3cce924cb89d",
+        "name": "What's New Form",
+        "webhookId": "aggregate-form-wh"
       },
       {
         "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/crawl_links.py crawl \"{{ $('CrawlForm').item.json.url }}\" {{ $('MainForm').item.json.THEME }} {{ $('CrawlForm').item.json.subtheme }}{{ $('CrawlForm').item.json.filter ? ' --filter \"' + $('CrawlForm').item.json.filter + '\"' : '' }}"
+          "command": "=python /home/nizar/workspace/gnl-process/whats_new_report.py {{ $(\"What's New Form\").item.json.month.substring(0,2) }} {{ $('MainForm').item.json.THEME }} {{ $(\"What's New Form\").item.json.subtheme }}"
         },
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          5264,
-          1936
+          10288,
+          3472
         ],
-        "id": "crawl-cmd-001",
-        "name": "Crawl Links",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/inject_crawled_links.py {{ $('MainForm').item.json.THEME }} {{ $('CrawlForm').item.json.subtheme }}"
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          5504,
-          1936
-        ],
-        "id": "inject-cmd-001",
-        "name": "Inject Crawled Links",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/get_title_v2.py WebAndYoutube Bulk {{ $('MainForm').item.json.THEME }} {{ $('CrawlForm').item.json.subtheme }}"
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          5744,
-          1936
-        ],
-        "id": "crawl-titles-001",
-        "name": "Generate Crawl Titles",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_generation.py WebAndYoutube Bulk {{ $('MainForm').item.json.THEME }} {{ $('CrawlForm').item.json.subtheme }}"
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          5984,
-          1936
-        ],
-        "id": "crawl-generate-001",
-        "name": "Generate Crawl Podcasts",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_download.py WebAndYoutube Bulk {{ $('MainForm').item.json.THEME }} {{ $('CrawlForm').item.json.subtheme }}"
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          6224,
-          1936
-        ],
-        "id": "crawl-download-001",
-        "name": "Download Crawl Podcasts",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_conversion.py WebAndYoutube Bulk {{ $('MainForm').item.json.THEME }} {{ $('CrawlForm').item.json.subtheme }}"
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          6464,
-          1936
-        ],
-        "id": "crawl-convert-001",
-        "name": "Convert Crawl Podcasts",
+        "id": "e21633fc-4db5-46a1-9651-7ef010c74764",
+        "name": "Generate What's New Report",
         "executeOnce": true,
         "retryOnFail": true
       }
     ],
     "connections": {
-      "Generate title": {
-        "main": [
-          []
-        ]
-      },
-      "remove the lock on chrome": {
-        "main": [
-          []
-        ]
-      },
       "MainForm": {
         "main": [
           [
@@ -792,67 +635,17 @@
       },
       "Switch": {
         "main": [
-          [
-            {
-              "node": "WebAndYoutube",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "GoogleDrive",
-              "type": "main",
-              "index": 0
-            }
-          ],
+          [],
           [
             {
               "node": "LocalStorage1",
               "type": "main",
               "index": 0
             }
-          ]
-        ]
-      },
-      "GoogleDrive": {
-        "main": [
+          ],
           [
             {
-              "node": "If",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Edit Fields": {
-        "main": [
-          [
-            {
-              "node": "Generate title",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "WebAndYoutube": {
-        "main": [
-          [
-            {
-              "node": "CrawlForm",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If": {
-        "main": [
-          [
-            {
-              "node": "Edit Fields",
+              "node": "What's New Form",
               "type": "main",
               "index": 0
             }
@@ -879,11 +672,6 @@
               "index": 0
             }
           ]
-        ]
-      },
-      "Generate bulk titles": {
-        "main": [
-          []
         ]
       },
       "Generate Bulk Podcasts": {
@@ -1006,95 +794,47 @@
           ]
         ]
       },
-      "CrawlForm": {
+      "Generate bulk titles": {
         "main": [
           [
             {
-              "node": "Crawl Links",
+              "node": "Generate Bulk Podcasts",
               "type": "main",
               "index": 0
             }
           ]
         ]
       },
-      "Crawl Links": {
+      "What's New Form": {
         "main": [
           [
             {
-              "node": "Inject Crawled Links",
+              "node": "Generate What's New Report",
               "type": "main",
               "index": 0
             }
           ]
-        ]
-      },
-      "Inject Crawled Links": {
-        "main": [
-          [
-            {
-              "node": "Generate Crawl Titles",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Generate Crawl Titles": {
-        "main": [
-          [
-            {
-              "node": "Generate Crawl Podcasts",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Generate Crawl Podcasts": {
-        "main": [
-          [
-            {
-              "node": "Download Crawl Podcasts",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Download Crawl Podcasts": {
-        "main": [
-          [
-            {
-              "node": "Convert Crawl Podcasts",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Convert Crawl Podcasts": {
-        "main": [
-          []
         ]
       }
     },
     "settings": {
-      "executionOrder": "v1"
+      "executionOrder": "v1",
+      "availableInMCP": false
     },
     "staticData": null,
     "meta": null,
     "pinData": {},
-    "versionId": "68b257e0-e5e7-4897-8b2a-8ebabd092a22",
-    "activeVersionId": "c702c6df-9ae7-49bb-837c-a235aff69c63",
-    "versionCounter": 243,
-    "triggerCount": 1,
+    "versionId": "e6ad5db9-24a6-4614-bad1-58f527d7194c",
+    "activeVersionId": null,
+    "versionCounter": 10,
+    "triggerCount": 0,
     "tags": [],
     "shared": [
       {
-        "updatedAt": "2025-12-29T23:19:21.751Z",
-        "createdAt": "2025-12-29T23:19:21.751Z",
+        "updatedAt": "2026-04-27T09:45:26.616Z",
+        "createdAt": "2026-04-27T09:45:26.616Z",
         "role": "workflow:owner",
-        "workflowId": "jQ9zKZRa4JbOgEdG",
+        "workflowId": "Jp4HFw5LYwnktOR2jvr0U",
         "projectId": "IUZUphTJqrq5q49O",
         "project": {
           "updatedAt": "2025-09-09T15:35:22.453Z",

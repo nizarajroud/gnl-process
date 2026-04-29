@@ -39,7 +39,7 @@ def collect_and_save(json_input):
     source_path = os.path.dirname(files[0].get('fullPath', '')) if files else ''
     source_type = files[0].get('sourceType', '') if files else ''
     podcast_theme = files[0].get('podcastTheme', '') if files else ''
-    podcast_subtheme = files[0].get('podcastSubfolder', '') if files else ''
+    podcast_subtheme = files[0].get('podcastSubfolder', '').lower() if files else ''
     
     # Insert into parent_configuration table
     cursor.execute('''
