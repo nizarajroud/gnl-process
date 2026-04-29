@@ -1,852 +1,850 @@
-[
-  {
-    "updatedAt": "2026-04-28T10:35:23.988Z",
-    "createdAt": "2026-04-27T09:45:26.612Z",
-    "id": "Jp4HFw5LYwnktOR2jvr0U",
-    "name": "GNL",
-    "description": null,
-    "active": false,
-    "isArchived": false,
-    "nodes": [
-      {
-        "parameters": {
-          "command": "python /home/nizar/workspace/gnl-process/nllm-aws-asl-clean-gnls.py"
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          10544,
-          2688
-        ],
-        "id": "ddbe66d2-3b70-44df-b326-3da2167abd02",
-        "name": "Clean All podcasts",
-        "executeOnce": true,
-        "retryOnFail": true
+{
+  "updatedAt": "2026-04-28T10:35:23.988Z",
+  "createdAt": "2026-04-27T09:45:26.612Z",
+  "id": "Jp4HFw5LYwnktOR2jvr0U",
+  "name": "GNL",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "command": "python /home/nizar/workspace/gnl-process/nllm-aws-asl-clean-gnls.py"
       },
-      {
-        "parameters": {
-          "command": "kill -9 $(ps aux | grep \"/opt/google/chrome\" | grep -v grep | awk '{print $2}')\npkill -f \"Clone-Chrome-profile\"\nrm -f \"/home/nizar/Clone-Chrome-profile/User Data/SingletonLock\""
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          9680,
-          2672
-        ],
-        "id": "e15c99f4-7406-4b87-935c-6b5336135622",
-        "name": "remove the lock on chrome",
-        "executeOnce": true,
-        "retryOnFail": true
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        10544,
+        2688
+      ],
+      "id": "ddbe66d2-3b70-44df-b326-3da2167abd02",
+      "name": "Clean All podcasts",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "kill -9 $(ps aux | grep \"/opt/google/chrome\" | grep -v grep | awk '{print $2}')\npkill -f \"Clone-Chrome-profile\"\nrm -f \"/home/nizar/Clone-Chrome-profile/User Data/SingletonLock\""
       },
-      {
-        "parameters": {
-          "command": "python  /home/nizar/workspace/gnl-process/setup_chrome_user_data_dir.py"
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          10112,
-          2688
-        ],
-        "id": "a39e03c1-12d5-43df-b70a-b63538229612",
-        "name": "configure chrome profile",
-        "executeOnce": true,
-        "retryOnFail": true
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        9680,
+        2672
+      ],
+      "id": "e15c99f4-7406-4b87-935c-6b5336135622",
+      "name": "remove the lock on chrome",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "python  /home/nizar/workspace/gnl-process/setup_chrome_user_data_dir.py"
       },
-      {
-        "parameters": {
-          "formTitle": "GNL Input Form",
-          "formDescription": "Select type and provide input",
-          "formFields": {
-            "values": [
-              {
-                "fieldLabel": "Type",
-                "fieldType": "dropdown",
-                "defaultValue": "What's New Report",
-                "fieldOptions": {
-                  "values": [
-                    {
-                      "option": "WebAndYoutube"
-                    },
-                    {
-                      "option": "LocalStorage"
-                    },
-                    {
-                      "option": "What's New Report"
-                    }
-                  ]
-                },
-                "requiredField": true
-              },
-              {
-                "fieldLabel": "THEME",
-                "fieldType": "dropdown",
-                "defaultValue": "AWS",
-                "fieldOptions": {
-                  "values": [
-                    {
-                      "option": "AWS"
-                    },
-                    {
-                      "option": "MISC"
-                    }
-                  ]
-                },
-                "requiredField": true
-              },
-              {
-                "fieldLabel": "Generation Mode",
-                "fieldType": "dropdown",
-                "defaultValue": "Bulk",
-                "fieldOptions": {
-                  "values": [
-                    {
-                      "option": "Single"
-                    },
-                    {
-                      "option": "Bulk"
-                    }
-                  ]
-                }
-              }
-            ]
-          },
-          "options": {}
-        },
-        "type": "n8n-nodes-base.formTrigger",
-        "typeVersion": 2.2,
-        "position": [
-          9168,
-          3424
-        ],
-        "id": "2ff9b58a-2cb4-4f69-a7f0-8f3e5277a50b",
-        "name": "MainForm",
-        "webhookId": "a42b67fa-3d7e-4824-9fe1-ef6c189e6e6d",
-        "alwaysOutputData": true
-      },
-      {
-        "parameters": {
-          "rules": {
-            "values": [
-              {
-                "conditions": {
-                  "options": {
-                    "caseSensitive": true,
-                    "leftValue": "",
-                    "typeValidation": "strict",
-                    "version": 3
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        10112,
+        2688
+      ],
+      "id": "a39e03c1-12d5-43df-b70a-b63538229612",
+      "name": "configure chrome profile",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "formTitle": "GNL Input Form",
+        "formDescription": "Select type and provide input",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Type",
+              "fieldType": "dropdown",
+              "defaultValue": "What's New Report",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "WebAndYoutube"
                   },
-                  "conditions": [
-                    {
-                      "leftValue": "={{ $('MainForm').item.json.Type }}",
-                      "rightValue": "WebAndYoutube",
-                      "operator": {
-                        "type": "string",
-                        "operation": "equals"
-                      },
-                      "id": "48808c76-e7e5-406a-ab49-fcc4a0d840e3"
-                    }
-                  ],
-                  "combinator": "and"
-                }
-              },
-              {
-                "conditions": {
-                  "options": {
-                    "caseSensitive": true,
-                    "leftValue": "",
-                    "typeValidation": "strict",
-                    "version": 3
+                  {
+                    "option": "LocalStorage"
                   },
-                  "conditions": [
-                    {
-                      "id": "40e6cbe1-ee28-4f49-a162-1cd0e137bb91",
-                      "leftValue": "={{ $('MainForm').item.json.Type }}",
-                      "rightValue": "LocalStorage",
-                      "operator": {
-                        "type": "string",
-                        "operation": "equals"
-                      }
-                    }
-                  ],
-                  "combinator": "and"
-                }
+                  {
+                    "option": "What's New Report"
+                  }
+                ]
               },
-              {
-                "conditions": {
-                  "options": {
-                    "caseSensitive": true,
-                    "leftValue": "",
-                    "typeValidation": "strict",
-                    "version": 3
-                  },
-                  "conditions": [
-                    {
-                      "id": "aggregate-cond",
-                      "leftValue": "={{ $('MainForm').item.json.Type }}",
-                      "rightValue": "What's New Report",
-                      "operator": {
-                        "type": "string",
-                        "operation": "equals"
-                      }
-                    }
-                  ],
-                  "combinator": "and"
-                }
-              }
-            ]
-          },
-          "options": {}
-        },
-        "type": "n8n-nodes-base.switch",
-        "typeVersion": 3.4,
-        "position": [
-          9552,
-          3392
-        ],
-        "id": "21e7c195-0c47-436f-8547-515c927eac14",
-        "name": "Switch"
-      },
-      {
-        "parameters": {
-          "command": "=/home/nizar/workspace/gnl-process/collect_and_save.sh '{{ $json.stdout }}'"
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          10784,
-          3088
-        ],
-        "id": "f871b61c-1aec-418d-9c52-9e5d7badc0c2",
-        "name": "CollectAndSave",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "sudo mount -t drvfs G: /mnt/g\n\n"
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          9392,
-          3424
-        ],
-        "id": "868eef14-5620-480d-960a-cfec4bdea750",
-        "name": "mount g-drive",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_generation.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }}"
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          11136,
-          3088
-        ],
-        "id": "0c63741e-1f87-4972-96e5-d51878ffdbda",
-        "name": "Generate Bulk Podcasts",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/get_title_v2.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }}"
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          10944,
-          3088
-        ],
-        "id": "b9efedb6-3236-438a-8f7a-5a192ffe70d9",
-        "name": "Generate bulk titles",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_download.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }}"
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          11328,
-          3184
-        ],
-        "id": "03323c96-8825-42fb-84d5-b15f3927c8a7",
-        "name": "download Bulk Podcasts",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_conversion.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }} "
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          11568,
-          3184
-        ],
-        "id": "5449fa4e-0dad-41aa-a695-b5a4c4ce7b7d",
-        "name": "convert Bulk Podcasts",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/split_pdf.py {{ $json.absolute_path }} {{ $('LocalStorage1').item.json.pages_per_split }} {{ $json.parent_file }} {{ $('LocalStorage1').item.json['Split Mode'] }} {{ $('LocalStorage1').item.json.questions_per_split }} {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json.THEME }} {{ $json.podcast_subtheme }}"
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          10624,
-          3088
-        ],
-        "id": "6b87f46c-0a56-489f-93af-7e40981fc433",
-        "name": "split pdf",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "formFields": {
-            "values": [
-              {
-                "fieldName": "sourceIdentifier",
-                "fieldLabel": "sourceIdentifier",
-                "fieldType": "file"
-              },
-              {
-                "fieldName": "Split Mode",
-                "fieldLabel": "Split Mode",
-                "fieldType": "dropdown",
-                "defaultValue": "Pages",
-                "fieldOptions": {
-                  "values": [
-                    {
-                      "option": "Pages"
-                    },
-                    {
-                      "option": "Questions"
-                    }
-                  ]
-                }
-              },
-              {
-                "fieldName": "pages_per_split",
-                "fieldLabel": "pages_per_split",
-                "fieldType": "number",
-                "defaultValue": "20",
-                "requiredField": true
-              },
-              {
-                "fieldName": "questions_per_split",
-                "fieldLabel": "questions_per_split",
-                "fieldType": "dropdown",
-                "defaultValue": "4",
-                "fieldOptions": {
-                  "values": [
-                    {
-                      "option": "4"
-                    },
-                    {
-                      "option": "8"
-                    }
-                  ]
-                },
-                "requiredField": true
-              }
-            ]
-          },
-          "options": {}
-        },
-        "type": "n8n-nodes-base.form",
-        "typeVersion": 2.4,
-        "position": [
-          10064,
-          3184
-        ],
-        "id": "87458a24-9376-4573-a690-31a79a040d31",
-        "name": "LocalStorage1",
-        "webhookId": "567c93c4-bd2c-41bc-882b-f141ec9b4055"
-      },
-      {
-        "parameters": {
-          "command": "=/home/nizar/workspace/gnl-process/find_local_main_source.zsh \"{{ $json.sourceIdentifier[0].filename }}\""
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          10256,
-          3184
-        ],
-        "id": "b6380021-035e-48e9-b44e-7b610981bdb0",
-        "name": "find_local_main_source",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "jsCode": "const output = $input.first().json.stdout;\nconst parsed = JSON.parse(output);\n\n// Get filename without extension\nconst fileName = parsed.file_name;\nconst name = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;\n\nreturn {\n  json: {\n    absolute_path: parsed.absolute_path,\n    parent_file: name,\n    podcast_subtheme: parsed.parent_folder\n  }\n};"
-        },
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          10432,
-          3184
-        ],
-        "id": "d8c6a1d2-b49c-4077-b9ea-57d3c754a800",
-        "name": "Code in JavaScript"
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/combine_mp3_v2.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }} {{ $('Code in JavaScript').item.json.parent_file }}"
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          11760,
-          3184
-        ],
-        "id": "b2548e54-49ea-4a35-bb8d-22d7904a799f",
-        "name": "combine Bulk Podcasts",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/xxx.py "
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          9984,
-          4240
-        ],
-        "id": "e4dd399f-6363-44b8-8257-fbab45abd0be",
-        "name": "highlight_correct_options",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/xxx.py "
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          10656,
-          4160
-        ],
-        "id": "8409fa9c-c650-4c8c-a7e8-78b4957f236e",
-        "name": "generate_ankycards",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/xxx.py "
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          9504,
-          4160
-        ],
-        "id": "edc5e5d3-3a15-4a52-b513-a8554dd65b53",
-        "name": "formatPdfFromUdemy",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/xxx.py "
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          10288,
-          4240
-        ],
-        "id": "0a4fc946-5a89-4c4b-b7da-9476f339b97d",
-        "name": "GenerateCompactExamVersion",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/xxx.py "
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          10656,
-          4336
-        ],
-        "id": "73784171-0b41-445f-9df3-e1901e00c34c",
-        "name": "extract_keywords",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/xxx.py "
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          10000,
-          4048
-        ],
-        "id": "38358869-1110-4453-af1f-6468555dc881",
-        "name": "you can start the worflow of gnl",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/xxx.py "
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          10944,
-          2704
-        ],
-        "id": "415e6a64-77d2-4280-a386-84093addf2fd",
-        "name": "combine_mp3_simple",
-        "executeOnce": true,
-        "retryOnFail": true
-      },
-      {
-        "parameters": {
-          "formFields": {
-            "values": [
-              {
-                "fieldName": "month",
-                "fieldLabel": "Mois",
-                "fieldType": "dropdown",
-                "defaultValue": "04",
-                "fieldOptions": {
-                  "values": [
-                    {
-                      "option": "01 - Janvier"
-                    },
-                    {
-                      "option": "02 - Février"
-                    },
-                    {
-                      "option": "03 - Mars"
-                    },
-                    {
-                      "option": "04 - Avril"
-                    },
-                    {
-                      "option": "05 - Mai"
-                    },
-                    {
-                      "option": "06 - Juin"
-                    },
-                    {
-                      "option": "07 - Juillet"
-                    },
-                    {
-                      "option": "08 - Août"
-                    },
-                    {
-                      "option": "09 - Septembre"
-                    },
-                    {
-                      "option": "10 - Octobre"
-                    },
-                    {
-                      "option": "11 - Novembre"
-                    },
-                    {
-                      "option": "12 - Décembre"
-                    }
-                  ]
-                },
-                "requiredField": true
-              },
-              {
-                "fieldName": "subtheme",
-                "fieldLabel": "Subtheme",
-                "fieldType": "dropdown",
-                "defaultValue": "aws-whats-new",
-                "fieldOptions": {
-                  "values": [
-                    {
-                      "option": "aws-whats-new"
-                    },
-                    {
-                      "option": "aws-solutions-lib"
-                    }
-                  ]
-                },
-                "requiredField": true
-              }
-            ]
-          },
-          "options": {}
-        },
-        "type": "n8n-nodes-base.form",
-        "typeVersion": 2.4,
-        "position": [
-          10064,
-          3472
-        ],
-        "id": "18c485d2-f23e-4a31-831f-3cce924cb89d",
-        "name": "What's New Form",
-        "webhookId": "aggregate-form-wh"
-      },
-      {
-        "parameters": {
-          "command": "=python /home/nizar/workspace/gnl-process/whats_new_report.py {{ $(\"What's New Form\").item.json.month.substring(0,2) }} {{ $('MainForm').item.json.THEME }} {{ $(\"What's New Form\").item.json.subtheme }}"
-        },
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          10288,
-          3472
-        ],
-        "id": "e21633fc-4db5-46a1-9651-7ef010c74764",
-        "name": "Generate What's New Report",
-        "executeOnce": true,
-        "retryOnFail": true
-      }
-    ],
-    "connections": {
-      "MainForm": {
-        "main": [
-          [
-            {
-              "node": "mount g-drive",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Switch": {
-        "main": [
-          [],
-          [
-            {
-              "node": "LocalStorage1",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "What's New Form",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "mount g-drive": {
-        "main": [
-          [
-            {
-              "node": "Switch",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "CollectAndSave": {
-        "main": [
-          [
-            {
-              "node": "Generate bulk titles",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Generate Bulk Podcasts": {
-        "main": [
-          [
-            {
-              "node": "download Bulk Podcasts",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "download Bulk Podcasts": {
-        "main": [
-          [
-            {
-              "node": "convert Bulk Podcasts",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "convert Bulk Podcasts": {
-        "main": [
-          [
-            {
-              "node": "combine Bulk Podcasts",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "LocalStorage1": {
-        "main": [
-          [
-            {
-              "node": "find_local_main_source",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "find_local_main_source": {
-        "main": [
-          [
-            {
-              "node": "Code in JavaScript",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Code in JavaScript": {
-        "main": [
-          [
-            {
-              "node": "split pdf",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "split pdf": {
-        "main": [
-          [
-            {
-              "node": "CollectAndSave",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "formatPdfFromUdemy": {
-        "main": [
-          [
-            {
-              "node": "highlight_correct_options",
-              "type": "main",
-              "index": 0
+              "requiredField": true
             },
             {
-              "node": "you can start the worflow of gnl",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "highlight_correct_options": {
-        "main": [
-          [
-            {
-              "node": "GenerateCompactExamVersion",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "GenerateCompactExamVersion": {
-        "main": [
-          [
-            {
-              "node": "generate_ankycards",
-              "type": "main",
-              "index": 0
+              "fieldLabel": "THEME",
+              "fieldType": "dropdown",
+              "defaultValue": "AWS",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "AWS"
+                  },
+                  {
+                    "option": "MISC"
+                  }
+                ]
+              },
+              "requiredField": true
             },
             {
-              "node": "extract_keywords",
-              "type": "main",
-              "index": 0
+              "fieldLabel": "Generation Mode",
+              "fieldType": "dropdown",
+              "defaultValue": "Bulk",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Single"
+                  },
+                  {
+                    "option": "Bulk"
+                  }
+                ]
+              }
             }
           ]
-        ]
+        },
+        "options": {}
       },
-      "Generate bulk titles": {
-        "main": [
-          [
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        9168,
+        3424
+      ],
+      "id": "2ff9b58a-2cb4-4f69-a7f0-8f3e5277a50b",
+      "name": "MainForm",
+      "webhookId": "a42b67fa-3d7e-4824-9fe1-ef6c189e6e6d",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
             {
-              "node": "Generate Bulk Podcasts",
-              "type": "main",
-              "index": 0
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('MainForm').item.json.Type }}",
+                    "rightValue": "WebAndYoutube",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "48808c76-e7e5-406a-ab49-fcc4a0d840e3"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "40e6cbe1-ee28-4f49-a162-1cd0e137bb91",
+                    "leftValue": "={{ $('MainForm').item.json.Type }}",
+                    "rightValue": "LocalStorage",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "aggregate-cond",
+                    "leftValue": "={{ $('MainForm').item.json.Type }}",
+                    "rightValue": "What's New Report",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
             }
           ]
-        ]
+        },
+        "options": {}
       },
-      "What's New Form": {
-        "main": [
-          [
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        9552,
+        3392
+      ],
+      "id": "21e7c195-0c47-436f-8547-515c927eac14",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "command": "=/home/nizar/workspace/gnl-process/collect_and_save.sh '{{ $json.stdout }}'"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        10784,
+        3088
+      ],
+      "id": "f871b61c-1aec-418d-9c52-9e5d7badc0c2",
+      "name": "CollectAndSave",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "sudo mount -t drvfs G: /mnt/g\n\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        9392,
+        3424
+      ],
+      "id": "868eef14-5620-480d-960a-cfec4bdea750",
+      "name": "mount g-drive",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_generation.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }}"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        11136,
+        3088
+      ],
+      "id": "0c63741e-1f87-4972-96e5-d51878ffdbda",
+      "name": "Generate Bulk Podcasts",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/get_title_v2.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }}"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        10944,
+        3088
+      ],
+      "id": "b9efedb6-3236-438a-8f7a-5a192ffe70d9",
+      "name": "Generate bulk titles",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_download.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }}"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        11328,
+        3184
+      ],
+      "id": "03323c96-8825-42fb-84d5-b15f3927c8a7",
+      "name": "download Bulk Podcasts",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_conversion.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }} "
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        11568,
+        3184
+      ],
+      "id": "5449fa4e-0dad-41aa-a695-b5a4c4ce7b7d",
+      "name": "convert Bulk Podcasts",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/split_pdf.py {{ $json.absolute_path }} {{ $('LocalStorage1').item.json.pages_per_split }} {{ $json.parent_file }} {{ $('LocalStorage1').item.json['Split Mode'] }} {{ $('LocalStorage1').item.json.questions_per_split }} {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json.THEME }} {{ $json.podcast_subtheme }}"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        10624,
+        3088
+      ],
+      "id": "6b87f46c-0a56-489f-93af-7e40981fc433",
+      "name": "split pdf",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "formFields": {
+          "values": [
             {
-              "node": "Generate What's New Report",
-              "type": "main",
-              "index": 0
+              "fieldName": "sourceIdentifier",
+              "fieldLabel": "sourceIdentifier",
+              "fieldType": "file"
+            },
+            {
+              "fieldName": "Split Mode",
+              "fieldLabel": "Split Mode",
+              "fieldType": "dropdown",
+              "defaultValue": "Pages",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Pages"
+                  },
+                  {
+                    "option": "Questions"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldName": "pages_per_split",
+              "fieldLabel": "pages_per_split",
+              "fieldType": "number",
+              "defaultValue": "20",
+              "requiredField": true
+            },
+            {
+              "fieldName": "questions_per_split",
+              "fieldLabel": "questions_per_split",
+              "fieldType": "dropdown",
+              "defaultValue": "4",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "4"
+                  },
+                  {
+                    "option": "8"
+                  }
+                ]
+              },
+              "requiredField": true
             }
           ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.4,
+      "position": [
+        10064,
+        3184
+      ],
+      "id": "87458a24-9376-4573-a690-31a79a040d31",
+      "name": "LocalStorage1",
+      "webhookId": "567c93c4-bd2c-41bc-882b-f141ec9b4055"
+    },
+    {
+      "parameters": {
+        "command": "=/home/nizar/workspace/gnl-process/find_local_main_source.zsh \"{{ $json.sourceIdentifier[0].filename }}\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        10256,
+        3184
+      ],
+      "id": "b6380021-035e-48e9-b44e-7b610981bdb0",
+      "name": "find_local_main_source",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = $input.first().json.stdout;\nconst parsed = JSON.parse(output);\n\n// Get filename without extension\nconst fileName = parsed.file_name;\nconst name = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;\n\nreturn {\n  json: {\n    absolute_path: parsed.absolute_path,\n    parent_file: name,\n    podcast_subtheme: parsed.parent_folder\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        10432,
+        3184
+      ],
+      "id": "d8c6a1d2-b49c-4077-b9ea-57d3c754a800",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/combine_mp3_v2.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }} {{ $('Code in JavaScript').item.json.parent_file }}"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        11760,
+        3184
+      ],
+      "id": "b2548e54-49ea-4a35-bb8d-22d7904a799f",
+      "name": "combine Bulk Podcasts",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/xxx.py "
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        9984,
+        4240
+      ],
+      "id": "e4dd399f-6363-44b8-8257-fbab45abd0be",
+      "name": "highlight_correct_options",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/xxx.py "
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        10656,
+        4160
+      ],
+      "id": "8409fa9c-c650-4c8c-a7e8-78b4957f236e",
+      "name": "generate_ankycards",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/xxx.py "
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        9504,
+        4160
+      ],
+      "id": "edc5e5d3-3a15-4a52-b513-a8554dd65b53",
+      "name": "formatPdfFromUdemy",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/xxx.py "
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        10288,
+        4240
+      ],
+      "id": "0a4fc946-5a89-4c4b-b7da-9476f339b97d",
+      "name": "GenerateCompactExamVersion",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/xxx.py "
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        10656,
+        4336
+      ],
+      "id": "73784171-0b41-445f-9df3-e1901e00c34c",
+      "name": "extract_keywords",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/xxx.py "
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        10000,
+        4048
+      ],
+      "id": "38358869-1110-4453-af1f-6468555dc881",
+      "name": "you can start the worflow of gnl",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/xxx.py "
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        10944,
+        2704
+      ],
+      "id": "415e6a64-77d2-4280-a386-84093addf2fd",
+      "name": "combine_mp3_simple",
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "formFields": {
+          "values": [
+            {
+              "fieldName": "month",
+              "fieldLabel": "Mois",
+              "fieldType": "dropdown",
+              "defaultValue": "04",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "01 - Janvier"
+                  },
+                  {
+                    "option": "02 - Février"
+                  },
+                  {
+                    "option": "03 - Mars"
+                  },
+                  {
+                    "option": "04 - Avril"
+                  },
+                  {
+                    "option": "05 - Mai"
+                  },
+                  {
+                    "option": "06 - Juin"
+                  },
+                  {
+                    "option": "07 - Juillet"
+                  },
+                  {
+                    "option": "08 - Août"
+                  },
+                  {
+                    "option": "09 - Septembre"
+                  },
+                  {
+                    "option": "10 - Octobre"
+                  },
+                  {
+                    "option": "11 - Novembre"
+                  },
+                  {
+                    "option": "12 - Décembre"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldName": "subtheme",
+              "fieldLabel": "Subtheme",
+              "fieldType": "dropdown",
+              "defaultValue": "aws-whats-new",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "aws-whats-new"
+                  },
+                  {
+                    "option": "aws-solutions-lib"
+                  }
+                ]
+              },
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.4,
+      "position": [
+        10064,
+        3472
+      ],
+      "id": "18c485d2-f23e-4a31-831f-3cce924cb89d",
+      "name": "What's New Form",
+      "webhookId": "aggregate-form-wh"
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/whats_new_report.py {{ $(\"What's New Form\").item.json.month.substring(0,2) }} {{ $('MainForm').item.json.THEME }} {{ $(\"What's New Form\").item.json.subtheme }}"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        10288,
+        3472
+      ],
+      "id": "e21633fc-4db5-46a1-9651-7ef010c74764",
+      "name": "Generate What's New Report",
+      "executeOnce": true,
+      "retryOnFail": true
+    }
+  ],
+  "connections": {
+    "MainForm": {
+      "main": [
+        [
+          {
+            "node": "mount g-drive",
+            "type": "main",
+            "index": 0
+          }
         ]
-      }
+      ]
     },
-    "settings": {
-      "executionOrder": "v1",
-      "availableInMCP": false
+    "Switch": {
+      "main": [
+        [],
+        [
+          {
+            "node": "LocalStorage1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "What's New Form",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "staticData": null,
-    "meta": null,
-    "pinData": {},
-    "versionId": "e6ad5db9-24a6-4614-bad1-58f527d7194c",
-    "activeVersionId": null,
-    "versionCounter": 10,
-    "triggerCount": 0,
-    "tags": [],
-    "shared": [
-      {
-        "updatedAt": "2026-04-27T09:45:26.616Z",
-        "createdAt": "2026-04-27T09:45:26.616Z",
-        "role": "workflow:owner",
-        "workflowId": "Jp4HFw5LYwnktOR2jvr0U",
-        "projectId": "IUZUphTJqrq5q49O",
-        "project": {
-          "updatedAt": "2025-09-09T15:35:22.453Z",
-          "createdAt": "2025-09-09T15:33:11.832Z",
-          "id": "IUZUphTJqrq5q49O",
-          "name": "Nizar Ajroud <nizar.ajroud@gmail.com>",
-          "type": "personal",
-          "icon": null,
-          "description": null,
-          "creatorId": "965c6769-4478-4dd7-b3d9-477397cdc9e1"
-        }
+    "mount g-drive": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CollectAndSave": {
+      "main": [
+        [
+          {
+            "node": "Generate bulk titles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Bulk Podcasts": {
+      "main": [
+        [
+          {
+            "node": "download Bulk Podcasts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "download Bulk Podcasts": {
+      "main": [
+        [
+          {
+            "node": "convert Bulk Podcasts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "convert Bulk Podcasts": {
+      "main": [
+        [
+          {
+            "node": "combine Bulk Podcasts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LocalStorage1": {
+      "main": [
+        [
+          {
+            "node": "find_local_main_source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "find_local_main_source": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "split pdf",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "split pdf": {
+      "main": [
+        [
+          {
+            "node": "CollectAndSave",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "formatPdfFromUdemy": {
+      "main": [
+        [
+          {
+            "node": "highlight_correct_options",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "you can start the worflow of gnl",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "highlight_correct_options": {
+      "main": [
+        [
+          {
+            "node": "GenerateCompactExamVersion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GenerateCompactExamVersion": {
+      "main": [
+        [
+          {
+            "node": "generate_ankycards",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "extract_keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate bulk titles": {
+      "main": [
+        [
+          {
+            "node": "Generate Bulk Podcasts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "What's New Form": {
+      "main": [
+        [
+          {
+            "node": "Generate What's New Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "e6ad5db9-24a6-4614-bad1-58f527d7194c",
+  "activeVersionId": null,
+  "versionCounter": 10,
+  "triggerCount": 0,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-04-27T09:45:26.616Z",
+      "createdAt": "2026-04-27T09:45:26.616Z",
+      "role": "workflow:owner",
+      "workflowId": "Jp4HFw5LYwnktOR2jvr0U",
+      "projectId": "IUZUphTJqrq5q49O",
+      "project": {
+        "updatedAt": "2025-09-09T15:35:22.453Z",
+        "createdAt": "2025-09-09T15:33:11.832Z",
+        "id": "IUZUphTJqrq5q49O",
+        "name": "Nizar Ajroud <nizar.ajroud@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "965c6769-4478-4dd7-b3d9-477397cdc9e1"
       }
-    ]
-  }
-]
+    }
+  ]
+}
