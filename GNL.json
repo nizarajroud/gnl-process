@@ -288,7 +288,7 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11568,
+        11688,
         3184
       ],
       "id": "5449fa4e-0dad-41aa-a695-b5a4c4ce7b7d",
@@ -409,7 +409,7 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11760,
+        11928,
         3184
       ],
       "id": "b2548e54-49ea-4a35-bb8d-22d7904a799f",
@@ -537,7 +537,7 @@
                     "option": "01 - Janvier"
                   },
                   {
-                    "option": "02 - Février"
+                    "option": "02 - F\u00e9vrier"
                   },
                   {
                     "option": "03 - Mars"
@@ -555,7 +555,7 @@
                     "option": "07 - Juillet"
                   },
                   {
-                    "option": "08 - Août"
+                    "option": "08 - Ao\u00fbt"
                   },
                   {
                     "option": "09 - Septembre"
@@ -567,7 +567,7 @@
                     "option": "11 - Novembre"
                   },
                   {
-                    "option": "12 - Décembre"
+                    "option": "12 - D\u00e9cembre"
                   }
                 ]
               },
@@ -618,6 +618,35 @@
       "name": "Generate What's New Report",
       "executeOnce": true,
       "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/validate_states.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        11388,
+        3184
+      ],
+      "id": "validate-states-001",
+      "name": "Validate States"
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        11478,
+        3184
+      ],
+      "id": "wait-approval-001",
+      "name": "Wait for Approval",
+      "webhookId": "state-validation-approval"
     }
   ],
   "connections": {
@@ -688,7 +717,7 @@
       "main": [
         [
           {
-            "node": "convert Bulk Podcasts",
+            "node": "Validate States",
             "type": "main",
             "index": 0
           }
@@ -809,6 +838,28 @@
         [
           {
             "node": "Generate What's New Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate States": {
+      "main": [
+        [
+          {
+            "node": "Wait for Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Approval": {
+      "main": [
+        [
+          {
+            "node": "convert Bulk Podcasts",
             "type": "main",
             "index": 0
           }
