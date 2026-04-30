@@ -203,20 +203,53 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
             print("✓ Upload successful, proceeding to audio generation")
             
             print("Starting audio generation...")
+            # try:
+            #     nova.act(
+            #         'In the Notebook guide section on the right side, find the Audio Overview card. '
+            #         'Click directly on the "Audio Overview" button inside that card. '
+            #         'Wait for and verify that a message appears containing both: '
+            #         '1) Text indicating generation is in progress (like "Generating Audio Overview...") '
+            #         '2) Text telling the user to wait (like "Come back in a few minutes") '
+            #         'Confirm you can see this complete status message before considering the task complete.'
+            #     )
+            #     print("✓ Audio generation started")
+            # except Exception as audio_error:
+            #     print(f"⚠ Audio generation failed: {str(audio_error)}")
+            #     raise
             try:
+                # Load prompt from file: looks for {subfolder}.txt, falls back to default.txt
+                prompts_dir = os.path.join(os.path.dirname(__file__), 'prompts')
+                prompt_file = os.path.join(prompts_dir, f"{subfolder}.txt")
+                if not os.path.exists(prompt_file):
+                    prompt_file = os.path.join(prompts_dir, "default.txt")
+                with open(prompt_file, 'r') as f:
+                    audio_prompt = f.read().strip().replace('"', '\\"')
+
                 nova.act(
                     'In the Notebook guide section on the right side, find the Audio Overview card. '
-                    'Click directly on the "Audio Overview" button inside that card. '
-                    'Wait for and verify that a message appears containing both: '
-                    '1) Text indicating generation is in progress (like "Generating Audio Overview...") '
-                    '2) Text telling the user to wait (like "Come back in a few minutes") '
-                    'Confirm you can see this complete status message before considering the task complete.'
+                    'Click on the arrow button (">") located at the top right corner of the Audio Overview card. '
+                    'Wait for the "Customize Audio Overview" modal window to appear. '
+                    'Once the modal is open, find the text input field labeled '
+                    '"What should the AI hosts focus on in this episode?" '
+                    f'and type the following prompt: "{audio_prompt}". '
+                    'Then click the "Generate" button at the bottom right of the modal. '
+                    'Wait for and verify that a message appears confirming that generation has started '
+                    '(like "Generating Audio Overview..." or "Come back in a few minutes"). '
+                    'Confirm you can see this status message before considering the task complete.'
                 )
                 print("✓ Audio generation started")
             except Exception as audio_error:
                 print(f"⚠ Audio generation failed: {str(audio_error)}")
                 raise
             
+            # Mark generation_state immediately after successful audio generation
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute("UPDATE podcast_download SET generation_state = 1, date = ? WHERE id = ?", (time.strftime("%Y-%m-%d"), record_id))
+            conn.commit()
+            conn.close()
+            print(f"✓ generation_state updated to 1 for record {record_id}")
+
             print("Waiting after audio generation...")
             time.sleep(5)
             
@@ -242,13 +275,6 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
             time.sleep(3)
             
         print(f"\n✓ Successfully processed record {record_id}")
-        
-        # Mark record as processed with current date
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute("UPDATE podcast_download SET generation_state = 1, date = ? WHERE id = ?", (time.strftime("%Y-%m-%d"), record_id))
-        conn.commit()
-        conn.close()
         
         # Decrement daily quota
         decrement_quota(db_path, 1)
