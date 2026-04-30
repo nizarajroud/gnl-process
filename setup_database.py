@@ -31,6 +31,7 @@ cursor.execute('''
         download_state INTEGER,
         conversion_state INTEGER,
         date TEXT,
+        file_url TEXT,
         FOREIGN KEY (parent_configuration_id) REFERENCES parent_configuration(id)
     )
 ''')

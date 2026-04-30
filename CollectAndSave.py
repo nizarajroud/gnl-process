@@ -53,13 +53,21 @@ def collect_and_save(json_input):
     parent_config_id = cursor.lastrowid
     
     # Insert files into podcast_download table
+    pdf_parts_folder = os.getenv('PDF_PARTS_FOLDER', '')
+    base_url = os.getenv('PDF_SERVER_BASE_URL', '')
+
     for file in files:
+        file_url = ''
+        if base_url and pdf_parts_folder:
+            relative_path = file.get('fullPath', '').replace(pdf_parts_folder, '').lstrip('/')
+            file_url = f"{base_url}/{relative_path}"
+
         cursor.execute('''
             INSERT INTO podcast_download 
             (parent_configuration_id, source_id, podcast_name, generation_state, 
-             download_state, conversion_state, date)
-            VALUES (?, ?, '', 0, 0, 0, NULL)
-        ''', (parent_config_id, file.get('fileName', '')))
+             download_state, conversion_state, date, file_url)
+            VALUES (?, ?, '', 0, 0, 0, NULL, ?)
+        ''', (parent_config_id, file.get('fileName', ''), file_url))
     
     conn.commit()
     print(f"Inserted {len(files)} records into podcast_download and 1 parent configuration")
