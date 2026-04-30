@@ -146,11 +146,11 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                 full_path = f"{source_path}/{sourceIdentifier}"
                 try:
                     nova.act(
-                        'Click on the "+ Create new" button to create a new notebook'
+                        'Click on the "+ Create notebook" button in the top right corner'
                     )
                     time.sleep(2)
                     nova.act(
-                        f'Find the hidden file input element on the page and use agentType to provide the file path {full_path} to it'
+                        f'Click on the "Upload files" button, then use agentType to provide the file path {full_path} to the file input'
                     )
                     time.sleep(5)
                     
