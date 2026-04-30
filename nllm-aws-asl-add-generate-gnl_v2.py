@@ -146,15 +146,18 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                 full_path = f"{source_path}/{sourceIdentifier}"
                 try:
                     nova.act(
-                        f'Click on "+ Create new" button '
-                        f'Use agentType to provide the file path {full_path} to the hidden file input element'
+                        'Click on the "+ Create new" button to create a new notebook'
+                    )
+                    time.sleep(2)
+                    nova.act(
+                        f'Find the hidden file input element on the page and use agentType to provide the file path {full_path} to it'
                     )
                     time.sleep(5)
                     
                     # Wait for upload to complete with retry logic
                     print("Waiting for upload to complete...")
                     upload_success = False
-                    max_attempts = 15
+                    max_attempts = 5
                     attempt = 0
                     
                     while not upload_success and attempt < max_attempts:
