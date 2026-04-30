@@ -369,7 +369,14 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "respondWithOptions": {
+            "values": {
+              "respondWith": "redirect",
+              "redirectUrl": "about:blank"
+            }
+          }
+        }
       },
       "type": "n8n-nodes-base.form",
       "typeVersion": 2.4,
@@ -599,7 +606,14 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "respondWithOptions": {
+            "values": {
+              "respondWith": "redirect",
+              "redirectUrl": "about:blank"
+            }
+          }
+        }
       },
       "type": "n8n-nodes-base.form",
       "typeVersion": 2.4,
