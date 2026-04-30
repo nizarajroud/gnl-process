@@ -37,8 +37,8 @@ def main(user_data_dir: str = None) -> None:
     
     os.makedirs(user_data_dir, exist_ok=True)
 
-    with NovaAct(starting_page="https://nova.amazon.com/act", user_data_dir=user_data_dir, clone_user_data_dir=False, headless=False):
-        input("Log into your WebAndYoutubes, then press enter...")
+    with NovaAct(starting_page="https://notebooklm.google.com/", user_data_dir=user_data_dir, clone_user_data_dir=False, headless=False):
+        input("Log into NotebookLM, then press enter...")
 
     print(f"User data dir saved to {user_data_dir=}")
 
