@@ -110,7 +110,14 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "respondWithOptions": {
+            "values": {
+              "respondWith": "redirect",
+              "redirectUrl": "about:blank"
+            }
+          }
+        }
       },
       "type": "n8n-nodes-base.formTrigger",
       "typeVersion": 2.2,
