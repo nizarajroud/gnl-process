@@ -41,7 +41,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
     cursor = conn.cursor()
     
     cursor.execute("""
-        SELECT pd.id, pd.source_id, pc.source_path, pd.podcast_name, pd.file_url
+        SELECT pd.id, pd.source_id, pc.source_path, pd.podcast_name
         FROM podcast_download pd
         JOIN parent_configuration pc ON pd.parent_configuration_id = pc.id
         WHERE pc.source_type = ? 
@@ -82,7 +82,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
         print("No records found matching the criteria")
         sys.exit(0)
     
-    record_id, source_id, source_path, podcast_name, file_url = records[0]
+    record_id, source_id, source_path, podcast_name = records[0]
     
     # Check if already generated
     conn = sqlite3.connect(db_path)
@@ -151,24 +151,11 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                 # Build full path: source_path is the folder, source_id is the filename
                 full_path = f"{source_path}/{sourceIdentifier}"
                 try:
-                    if file_url:
-                        # Use URL-based upload (more reliable)
-                        nova.act(
-                            'Click on "+ Create new" button '
-                            'Click on "Websites" button '
-                            f'Insert this link <{file_url}> into the text box '
-                            'Click on "Insert" button '
-                            'Wait until the source finishes loading'
-                        )
-                        upload_success = True
-                        print(f"✓ Uploaded via URL: {file_url}")
-                    else:
-                        # Fallback to file input method
-                        nova.act(
-                            f'Click on "+ Create new" button '
-                            f'Use agentType to provide the file path {full_path} to the hidden file input element'
-                        )
-                        time.sleep(5)
+                    nova.act(
+                        f'Click on "+ Create new" button '
+                        f'Use agentType to provide the file path {full_path} to the hidden file input element'
+                    )
+                    time.sleep(5)
 
                     # Wait for upload to complete with retry logic
                     print("Waiting for upload to complete...")
