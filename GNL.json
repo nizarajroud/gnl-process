@@ -743,13 +743,29 @@
     },
     {
       "parameters": {
-        "httpMethod": "GET",
-        "path": "gnl-stop",
-        "responseMode": "onReceived",
+        "formTitle": "\u26d4 Emergency Stop",
+        "formDescription": "Click Submit to stop all running processes immediately.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Confirm",
+              "fieldType": "dropdown",
+              "defaultValue": "STOP ALL",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "STOP ALL"
+                  }
+                ]
+              },
+              "requiredField": true
+            }
+          ]
+        },
         "options": {}
       },
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
       "position": [
         200,
         4000
