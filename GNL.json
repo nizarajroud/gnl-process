@@ -608,9 +608,11 @@
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "formTitle": "What's New Report",
+        "formDescription": "Generate a What's New report for a given month"
       },
-      "type": "n8n-nodes-base.form",
+      "type": "n8n-nodes-base.formTrigger",
       "typeVersion": 2.4,
       "position": [
         10064,
