@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-04-28T10:35:23.988Z",
+  "updatedAt": "2026-04-30T19:00:46.537Z",
   "createdAt": "2026-04-27T09:45:26.612Z",
   "id": "Jp4HFw5LYwnktOR2jvr0U",
   "name": "GNL",
@@ -243,8 +243,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11136,
-        3088
+        11120,
+        3264
       ],
       "id": "0c63741e-1f87-4972-96e5-d51878ffdbda",
       "name": "Generate Bulk Podcasts",
@@ -274,7 +274,7 @@
       "typeVersion": 1,
       "position": [
         11328,
-        3184
+        3264
       ],
       "id": "03323c96-8825-42fb-84d5-b15f3927c8a7",
       "name": "download Bulk Podcasts",
@@ -288,8 +288,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11568,
-        3184
+        11952,
+        3616
       ],
       "id": "5449fa4e-0dad-41aa-a695-b5a4c4ce7b7d",
       "name": "convert Bulk Podcasts",
@@ -340,7 +340,7 @@
               "fieldName": "pages_per_split",
               "fieldLabel": "pages_per_split",
               "fieldType": "number",
-              "defaultValue": "20",
+              "defaultValue": "3",
               "requiredField": true
             },
             {
@@ -382,7 +382,7 @@
       "typeVersion": 1,
       "position": [
         10256,
-        3184
+        3088
       ],
       "id": "b6380021-035e-48e9-b44e-7b610981bdb0",
       "name": "find_local_main_source",
@@ -397,7 +397,7 @@
       "typeVersion": 2,
       "position": [
         10432,
-        3184
+        3088
       ],
       "id": "d8c6a1d2-b49c-4077-b9ea-57d3c754a800",
       "name": "Code in JavaScript"
@@ -409,8 +409,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11760,
-        3184
+        12192,
+        3616
       ],
       "id": "b2548e54-49ea-4a35-bb8d-22d7904a799f",
       "name": "combine Bulk Podcasts",
@@ -537,7 +537,7 @@
                     "option": "01 - Janvier"
                   },
                   {
-                    "option": "02 - Février"
+                    "option": "02 - F\u00e9vrier"
                   },
                   {
                     "option": "03 - Mars"
@@ -555,7 +555,7 @@
                     "option": "07 - Juillet"
                   },
                   {
-                    "option": "08 - Août"
+                    "option": "08 - Ao\u00fbt"
                   },
                   {
                     "option": "09 - Septembre"
@@ -567,7 +567,7 @@
                     "option": "11 - Novembre"
                   },
                   {
-                    "option": "12 - Décembre"
+                    "option": "12 - D\u00e9cembre"
                   }
                 ]
               },
@@ -618,6 +618,34 @@
       "name": "Generate What's New Report",
       "executeOnce": true,
       "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/validate_states.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }}"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        11552,
+        3440
+      ],
+      "id": "validate-states-001",
+      "name": "Validate States"
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        11760,
+        3616
+      ],
+      "id": "wait-approval-001",
+      "name": "Wait for Approval",
+      "webhookId": "state-validation-approval"
     }
   ],
   "connections": {
@@ -688,7 +716,7 @@
       "main": [
         [
           {
-            "node": "convert Bulk Podcasts",
+            "node": "Validate States",
             "type": "main",
             "index": 0
           }
@@ -814,6 +842,28 @@
           }
         ]
       ]
+    },
+    "Validate States": {
+      "main": [
+        [
+          {
+            "node": "Wait for Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Approval": {
+      "main": [
+        [
+          {
+            "node": "convert Bulk Podcasts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -823,9 +873,9 @@
   "staticData": null,
   "meta": null,
   "pinData": {},
-  "versionId": "e6ad5db9-24a6-4614-bad1-58f527d7194c",
+  "versionId": "77bbdaea-4897-4995-b42c-0feeadb0e3a7",
   "activeVersionId": null,
-  "versionCounter": 10,
+  "versionCounter": 11,
   "triggerCount": 0,
   "tags": [],
   "shared": [

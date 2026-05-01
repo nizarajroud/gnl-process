@@ -26,6 +26,13 @@ Automate the end-to-end process of creating educational podcasts from PDF docume
 
 ## Constraints
 - NotebookLM has no public API (consumer version) — requires browser automation
+- NotebookLM cannot access localhost/local network URLs — must upload files directly
 - Daily generation quota: ~20 podcasts per day (Google's implicit limit)
 - Audio generation takes ~5-10 minutes per podcast
-- Chrome profile must maintain Google session
+- Chrome profile must maintain Google session (SingletonLock auto-cleaned)
+- Only one Nova Act instance can use the Chrome profile at a time
+- Google blocks automated browsers from authenticating (Playwright MCP cannot be used)
+
+## Subscription
+- Google One AI Premium (5TB, CA$13.49/month) — consumer NotebookLM, not Enterprise
+- NotebookLM Enterprise API exists but requires Google Cloud project + licensing (not applicable)

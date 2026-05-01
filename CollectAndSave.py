@@ -3,6 +3,9 @@ import json
 import sqlite3
 import sys
 import os
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
 def collect_and_save(json_input):
     data = json.loads(json_input)

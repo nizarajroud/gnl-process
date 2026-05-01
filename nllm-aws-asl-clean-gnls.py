@@ -21,6 +21,12 @@ def main(user_data_dir: str = None) -> None:
     
     headless = os.getenv('HEADLESS', '0') == '1'
 
+    # Clean stale SingletonLock
+    singleton_lock = os.path.join(user_data_dir, 'SingletonLock')
+    if os.path.exists(singleton_lock):
+        os.remove(singleton_lock)
+        print("🔓 Removed stale SingletonLock")
+
     with NovaAct(
         starting_page="http://notebooklm.google.com/",
         user_data_dir=user_data_dir,

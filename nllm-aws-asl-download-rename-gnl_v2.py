@@ -75,6 +75,12 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
     print(f"\nProcessing record {record_id}: {podcast_name}")
     print(f"Remaining records: {len(records) - 1}")
     
+    # Clean stale SingletonLock
+    singleton_lock = os.path.join(user_data_dir, 'SingletonLock')
+    if os.path.exists(singleton_lock):
+        os.remove(singleton_lock)
+        print("🔓 Removed stale SingletonLock")
+
     try:
         with NovaAct(
             starting_page=os.getenv('NOTEBOOKLM_URL', 'http://notebooklm.google.com/'),

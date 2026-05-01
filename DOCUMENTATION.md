@@ -1,5 +1,5 @@
 # GNL Process - NotebookLM Automation
-
+nohup python serve_pdfs.py > /dev/null 2>&1 &
 Automated workflow for processing content sources and generating NotebookLM podcasts with database tracking and audio processing.
 
 ## Overview
