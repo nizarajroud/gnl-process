@@ -740,6 +740,36 @@
       ],
       "id": "check-phase-continue",
       "name": "Continue if not Subscribe"
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "gnl-stop",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        4000
+      ],
+      "id": "emergency-stop-trigger",
+      "name": "Emergency Stop",
+      "webhookId": "gnl-emergency-stop"
+    },
+    {
+      "parameters": {
+        "command": "touch /tmp/gnl-stop && pkill -f 'process_all_records_for_generation' 2>/dev/null; pkill -f 'process_all_records_for_download' 2>/dev/null; pkill -f 'process_all_records_for_conversion' 2>/dev/null; pkill -f 'nllm-aws-asl-add-generate-gnl' 2>/dev/null; pkill -f 'nllm-aws-asl-download-rename-gnl' 2>/dev/null; echo 'All processes stopped'"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        450,
+        4000
+      ],
+      "id": "stop-all-processes",
+      "name": "Stop All Processes"
     }
   ],
   "connections": {
@@ -982,6 +1012,17 @@
           }
         ],
         []
+      ]
+    },
+    "Emergency Stop": {
+      "main": [
+        [
+          {
+            "node": "Stop All Processes",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },

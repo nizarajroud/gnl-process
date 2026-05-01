@@ -17,7 +17,16 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str):
     
     script_path = os.path.join(os.path.dirname(__file__), 'nllm-aws-asl-download-rename-gnl_v2.py')
     
+    STOP_FILE = '/tmp/gnl-stop'
+    if os.path.exists(STOP_FILE):
+        os.remove(STOP_FILE)
+
     while True:
+        if os.path.exists(STOP_FILE):
+            print("⛔ Stop signal received. Exiting.")
+            os.remove(STOP_FILE)
+            sys.exit(0)
+
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
