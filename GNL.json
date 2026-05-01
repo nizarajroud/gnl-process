@@ -704,7 +704,13 @@
     },
     "Switch": {
       "main": [
-        [],
+        [
+          {
+            "node": "LocalStorage1",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Generate Bulk Podcasts",
