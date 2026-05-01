@@ -776,7 +776,7 @@
     },
     {
       "parameters": {
-        "command": "touch /tmp/gnl-stop && pkill -f 'process_all_records_for_generation' 2>/dev/null; pkill -f 'process_all_records_for_download' 2>/dev/null; pkill -f 'process_all_records_for_conversion' 2>/dev/null; pkill -f 'nllm-aws-asl-add-generate-gnl' 2>/dev/null; pkill -f 'nllm-aws-asl-download-rename-gnl' 2>/dev/null; echo 'All processes stopped'"
+        "command": "touch /tmp/gnl-stop; pkill -f 'process_all_records_for_generation' 2>/dev/null; pkill -f 'process_all_records_for_download' 2>/dev/null; pkill -f 'process_all_records_for_conversion' 2>/dev/null; pkill -f 'nllm-aws-asl-add-generate-gnl' 2>/dev/null; pkill -f 'nllm-aws-asl-download-rename-gnl' 2>/dev/null; echo 'All processes stopped'; exit 0"
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
