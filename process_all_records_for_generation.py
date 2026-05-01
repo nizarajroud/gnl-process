@@ -6,7 +6,7 @@ import sys
 import sqlite3
 import os
 
-def main(source_type: str, generation_mode: str, theme: str, subfolder: str):
+def main(source_type: str, generation_mode: str, theme: str, subfolder: str, parent_id: int = None):
     generation_mode = generation_mode.lower()
     subfolder = subfolder.lower()
     
@@ -22,16 +22,24 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
-        cursor.execute("""
-            SELECT COUNT(*) 
-            FROM podcast_download pd
-            JOIN parent_configuration pc ON pd.parent_configuration_id = pc.id
-            WHERE pc.source_type = ? 
-            AND pc.generation_mode = ? 
-            AND pc.podcast_theme = ? 
-            AND pc.podcast_subtheme = ? 
-            AND pd.generation_state = 0
-        """, (source_type, generation_mode, theme, subfolder))
+        if parent_id:
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM podcast_download pd
+                WHERE pd.parent_configuration_id = ?
+                AND pd.generation_state = 0
+            """, (parent_id,))
+        else:
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM podcast_download pd
+                JOIN parent_configuration pc ON pd.parent_configuration_id = pc.id
+                WHERE pc.source_type = ? 
+                AND pc.generation_mode = ? 
+                AND pc.podcast_theme = ? 
+                AND pc.podcast_subtheme = ? 
+                AND pd.generation_state = 0
+            """, (source_type, generation_mode, theme, subfolder))
         
         count = cursor.fetchone()[0]
         conn.close()

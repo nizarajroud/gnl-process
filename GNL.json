@@ -59,6 +59,25 @@
         "formFields": {
           "values": [
             {
+              "fieldLabel": "Phase",
+              "fieldType": "dropdown",
+              "defaultValue": "Subscribe",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Subscribe"
+                  },
+                  {
+                    "option": "Process"
+                  },
+                  {
+                    "option": "Deliver"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
               "fieldLabel": "Type",
               "fieldType": "dropdown",
               "defaultValue": "What's New Report",
@@ -107,6 +126,12 @@
                   }
                 ]
               }
+            },
+            {
+              "fieldLabel": "Parent ID",
+              "fieldType": "number",
+              "defaultValue": "",
+              "requiredField": false
             }
           ]
         },
@@ -131,67 +156,58 @@
               "conditions": {
                 "options": {
                   "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 3
+                  "leftValue": ""
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{ $('MainForm').item.json.Type }}",
-                    "rightValue": "WebAndYoutube",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    },
-                    "id": "48808c76-e7e5-406a-ab49-fcc4a0d840e3"
-                  }
-                ],
-                "combinator": "and"
-              }
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 3
-                },
-                "conditions": [
-                  {
-                    "id": "40e6cbe1-ee28-4f49-a162-1cd0e137bb91",
-                    "leftValue": "={{ $('MainForm').item.json.Type }}",
-                    "rightValue": "LocalStorage",
+                    "leftValue": "={{ $('MainForm').item.json.Phase }}",
+                    "rightValue": "Subscribe",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
                     }
                   }
-                ],
-                "combinator": "and"
-              }
+                ]
+              },
+              "renameOutput": "Subscribe"
             },
             {
               "conditions": {
                 "options": {
                   "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 3
+                  "leftValue": ""
                 },
                 "conditions": [
                   {
-                    "id": "aggregate-cond",
-                    "leftValue": "={{ $('MainForm').item.json.Type }}",
-                    "rightValue": "What's New Report",
+                    "leftValue": "={{ $('MainForm').item.json.Phase }}",
+                    "rightValue": "Process",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
                     }
                   }
-                ],
-                "combinator": "and"
-              }
+                ]
+              },
+              "renameOutput": "Process"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": ""
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('MainForm').item.json.Phase }}",
+                    "rightValue": "Deliver",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": "Deliver"
             }
           ]
         },
@@ -646,6 +662,32 @@
       "id": "wait-approval-001",
       "name": "Wait for Approval",
       "webhookId": "state-validation-approval"
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/list_parents.py process"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        800,
+        3400
+      ],
+      "id": "list-parents-process",
+      "name": "List Parents (Process)"
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/list_parents.py deliver"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        800,
+        3600
+      ],
+      "id": "list-parents-deliver",
+      "name": "List Parents (Deliver)"
     }
   ],
   "connections": {
@@ -665,14 +707,14 @@
         [],
         [
           {
-            "node": "LocalStorage1",
+            "node": "Generate Bulk Podcasts",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "What's New Form",
+            "node": "Validate States",
             "type": "main",
             "index": 0
           }
