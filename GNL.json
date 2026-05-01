@@ -72,6 +72,9 @@
                   },
                   {
                     "option": "Deliver"
+                  },
+                  {
+                    "option": "All Phases"
                   }
                 ]
               },
@@ -208,6 +211,25 @@
                 ]
               },
               "renameOutput": "Deliver"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": ""
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('MainForm').item.json.Phase }}",
+                    "rightValue": "All Phases",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": "All Phases"
             }
           ]
         },
@@ -690,6 +712,34 @@
       ],
       "id": "list-parents-deliver",
       "name": "List Parents (Deliver)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": ""
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('MainForm').item.json.Phase }}",
+              "rightValue": "Subscribe",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        10800,
+        3184
+      ],
+      "id": "check-phase-continue",
+      "name": "Continue if not Subscribe"
     }
   ],
   "connections": {
@@ -726,6 +776,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "LocalStorage1",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -744,7 +801,7 @@
       "main": [
         [
           {
-            "node": "Generate bulk titles",
+            "node": "Continue if not Subscribe",
             "type": "main",
             "index": 0
           }
@@ -913,6 +970,18 @@
             "index": 0
           }
         ]
+      ]
+    },
+    "Continue if not Subscribe": {
+      "main": [
+        [
+          {
+            "node": "Generate bulk titles",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     }
   },
