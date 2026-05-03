@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-04-30T19:00:46.537Z",
+  "updatedAt": "2026-05-03T15:52:25.157Z",
   "createdAt": "2026-04-27T09:45:26.612Z",
   "id": "Jp4HFw5LYwnktOR2jvr0U",
   "name": "GNL",
@@ -61,7 +61,7 @@
             {
               "fieldLabel": "Type",
               "fieldType": "dropdown",
-              "defaultValue": "What's New Report",
+              "defaultValue": "LocalStorage",
               "fieldOptions": {
                 "values": [
                   {
@@ -69,9 +69,6 @@
                   },
                   {
                     "option": "LocalStorage"
-                  },
-                  {
-                    "option": "What's New Report"
                   }
                 ]
               },
@@ -115,8 +112,8 @@
       "type": "n8n-nodes-base.formTrigger",
       "typeVersion": 2.2,
       "position": [
-        9168,
-        3424
+        9536,
+        3088
       ],
       "id": "2ff9b58a-2cb4-4f69-a7f0-8f3e5277a50b",
       "name": "MainForm",
@@ -200,8 +197,8 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.4,
       "position": [
-        9552,
-        3392
+        9888,
+        3072
       ],
       "id": "21e7c195-0c47-436f-8547-515c927eac14",
       "name": "Switch"
@@ -228,8 +225,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        9392,
-        3424
+        9696,
+        3088
       ],
       "id": "868eef14-5620-480d-960a-cfec4bdea750",
       "name": "mount g-drive",
@@ -238,13 +235,13 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_generation.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }}"
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_generation.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
         11120,
-        3264
+        3088
       ],
       "id": "0c63741e-1f87-4972-96e5-d51878ffdbda",
       "name": "Generate Bulk Podcasts",
@@ -253,7 +250,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/get_title_v2.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }}"
+        "command": "=python /home/nizar/workspace/gnl-process/get_title_v2.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -268,13 +265,13 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_download.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }}"
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_download.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
         11328,
-        3264
+        3088
       ],
       "id": "03323c96-8825-42fb-84d5-b15f3927c8a7",
       "name": "download Bulk Podcasts",
@@ -283,13 +280,13 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_conversion.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }} "
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_conversion.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\" "
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11952,
-        3616
+        11536,
+        3088
       ],
       "id": "5449fa4e-0dad-41aa-a695-b5a4c4ce7b7d",
       "name": "convert Bulk Podcasts",
@@ -298,7 +295,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/split_pdf.py {{ $json.absolute_path }} {{ $('LocalStorage1').item.json.pages_per_split }} {{ $json.parent_file }} {{ $('LocalStorage1').item.json['Split Mode'] }} {{ $('LocalStorage1').item.json.questions_per_split }} {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json.THEME }} {{ $json.podcast_subtheme }}"
+        "command": "=python /home/nizar/workspace/gnl-process/split_pdf.py \"{{ $json.absolute_path }}\" \"{{ $('LocalStorage1').item.json.pages_per_split }}\" \"{{ $json.parent_file }}\" \"{{ $('LocalStorage1').item.json['Split Mode'] }}\" \"{{ $('LocalStorage1').item.json.questions_per_split }}\" \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $json.podcast_subtheme }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -340,7 +337,7 @@
               "fieldName": "pages_per_split",
               "fieldLabel": "pages_per_split",
               "fieldType": "number",
-              "defaultValue": "3",
+              "defaultValue": "1",
               "requiredField": true
             },
             {
@@ -367,8 +364,8 @@
       "type": "n8n-nodes-base.form",
       "typeVersion": 2.4,
       "position": [
-        10064,
-        3184
+        10096,
+        3088
       ],
       "id": "87458a24-9376-4573-a690-31a79a040d31",
       "name": "LocalStorage1",
@@ -404,13 +401,13 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/combine_mp3_v2.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }} {{ $('Code in JavaScript').item.json.parent_file }}"
+        "command": "=python /home/nizar/workspace/gnl-process/combine_mp3_v2.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\" \"{{ $('Code in JavaScript').item.json.parent_file }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        12192,
-        3616
+        11856,
+        3088
       ],
       "id": "b2548e54-49ea-4a35-bb8d-22d7904a799f",
       "name": "combine Bulk Podcasts",
@@ -524,6 +521,8 @@
     },
     {
       "parameters": {
+        "formTitle": "What's New Report",
+        "formDescription": "Generate a What's New report for a given month",
         "formFields": {
           "values": [
             {
@@ -594,11 +593,11 @@
         },
         "options": {}
       },
-      "type": "n8n-nodes-base.form",
+      "type": "n8n-nodes-base.formTrigger",
       "typeVersion": 2.4,
       "position": [
-        10064,
-        3472
+        9520,
+        2848
       ],
       "id": "18c485d2-f23e-4a31-831f-3cce924cb89d",
       "name": "What's New Form",
@@ -606,13 +605,13 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/whats_new_report.py {{ $(\"What's New Form\").item.json.month.substring(0,2) }} {{ $('MainForm').item.json.THEME }} {{ $(\"What's New Form\").item.json.subtheme }}"
+        "command": "=python /home/nizar/workspace/gnl-process/whats_new_report.py \"{{ $(\"What's New Form\").item.json.month.substring(0,2) }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $(\"What's New Form\").item.json.subtheme }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10288,
-        3472
+        9712,
+        2848
       ],
       "id": "e21633fc-4db5-46a1-9651-7ef010c74764",
       "name": "Generate What's New Report",
@@ -621,13 +620,13 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/validate_states.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }}"
+        "command": "=python /home/nizar/workspace/gnl-process/validate_states.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11552,
-        3440
+        11568,
+        2576
       ],
       "id": "validate-states-001",
       "name": "Validate States"
@@ -641,7 +640,7 @@
       "typeVersion": 1.1,
       "position": [
         11760,
-        3616
+        2608
       ],
       "id": "wait-approval-001",
       "name": "Wait for Approval",
@@ -670,13 +669,7 @@
             "index": 0
           }
         ],
-        [
-          {
-            "node": "What's New Form",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "mount g-drive": {
@@ -716,7 +709,7 @@
       "main": [
         [
           {
-            "node": "Validate States",
+            "node": "convert Bulk Podcasts",
             "type": "main",
             "index": 0
           }
@@ -725,13 +718,7 @@
     },
     "convert Bulk Podcasts": {
       "main": [
-        [
-          {
-            "node": "combine Bulk Podcasts",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "LocalStorage1": {
@@ -856,13 +843,7 @@
     },
     "Wait for Approval": {
       "main": [
-        [
-          {
-            "node": "convert Bulk Podcasts",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     }
   },
@@ -873,9 +854,9 @@
   "staticData": null,
   "meta": null,
   "pinData": {},
-  "versionId": "77bbdaea-4897-4995-b42c-0feeadb0e3a7",
+  "versionId": "780d1fc7-3390-4fcc-ba31-5f76b076b895",
   "activeVersionId": null,
-  "versionCounter": 11,
+  "versionCounter": 14,
   "triggerCount": 0,
   "tags": [],
   "shared": [

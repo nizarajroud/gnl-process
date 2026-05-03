@@ -50,8 +50,8 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str):
         ])
         
         if result.returncode != 0:
-            print(f"\n✗ Script failed. Stopping.")
-            sys.exit(1)
+            print(f"\n⚠ Script failed on one record. Continuing with next...")
+            continue
 
 if __name__ == "__main__":
     if len(sys.argv) != 5:
