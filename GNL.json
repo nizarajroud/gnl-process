@@ -238,7 +238,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_generation.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }}"
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_generation.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -253,7 +253,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/get_title_v2.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }}"
+        "command": "=python /home/nizar/workspace/gnl-process/get_title_v2.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -268,7 +268,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_download.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }}"
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_download.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -283,7 +283,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_conversion.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }} "
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_conversion.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\" "
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -298,7 +298,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/split_pdf.py {{ $json.absolute_path }} {{ $('LocalStorage1').item.json.pages_per_split }} {{ $json.parent_file }} {{ $('LocalStorage1').item.json['Split Mode'] }} {{ $('LocalStorage1').item.json.questions_per_split }} {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json.THEME }} {{ $json.podcast_subtheme }}"
+        "command": "=python /home/nizar/workspace/gnl-process/split_pdf.py \"{{ $json.absolute_path }}\" \"{{ $('LocalStorage1').item.json.pages_per_split }}\" \"{{ $json.parent_file }}\" \"{{ $('LocalStorage1').item.json['Split Mode'] }}\" \"{{ $('LocalStorage1').item.json.questions_per_split }}\" \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $json.podcast_subtheme }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -404,7 +404,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/combine_mp3_v2.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }} {{ $('Code in JavaScript').item.json.parent_file }}"
+        "command": "=python /home/nizar/workspace/gnl-process/combine_mp3_v2.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\" \"{{ $('Code in JavaScript').item.json.parent_file }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -606,7 +606,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/whats_new_report.py {{ $(\"What's New Form\").item.json.month.substring(0,2) }} {{ $('MainForm').item.json.THEME }} {{ $(\"What's New Form\").item.json.subtheme }}"
+        "command": "=python /home/nizar/workspace/gnl-process/whats_new_report.py \"{{ $(\"What's New Form\").item.json.month.substring(0,2) }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $(\"What's New Form\").item.json.subtheme }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -621,7 +621,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/validate_states.py {{ $('MainForm').item.json.Type }} {{ $('MainForm').item.json['Generation Mode'] }} {{ $('MainForm').item.json.THEME }} {{ $('Code in JavaScript').item.json.podcast_subtheme }}"
+        "command": "=python /home/nizar/workspace/gnl-process/validate_states.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
