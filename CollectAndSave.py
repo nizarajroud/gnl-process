@@ -34,6 +34,15 @@ def collect_and_save(json_input):
     podcast_theme = files[0].get('podcastTheme', '') if files else ''
     podcast_subtheme = files[0].get('podcastSubfolder', '').lower() if files else ''
     
+    # Clean existing audio parts folder for this parent
+    import shutil
+    audio_parts_folder = os.getenv('AUDIO_PARTS_FOLDER', '')
+    if audio_parts_folder and podcast_subtheme and parent_file:
+        audio_dir = os.path.join(audio_parts_folder, podcast_subtheme, parent_file)
+        if os.path.exists(audio_dir):
+            shutil.rmtree(audio_dir)
+            print(f"Cleaned audio parts: {audio_dir}", file=sys.stderr)
+    
     # Check if parent with same parent_file + podcast_subtheme already exists
     cursor.execute('''
         SELECT id FROM parent_configuration 
