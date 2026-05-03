@@ -17,11 +17,10 @@
 ## n8n Workflow Flow (GNL.json)
 
 ```
-MainForm (Generate/All Phases) → Switch
-  ├── Generate:    LocalStorage1 → split → CollectAndSave → titles → Generate Bulk → STOP
-  └── All Phases:  LocalStorage1 → split → CollectAndSave → titles → Generate Bulk → Download → Validate → Wait → Convert → Combine
-
-Deliver Form (Parent ID) → Download → Validate → Wait → Convert → Combine
+MainForm (Subscribe / Process & Deliver / All Phases) → Switch
+  ├── Subscribe:         LocalStorage1 → split → CollectAndSave → titles → STOP
+  ├── Process & Deliver: Generate Bulk → Download → Validate → Wait → Convert → Combine
+  └── All Phases:        LocalStorage1 → split → CollectAndSave → titles → Generate → Download → Validate → Wait → Convert → Combine
 
 What's New Form (independent) → Generate What's New Report
 

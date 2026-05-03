@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-03T09:20:37.844Z",
+  "updatedAt": "2026-05-03T10:17:12.877Z",
   "createdAt": "2026-04-27T09:45:26.612Z",
   "id": "Jp4HFw5LYwnktOR2jvr0U",
   "name": "GNL",
@@ -61,11 +61,14 @@
             {
               "fieldLabel": "Phase",
               "fieldType": "dropdown",
-              "defaultValue": "Generate",
+              "defaultValue": "Subscribe",
               "fieldOptions": {
                 "values": [
                   {
-                    "option": "Generate"
+                    "option": "Subscribe"
+                  },
+                  {
+                    "option": "Process & Deliver"
                   },
                   {
                     "option": "All Phases"
@@ -77,7 +80,7 @@
             {
               "fieldLabel": "Type",
               "fieldType": "dropdown",
-              "defaultValue": "What's New Report",
+              "defaultValue": "LocalStorage",
               "fieldOptions": {
                 "values": [
                   {
@@ -123,6 +126,12 @@
                   }
                 ]
               }
+            },
+            {
+              "fieldLabel": "Parent ID",
+              "fieldType": "number",
+              "defaultValue": "",
+              "requiredField": false
             }
           ]
         },
@@ -172,9 +181,9 @@
                 },
                 "conditions": [
                   {
-                    "id": "phase-generate",
+                    "id": "phase-pd",
                     "leftValue": "={{ $('MainForm').item.json.Phase }}",
-                    "rightValue": "Generate",
+                    "rightValue": "Process & Deliver",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
@@ -183,7 +192,28 @@
                 ],
                 "combinator": "and"
               },
-              "renameOutput": "Generate"
+              "renameOutput": "Process & Deliver"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": ""
+                },
+                "conditions": [
+                  {
+                    "id": "phase-subscribe",
+                    "leftValue": "={{ $('MainForm').item.json.Phase }}",
+                    "rightValue": "Subscribe",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": "Subscribe"
             }
           ]
         },
@@ -192,8 +222,8 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.4,
       "position": [
-        9344,
-        3056
+        9296,
+        3008
       ],
       "id": "21e7c195-0c47-436f-8547-515c927eac14",
       "name": "Switch"
@@ -230,13 +260,13 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_generation.py --parent_id=\"{{ $(\"Process Form\").item.json[\"Parent ID\"] }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_generation.py --parent_id=\"{{ $(\"MainForm\").item.json[\"Parent ID\"] }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10912,
-        3040
+        11568,
+        2816
       ],
       "id": "0c63741e-1f87-4972-96e5-d51878ffdbda",
       "name": "Generate Bulk Podcasts",
@@ -260,13 +290,13 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_download.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_download.py --parent_id=\"{{ $(\"MainForm\").item.json[\"Parent ID\"] }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11152,
-        3040
+        11488,
+        3184
       ],
       "id": "03323c96-8825-42fb-84d5-b15f3927c8a7",
       "name": "download Bulk Podcasts",
@@ -275,13 +305,13 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_conversion.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\" "
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_conversion.py --parent_id=\"{{ $(\"MainForm\").item.json[\"Parent ID\"] }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11808,
-        3168
+        11824,
+        3312
       ],
       "id": "5449fa4e-0dad-41aa-a695-b5a4c4ce7b7d",
       "name": "convert Bulk Podcasts",
@@ -296,7 +326,7 @@
       "typeVersion": 1,
       "position": [
         10096,
-        3056
+        3104
       ],
       "id": "6b87f46c-0a56-489f-93af-7e40981fc433",
       "name": "split pdf",
@@ -332,7 +362,7 @@
               "fieldName": "pages_per_split",
               "fieldLabel": "pages_per_split",
               "fieldType": "number",
-              "defaultValue": "3",
+              "defaultValue": "2",
               "requiredField": true
             },
             {
@@ -360,7 +390,7 @@
       "typeVersion": 2.4,
       "position": [
         9568,
-        3056
+        3104
       ],
       "id": "87458a24-9376-4573-a690-31a79a040d31",
       "name": "LocalStorage1",
@@ -374,7 +404,7 @@
       "typeVersion": 1,
       "position": [
         9728,
-        3056
+        3120
       ],
       "id": "b6380021-035e-48e9-b44e-7b610981bdb0",
       "name": "find_local_main_source",
@@ -389,20 +419,20 @@
       "typeVersion": 2,
       "position": [
         9920,
-        3056
+        3120
       ],
       "id": "d8c6a1d2-b49c-4077-b9ea-57d3c754a800",
       "name": "Code in JavaScript"
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/combine_mp3_v2.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\" \"{{ $('Code in JavaScript').item.json.parent_file }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/combine_mp3_v2.py --parent_id=\"{{ $(\"MainForm\").item.json[\"Parent ID\"] }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        12016,
-        3184
+        12032,
+        3312
       ],
       "id": "b2548e54-49ea-4a35-bb8d-22d7904a799f",
       "name": "combine Bulk Podcasts",
@@ -615,13 +645,13 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/validate_states.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/validate_states.py --parent_id=\"{{ $(\"MainForm\").item.json[\"Parent ID\"] }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
         11408,
-        3168
+        3312
       ],
       "id": "validate-states-001",
       "name": "Validate States"
@@ -635,7 +665,7 @@
       "typeVersion": 1.1,
       "position": [
         11600,
-        3168
+        3312
       ],
       "id": "wait-approval-001",
       "name": "Wait for Approval",
@@ -648,8 +678,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10624,
-        3248
+        10960,
+        2560
       ],
       "id": "list-parents-process",
       "name": "List Parents (Process)"
@@ -661,7 +691,7 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10608,
+        10752,
         3408
       ],
       "id": "list-parents-deliver",
@@ -678,10 +708,10 @@
             {
               "id": "phase-check",
               "leftValue": "={{ $('MainForm').item.json.Phase }}",
-              "rightValue": "All Phases",
+              "rightValue": "Subscribe",
               "operator": {
                 "type": "string",
-                "operation": "equals"
+                "operation": "notEquals"
               }
             }
           ],
@@ -692,8 +722,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        10624,
-        3056
+        11152,
+        2896
       ],
       "id": "check-phase-continue",
       "name": "Continue to Deliver"
@@ -775,8 +805,8 @@
       "type": "n8n-nodes-base.formTrigger",
       "typeVersion": 2.2,
       "position": [
-        10240,
-        3248
+        10800,
+        2576
       ],
       "id": "process-form-trigger",
       "name": "Process Form",
@@ -800,8 +830,8 @@
       "type": "n8n-nodes-base.formTrigger",
       "typeVersion": 2.2,
       "position": [
-        10224,
-        3424
+        10848,
+        3232
       ],
       "id": "deliver-form-trigger",
       "name": "Deliver Form",
@@ -825,6 +855,13 @@
         [
           {
             "node": "LocalStorage1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Bulk Podcasts",
             "type": "main",
             "index": 0
           }
@@ -864,7 +901,7 @@
       "main": [
         [
           {
-            "node": "Continue to Deliver",
+            "node": "download Bulk Podcasts",
             "type": "main",
             "index": 0
           }
@@ -984,7 +1021,7 @@
       "main": [
         [
           {
-            "node": "Generate Bulk Podcasts",
+            "node": "Continue to Deliver",
             "type": "main",
             "index": 0
           }
@@ -1106,7 +1143,7 @@
       "main": [
         [
           {
-            "node": "download Bulk Podcasts",
+            "node": "Generate Bulk Podcasts",
             "type": "main",
             "index": 0
           }
@@ -1122,9 +1159,9 @@
   "staticData": null,
   "meta": null,
   "pinData": {},
-  "versionId": "7ff90301-aaf7-407e-9e5c-103c20b2e118",
+  "versionId": "c73a1939-0a14-49eb-bf42-f9ca0496322e",
   "activeVersionId": null,
-  "versionCounter": 14,
+  "versionCounter": 16,
   "triggerCount": 0,
   "tags": [],
   "shared": [

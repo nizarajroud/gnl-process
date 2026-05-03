@@ -34,16 +34,34 @@ def collect_and_save(json_input):
     podcast_theme = files[0].get('podcastTheme', '') if files else ''
     podcast_subtheme = files[0].get('podcastSubfolder', '').lower() if files else ''
     
-    # Insert into parent_configuration table
+    # Check if parent with same parent_file + podcast_subtheme already exists
     cursor.execute('''
-        INSERT INTO parent_configuration 
-        (parent_file, source_path, source_type, podcast_theme, podcast_subtheme, 
-         split_configuration, generation_mode, combination_state)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 0)
-    ''', (parent_file, source_path, source_type, podcast_theme, podcast_subtheme, 
-          split_configuration, generation_mode))
+        SELECT id FROM parent_configuration 
+        WHERE parent_file = ? AND podcast_subtheme = ?
+    ''', (parent_file, podcast_subtheme))
+    existing = cursor.fetchone()
     
-    parent_config_id = cursor.lastrowid
+    if existing:
+        parent_config_id = existing[0]
+        # Delete old child records
+        cursor.execute('DELETE FROM podcast_download WHERE parent_configuration_id = ?', (parent_config_id,))
+        # Update parent
+        cursor.execute('''
+            UPDATE parent_configuration 
+            SET source_path=?, source_type=?, podcast_theme=?, split_configuration=?, 
+                generation_mode=?, combination_state=0
+            WHERE id=?
+        ''', (source_path, source_type, podcast_theme, split_configuration, generation_mode, parent_config_id))
+        print(f"Replaced existing parent {parent_config_id} ({parent_file}/{podcast_subtheme})")
+    else:
+        cursor.execute('''
+            INSERT INTO parent_configuration 
+            (parent_file, source_path, source_type, podcast_theme, podcast_subtheme, 
+             split_configuration, generation_mode, combination_state)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+        ''', (parent_file, source_path, source_type, podcast_theme, podcast_subtheme, 
+              split_configuration, generation_mode))
+        parent_config_id = cursor.lastrowid
     
     # Insert files into podcast_download table
     for file in files:

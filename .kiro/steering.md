@@ -46,14 +46,13 @@ Automated workflow for processing content sources into NotebookLM podcasts with 
 9. `batch_convert_to_mp3_v2.py` → converts m4a to mp3
 10. `combine_mp3_v2.py` → concatenates mp3 files into final podcast
 
-## Workflow Phases (2 independent phases)
-- **Generate** (steps 1-4): split → save to DB → generate titles → generate podcasts → STOP
-- **Deliver** (steps 6-10): download → validate → approve → convert → combine
-- **All Phases**: runs Generate then Deliver end-to-end
+## Workflow Phases (2 independent phases + All)
+- **Subscribe** (steps 1-3): split → save to DB → generate titles → STOP
+- **Process & Deliver** (steps 4-10): generate → download → validate → approve → convert → combine
+- **All Phases**: runs Subscribe then Process & Deliver end-to-end
 
 ## Entry Points (n8n)
-- **MainForm**: Generate or All Phases (file upload, split config, theme)
-- **Deliver Form**: Parent ID only (download + convert + combine)
+- **MainForm**: Subscribe, Process & Deliver, or All Phases (file upload, split config, theme)
 - **What's New Form**: Independent workflow for What's New reports
 - **Emergency Stop**: `gnl-stop` alias kills all processes
 - **Clean Database**: `gnl-clean` alias deletes all records
