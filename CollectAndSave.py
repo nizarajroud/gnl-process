@@ -50,7 +50,7 @@ def collect_and_save(json_input):
                 generation_mode=?, combination_state=0
             WHERE id=?
         ''', (source_path, source_type, podcast_theme, split_configuration, generation_mode, parent_config_id))
-        print(f"Replaced existing parent {parent_config_id} ({parent_file}/{podcast_subtheme})")
+        print(f"Replaced existing parent {parent_config_id} ({parent_file}/{podcast_subtheme})", file=sys.stderr)
     else:
         cursor.execute('''
             INSERT INTO parent_configuration 
@@ -73,7 +73,9 @@ def collect_and_save(json_input):
         ''', (parent_config_id, file.get('fileName', '')))
     
     conn.commit()
-    print(f"Inserted {len(files)} records into podcast_download and 1 parent configuration")
+    print(f"Inserted {len(files)} records into podcast_download and 1 parent configuration", file=sys.stderr)
+    # Output parent_id as JSON for n8n to capture
+    print(json.dumps({"parent_id": parent_config_id}))
     conn.close()
 
 if __name__ == '__main__':

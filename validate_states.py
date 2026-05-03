@@ -17,13 +17,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def validate(source_type: str, generation_mode: str, theme: str, subfolder: str) -> None:
-    subfolder = subfolder.lower()
-    db_path = os.path.join(os.path.dirname(__file__), 'gnl.db')
+def validate(source_type: str = None, generation_mode: str = None, theme: str = None, subfolder: str = None, parent_id: int = None) -> None:
+    from resolve_parent import resolve_parent
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gnl.db')
 
     if not os.path.exists(db_path):
         print("❌ Database not found")
         sys.exit(1)
+
+    source_type, generation_mode, theme, subfolder = resolve_parent(db_path, source_type, generation_mode, theme, subfolder, parent_id)
 
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()

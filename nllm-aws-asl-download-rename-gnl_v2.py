@@ -17,7 +17,10 @@ from nova_act import NovaAct
 
 load_dotenv()
 
-def main(source_type: str, generation_mode: str, theme: str, subfolder: str, user_data_dir: str = None, headless: bool = None) -> None:
+def main(source_type: str = None, generation_mode: str = None, theme: str = None, subfolder: str = None, user_data_dir: str = None, headless: bool = None, parent_id: int = None) -> None:
+    from resolve_parent import resolve_parent
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gnl.db')
+    source_type, generation_mode, theme, subfolder = resolve_parent(db_path, source_type, generation_mode, theme, subfolder, parent_id)
     generation_mode = generation_mode.lower()
     subfolder = subfolder.lower()
     

@@ -235,7 +235,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_generation.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_generation.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parent_id }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -250,7 +250,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/get_title_v2.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/get_title_v2.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parent_id }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -265,7 +265,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_download.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_download.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parent_id }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -280,7 +280,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_conversion.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\" "
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_conversion.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parent_id }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -401,7 +401,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/combine_mp3_v2.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\" \"{{ $('Code in JavaScript').item.json.parent_file }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/combine_mp3_v2.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parent_id }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -620,7 +620,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/validate_states.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/validate_states.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parent_id }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -645,6 +645,19 @@
       "id": "wait-approval-001",
       "name": "Wait for Approval",
       "webhookId": "state-validation-approval"
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = JSON.parse($('CollectAndSave').item.json.stdout);\nreturn [{ json: { parent_id: output.parent_id } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        10700,
+        3184
+      ],
+      "id": "extract-parent-id-from-collect",
+      "name": "Extract Parent ID"
     }
   ],
   "connections": {
@@ -687,7 +700,7 @@
       "main": [
         [
           {
-            "node": "Generate bulk titles",
+            "node": "Extract Parent ID",
             "type": "main",
             "index": 0
           }
@@ -844,6 +857,17 @@
     "Wait for Approval": {
       "main": [
         []
+      ]
+    },
+    "Extract Parent ID": {
+      "main": [
+        [
+          {
+            "node": "Generate bulk titles",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
