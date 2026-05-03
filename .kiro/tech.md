@@ -17,15 +17,13 @@
 ## n8n Workflow Flow (GNL.json)
 
 ```
-MainForm → Switch → [LocalStorage form / What's New form]
-                         ↓
-split_pdf → CollectAndSave → Generate Bulk Podcasts → Download Bulk Podcasts
-                                                              ↓
-                                                    Validate States
-                                                              ↓
-                                                    Wait for Approval (webhook)
-                                                              ↓
-                                                    Convert Bulk Podcasts → Combine Bulk Podcasts
+MainForm → mount g-drive → Switch (by Type)
+  └── LocalStorage → LocalStorage1 form → find_local_main_source → Code → split_pdf
+      → CollectAndSave → Generate bulk titles → Generate Bulk Podcasts
+      → Download Bulk Podcasts → Validate States → Wait for Approval
+      → Convert Bulk Podcasts → Combine Bulk Podcasts
+
+What's New Form (independent trigger) → Generate What's New Report
 ```
 
 ## Database Schema
@@ -90,11 +88,11 @@ prompts/                # Audio generation prompts
 - `python-dotenv` — Environment configuration
 - `requests` + `beautifulsoup4` — Web crawling
 
-## Environment Variables
+## Environment Variables (see .env.example)
 | Variable | Purpose |
 |----------|---------|
 | NOVA_ACT_API_KEY | Nova Act free version authentication |
-| USER_DATA_DIR | Chrome profile path (/home/nizar/Clone-Chrome-profile/User Data) |
+| USER_DATA_DIR | Chrome profile path |
 | HEADLESS | Browser visibility (0=visible, 1=headless) |
 | GNL_BACKLOG | Final audio output path (Google Drive) |
 | GNL_PROCESSING_PATH | Source documents path |
@@ -113,3 +111,9 @@ prompts/                # Audio generation prompts
 - Google blocks Playwright/automated browsers from OAuth login
 - File upload via hidden input (agentType) works but depends on NotebookLM UI stability
 - generation_state may not update if script crashes after generation but before DB write (mitigated by updating immediately after audio generation starts)
+- WSL memory constraints can cause Chrome EPIPE crashes — monitor with `free -h`
+
+## Active Branches
+- `main` — stable, production-ready
+- `feat/independent-phases` — WIP: independent Subscribe/Process&Deliver/All Phases with dynamic parent dropdown
+- `feat/bedrock-agent-core` — WIP: Bedrock AgentCore integration

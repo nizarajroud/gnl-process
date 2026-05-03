@@ -14,7 +14,7 @@ Automate the end-to-end process of creating educational podcasts from PDF docume
 4. **Exam Preparation**: Generate Anki flashcards and audio content from certification materials
 
 ## Content Sources
-- Local PDF files (exam dumps, documentation)
+- Local PDF files (exam dumps, documentation) — primary source
 - Web URLs (AWS blogs, What's New)
 - YouTube videos
 - Google Drive documents
@@ -26,13 +26,14 @@ Automate the end-to-end process of creating educational podcasts from PDF docume
 
 ## Constraints
 - NotebookLM has no public API (consumer version) — requires browser automation
+- NotebookLM Enterprise API exists but requires Google Cloud project + licensing (not applicable)
 - NotebookLM cannot access localhost/local network URLs — must upload files directly
 - Daily generation quota: ~20 podcasts per day (Google's implicit limit)
 - Audio generation takes ~5-10 minutes per podcast
 - Chrome profile must maintain Google session (SingletonLock auto-cleaned)
 - Only one Nova Act instance can use the Chrome profile at a time
 - Google blocks automated browsers from authenticating (Playwright MCP cannot be used)
+- WSL memory (~16GB) shared with VS Code, n8n, MCP servers — Chrome can crash if memory is low
 
 ## Subscription
 - Google One AI Premium (5TB, CA$13.49/month) — consumer NotebookLM, not Enterprise
-- NotebookLM Enterprise API exists but requires Google Cloud project + licensing (not applicable)
