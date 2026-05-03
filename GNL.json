@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-04-30T19:00:46.537Z",
+  "updatedAt": "2026-05-03T15:44:14.668Z",
   "createdAt": "2026-04-27T09:45:26.612Z",
   "id": "Jp4HFw5LYwnktOR2jvr0U",
   "name": "GNL",
@@ -244,7 +244,7 @@
       "typeVersion": 1,
       "position": [
         11120,
-        3264
+        3104
       ],
       "id": "0c63741e-1f87-4972-96e5-d51878ffdbda",
       "name": "Generate Bulk Podcasts",
@@ -273,8 +273,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11328,
-        3264
+        11360,
+        3104
       ],
       "id": "03323c96-8825-42fb-84d5-b15f3927c8a7",
       "name": "download Bulk Podcasts",
@@ -288,8 +288,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11952,
-        3616
+        11616,
+        3104
       ],
       "id": "5449fa4e-0dad-41aa-a695-b5a4c4ce7b7d",
       "name": "convert Bulk Podcasts",
@@ -409,8 +409,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        12192,
-        3616
+        11872,
+        3120
       ],
       "id": "b2548e54-49ea-4a35-bb8d-22d7904a799f",
       "name": "combine Bulk Podcasts",
@@ -592,9 +592,11 @@
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "formTitle": "What's New Report",
+        "formDescription": "Generate a What's New report for a given month"
       },
-      "type": "n8n-nodes-base.form",
+      "type": "n8n-nodes-base.formTrigger",
       "typeVersion": 2.4,
       "position": [
         10064,
@@ -626,8 +628,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11552,
-        3440
+        11568,
+        2576
       ],
       "id": "validate-states-001",
       "name": "Validate States"
@@ -641,7 +643,7 @@
       "typeVersion": 1.1,
       "position": [
         11760,
-        3616
+        2608
       ],
       "id": "wait-approval-001",
       "name": "Wait for Approval",
@@ -670,13 +672,7 @@
             "index": 0
           }
         ],
-        [
-          {
-            "node": "What's New Form",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "mount g-drive": {
@@ -716,7 +712,7 @@
       "main": [
         [
           {
-            "node": "Validate States",
+            "node": "convert Bulk Podcasts",
             "type": "main",
             "index": 0
           }
@@ -856,13 +852,7 @@
     },
     "Wait for Approval": {
       "main": [
-        [
-          {
-            "node": "convert Bulk Podcasts",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     }
   },
@@ -873,9 +863,9 @@
   "staticData": null,
   "meta": null,
   "pinData": {},
-  "versionId": "77bbdaea-4897-4995-b42c-0feeadb0e3a7",
+  "versionId": "963e4876-7b8a-42ac-9c87-d3ff18c24672",
   "activeVersionId": null,
-  "versionCounter": 11,
+  "versionCounter": 12,
   "triggerCount": 0,
   "tags": [],
   "shared": [
