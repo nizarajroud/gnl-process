@@ -1,12 +1,20 @@
 import sqlite3
+import os
 
-conn = sqlite3.connect('gnl.db')
+db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gnl.db')
+conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
+
 cursor.execute('DELETE FROM podcast_download')
-podcast_count = cursor.rowcount
+print(f"Deleted {cursor.rowcount} records from podcast_download")
 cursor.execute('DELETE FROM parent_configuration')
-parent_count = cursor.rowcount
+print(f"Deleted {cursor.rowcount} records from parent_configuration")
+cursor.execute('DELETE FROM crawl_item')
+print(f"Deleted {cursor.rowcount} records from crawl_item")
+cursor.execute('DELETE FROM crawl_source')
+print(f"Deleted {cursor.rowcount} records from crawl_source")
+cursor.execute("DELETE FROM sqlite_sequence")
+
 conn.commit()
-print(f"Deleted {podcast_count} records from podcast_download table")
-print(f"Deleted {parent_count} records from parent_configuration table")
 conn.close()
+print("✓ Database cleaned")

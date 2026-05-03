@@ -21,16 +21,6 @@ def collect_and_save(json_input):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    # Clean records that haven't been generated yet
-    cursor.execute("""
-        DELETE FROM podcast_download 
-        WHERE generation_state = 0
-    """)
-    deleted_count = cursor.rowcount
-    conn.commit()
-    if deleted_count > 0:
-        print(f"Cleaned {deleted_count} ungenerated records from database")
-    
     # Handle both single and bulk modes
     files = data.get('files', [])
     if generation_mode == 'single' and not files:
@@ -44,14 +34,32 @@ def collect_and_save(json_input):
     podcast_theme = files[0].get('podcastTheme', '') if files else ''
     podcast_subtheme = files[0].get('podcastSubfolder', '').lower() if files else ''
     
-    # Insert into parent_configuration table
+    # Check if parent with same parent_file + podcast_subtheme already exists
     cursor.execute('''
-        INSERT INTO parent_configuration 
-        (parent_file, source_path, source_type, podcast_theme, podcast_subtheme, 
-         split_configuration, generation_mode, combination_state)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 0)
-    ''', (parent_file, source_path, source_type, podcast_theme, podcast_subtheme, 
-          split_configuration, generation_mode))
+        SELECT id FROM parent_configuration 
+        WHERE parent_file = ? AND podcast_subtheme = ?
+    ''', (parent_file, podcast_subtheme))
+    existing = cursor.fetchone()
+    
+    if existing:
+        parent_config_id = existing[0]
+        cursor.execute('DELETE FROM podcast_download WHERE parent_configuration_id = ?', (parent_config_id,))
+        cursor.execute('''
+            UPDATE parent_configuration 
+            SET source_path=?, source_type=?, podcast_theme=?, split_configuration=?, 
+                generation_mode=?, combination_state=0
+            WHERE id=?
+        ''', (source_path, source_type, podcast_theme, split_configuration, generation_mode, parent_config_id))
+        print(f"Replaced existing parent {parent_config_id} ({parent_file}/{podcast_subtheme})")
+    else:
+        cursor.execute('''
+            INSERT INTO parent_configuration 
+            (parent_file, source_path, source_type, podcast_theme, podcast_subtheme, 
+             split_configuration, generation_mode, combination_state)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+        ''', (parent_file, source_path, source_type, podcast_theme, podcast_subtheme, 
+              split_configuration, generation_mode))
+        parent_config_id = cursor.lastrowid
     
     parent_config_id = cursor.lastrowid
     
