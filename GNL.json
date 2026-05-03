@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-03T15:44:14.668Z",
+  "updatedAt": "2026-05-03T15:52:25.157Z",
   "createdAt": "2026-04-27T09:45:26.612Z",
   "id": "Jp4HFw5LYwnktOR2jvr0U",
   "name": "GNL",
@@ -61,7 +61,7 @@
             {
               "fieldLabel": "Type",
               "fieldType": "dropdown",
-              "defaultValue": "What's New Report",
+              "defaultValue": "LocalStorage",
               "fieldOptions": {
                 "values": [
                   {
@@ -69,9 +69,6 @@
                   },
                   {
                     "option": "LocalStorage"
-                  },
-                  {
-                    "option": "What's New Report"
                   }
                 ]
               },
@@ -115,8 +112,8 @@
       "type": "n8n-nodes-base.formTrigger",
       "typeVersion": 2.2,
       "position": [
-        9168,
-        3424
+        9536,
+        3088
       ],
       "id": "2ff9b58a-2cb4-4f69-a7f0-8f3e5277a50b",
       "name": "MainForm",
@@ -200,8 +197,8 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.4,
       "position": [
-        9552,
-        3392
+        9888,
+        3072
       ],
       "id": "21e7c195-0c47-436f-8547-515c927eac14",
       "name": "Switch"
@@ -228,8 +225,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        9392,
-        3424
+        9696,
+        3088
       ],
       "id": "868eef14-5620-480d-960a-cfec4bdea750",
       "name": "mount g-drive",
@@ -244,7 +241,7 @@
       "typeVersion": 1,
       "position": [
         11120,
-        3104
+        3088
       ],
       "id": "0c63741e-1f87-4972-96e5-d51878ffdbda",
       "name": "Generate Bulk Podcasts",
@@ -273,8 +270,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11360,
-        3104
+        11328,
+        3088
       ],
       "id": "03323c96-8825-42fb-84d5-b15f3927c8a7",
       "name": "download Bulk Podcasts",
@@ -288,8 +285,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11616,
-        3104
+        11536,
+        3088
       ],
       "id": "5449fa4e-0dad-41aa-a695-b5a4c4ce7b7d",
       "name": "convert Bulk Podcasts",
@@ -340,7 +337,7 @@
               "fieldName": "pages_per_split",
               "fieldLabel": "pages_per_split",
               "fieldType": "number",
-              "defaultValue": "3",
+              "defaultValue": "1",
               "requiredField": true
             },
             {
@@ -367,8 +364,8 @@
       "type": "n8n-nodes-base.form",
       "typeVersion": 2.4,
       "position": [
-        10064,
-        3184
+        10096,
+        3088
       ],
       "id": "87458a24-9376-4573-a690-31a79a040d31",
       "name": "LocalStorage1",
@@ -409,8 +406,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11872,
-        3120
+        11856,
+        3088
       ],
       "id": "b2548e54-49ea-4a35-bb8d-22d7904a799f",
       "name": "combine Bulk Podcasts",
@@ -524,6 +521,8 @@
     },
     {
       "parameters": {
+        "formTitle": "What's New Report",
+        "formDescription": "Generate a What's New report for a given month",
         "formFields": {
           "values": [
             {
@@ -592,15 +591,13 @@
             }
           ]
         },
-        "options": {},
-        "formTitle": "What's New Report",
-        "formDescription": "Generate a What's New report for a given month"
+        "options": {}
       },
       "type": "n8n-nodes-base.formTrigger",
       "typeVersion": 2.4,
       "position": [
-        10064,
-        3472
+        9520,
+        2848
       ],
       "id": "18c485d2-f23e-4a31-831f-3cce924cb89d",
       "name": "What's New Form",
@@ -613,8 +610,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10288,
-        3472
+        9712,
+        2848
       ],
       "id": "e21633fc-4db5-46a1-9651-7ef010c74764",
       "name": "Generate What's New Report",
@@ -721,13 +718,7 @@
     },
     "convert Bulk Podcasts": {
       "main": [
-        [
-          {
-            "node": "combine Bulk Podcasts",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "LocalStorage1": {
@@ -863,9 +854,9 @@
   "staticData": null,
   "meta": null,
   "pinData": {},
-  "versionId": "963e4876-7b8a-42ac-9c87-d3ff18c24672",
+  "versionId": "780d1fc7-3390-4fcc-ba31-5f76b076b895",
   "activeVersionId": null,
-  "versionCounter": 12,
+  "versionCounter": 14,
   "triggerCount": 0,
   "tags": [],
   "shared": [
