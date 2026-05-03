@@ -44,7 +44,7 @@ def main(source_type: str = None, generation_mode: str = None, theme: str = None
             break
 
         print(f"\n{'='*60}\nRecords remaining: {count}\n{'='*60}\n")
-        result = subprocess.run(['python', script_path, source_type, generation_mode, theme, subfolder])
+        result = subprocess.run(['python', script_path, source_type, generation_mode, theme, subfolder] + (['--parent_id', str(parent_id)] if parent_id else []))
         if result.returncode != 0:
             print(f"\n⚠ Script failed on one record. Continuing with next...")
             continue

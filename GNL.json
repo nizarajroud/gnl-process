@@ -126,12 +126,6 @@
                   }
                 ]
               }
-            },
-            {
-              "fieldLabel": "Parent ID",
-              "fieldType": "number",
-              "defaultValue": "",
-              "requiredField": false
             }
           ]
         },
@@ -260,7 +254,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_generation.py --parent_id=\"{{ $(\"MainForm\").item.json[\"Parent ID\"] }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_generation.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parentId }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -290,7 +284,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_download.py --parent_id=\"{{ $(\"MainForm\").item.json[\"Parent ID\"] }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_download.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parentId }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -305,7 +299,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_conversion.py --parent_id=\"{{ $(\"MainForm\").item.json[\"Parent ID\"] }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_conversion.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parentId }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -426,7 +420,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/combine_mp3_v2.py --parent_id=\"{{ $(\"MainForm\").item.json[\"Parent ID\"] }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/combine_mp3_v2.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parentId }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -645,7 +639,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/validate_states.py --parent_id=\"{{ $(\"MainForm\").item.json[\"Parent ID\"] }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/validate_states.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parentId }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -836,6 +830,59 @@
       "id": "deliver-form-trigger",
       "name": "Deliver Form",
       "webhookId": "a736d4fe-f5fc-4c73-8ad1-09d8f521b753"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst { execSync } = require('child_process');\nconst phase = $('MainForm').item.json.Phase;\n\n// Only fetch parents for Process & Deliver\nif (phase === 'Process & Deliver') {\n    const output = execSync('python /home/nizar/workspace/gnl-process/list_parents.py process').toString();\n    const parents = JSON.parse(output);\n    const options = parents.map(p => p.id + ' - ' + p.label);\n    return [{ json: { parentOptions: options, phase: phase } }];\n} else {\n    return [{ json: { parentOptions: [], phase: phase } }];\n}\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        3400
+      ],
+      "id": "fetch-parents-code",
+      "name": "Fetch Parents"
+    },
+    {
+      "parameters": {
+        "formTitle": "Select Parent Configuration",
+        "formDescription": "Choose which configuration to process",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Parent",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": "={{ $json.parentOptions.map(o => ({option: o})) }}"
+              },
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        800,
+        3400
+      ],
+      "id": "parent-select-form",
+      "name": "Select Parent"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst selection = $('Select Parent').item.json.Parent;\nconst parentId = parseInt(selection.split(' - ')[0]);\nreturn [{ json: { parentId: parentId } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        3400
+      ],
+      "id": "extract-parent-id",
+      "name": "Extract Parent ID"
     }
   ],
   "connections": {
@@ -861,7 +908,7 @@
         ],
         [
           {
-            "node": "Generate Bulk Podcasts",
+            "node": "Fetch Parents",
             "type": "main",
             "index": 0
           }
@@ -1149,6 +1196,39 @@
           }
         ],
         []
+      ]
+    },
+    "Fetch Parents": {
+      "main": [
+        [
+          {
+            "node": "Select Parent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Parent": {
+      "main": [
+        [
+          {
+            "node": "Extract Parent ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Parent ID": {
+      "main": [
+        [
+          {
+            "node": "Generate Bulk Podcasts",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
