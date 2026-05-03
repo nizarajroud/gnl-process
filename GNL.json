@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-03T15:52:25.157Z",
+  "updatedAt": "2026-05-03T16:41:13.746Z",
   "createdAt": "2026-04-27T09:45:26.612Z",
   "id": "Jp4HFw5LYwnktOR2jvr0U",
   "name": "GNL",
@@ -240,7 +240,7 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11120,
+        11328,
         3088
       ],
       "id": "0c63741e-1f87-4972-96e5-d51878ffdbda",
@@ -255,7 +255,7 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10944,
+        11136,
         3088
       ],
       "id": "b9efedb6-3236-438a-8f7a-5a192ffe70d9",
@@ -270,7 +270,7 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11328,
+        11536,
         3088
       ],
       "id": "03323c96-8825-42fb-84d5-b15f3927c8a7",
@@ -285,7 +285,7 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11536,
+        11744,
         3088
       ],
       "id": "5449fa4e-0dad-41aa-a695-b5a4c4ce7b7d",
@@ -406,8 +406,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11856,
-        3088
+        12128,
+        3072
       ],
       "id": "b2548e54-49ea-4a35-bb8d-22d7904a799f",
       "name": "combine Bulk Podcasts",
@@ -629,7 +629,8 @@
         2576
       ],
       "id": "validate-states-001",
-      "name": "Validate States"
+      "name": "Validate States",
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -653,11 +654,42 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        10700,
-        3184
+        10960,
+        3088
       ],
       "id": "extract-parent-id-from-collect",
       "name": "Extract Parent ID"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": ""
+          },
+          "conditions": [
+            {
+              "id": "validate-exit-check",
+              "leftValue": "={{ $('Validate States').item.json.exitCode }}",
+              "rightValue": "0",
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        12200,
+        3184
+      ],
+      "id": "validate-check-if",
+      "name": "All Complete?"
     }
   ],
   "connections": {
@@ -731,7 +763,13 @@
     },
     "convert Bulk Podcasts": {
       "main": [
-        []
+        [
+          {
+            "node": "Validate States",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "LocalStorage1": {
@@ -847,16 +885,11 @@
       "main": [
         [
           {
-            "node": "Wait for Approval",
+            "node": "All Complete?",
             "type": "main",
             "index": 0
           }
         ]
-      ]
-    },
-    "Wait for Approval": {
-      "main": [
-        []
       ]
     },
     "Extract Parent ID": {
@@ -864,6 +897,24 @@
         [
           {
             "node": "Generate bulk titles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "All Complete?": {
+      "main": [
+        [
+          {
+            "node": "combine Bulk Podcasts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Bulk Podcasts",
             "type": "main",
             "index": 0
           }
@@ -878,9 +929,9 @@
   "staticData": null,
   "meta": null,
   "pinData": {},
-  "versionId": "780d1fc7-3390-4fcc-ba31-5f76b076b895",
+  "versionId": "63b31046-e246-4416-bd8d-908008339e39",
   "activeVersionId": null,
-  "versionCounter": 14,
+  "versionCounter": 15,
   "triggerCount": 0,
   "tags": [],
   "shared": [
