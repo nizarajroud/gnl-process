@@ -21,16 +21,6 @@ def collect_and_save(json_input):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    # Clean records that haven't been generated yet
-    cursor.execute("""
-        DELETE FROM podcast_download 
-        WHERE generation_state = 0
-    """)
-    deleted_count = cursor.rowcount
-    conn.commit()
-    if deleted_count > 0:
-        print(f"Cleaned {deleted_count} ungenerated records from database")
-    
     # Handle both single and bulk modes
     files = data.get('files', [])
     if generation_mode == 'single' and not files:

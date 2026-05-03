@@ -17,15 +17,16 @@
 ## n8n Workflow Flow (GNL.json)
 
 ```
-MainForm → Switch → [LocalStorage form / What's New form]
-                         ↓
-split_pdf → CollectAndSave → Generate Bulk Podcasts → Download Bulk Podcasts
-                                                              ↓
-                                                    Validate States
-                                                              ↓
-                                                    Wait for Approval (webhook)
-                                                              ↓
-                                                    Convert Bulk Podcasts → Combine Bulk Podcasts
+MainForm (Generate/All Phases) → Switch
+  ├── Generate:    LocalStorage1 → split → CollectAndSave → titles → Generate Bulk → STOP
+  └── All Phases:  LocalStorage1 → split → CollectAndSave → titles → Generate Bulk → Download → Validate → Wait → Convert → Combine
+
+Deliver Form (Parent ID) → Download → Validate → Wait → Convert → Combine
+
+What's New Form (independent) → Generate What's New Report
+
+Emergency Stop (gnl-stop alias) → kills all processes
+Clean Database (gnl-clean alias) → deletes all records
 ```
 
 ## Database Schema

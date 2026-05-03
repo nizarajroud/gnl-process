@@ -6,14 +6,33 @@ import sys
 import sqlite3
 import os
 
-def main(source_type: str, generation_mode: str, theme: str, subfolder: str, parent_id: int = None):
-    generation_mode = generation_mode.lower()
-    subfolder = subfolder.lower()
-    
+def main(source_type: str = None, generation_mode: str = None, theme: str = None, subfolder: str = None, parent_id: int = None):
+    if not parent_id and not all([source_type, generation_mode, theme, subfolder]):
+        print("Usage: python process_all_records.py <source_type> <generation_mode> <theme> <subfolder>")
+        print("   or: python process_all_records.py --parent_id=<id>")
+        sys.exit(1)
+
+    if generation_mode:
+        generation_mode = generation_mode.lower()
+    if subfolder:
+        subfolder = subfolder.lower()
+
+    # If parent_id provided, resolve params from DB
     db_path = os.path.join(os.path.dirname(__file__), 'gnl.db')
     if not os.path.exists(db_path):
         print(f"Error: Database not found at {db_path}")
         sys.exit(1)
+
+    if parent_id and not all([source_type, generation_mode, theme, subfolder]):
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT source_type, generation_mode, podcast_theme, podcast_subtheme FROM parent_configuration WHERE id = ?", (parent_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            print(f"Error: Parent ID {parent_id} not found")
+            sys.exit(1)
+        source_type, generation_mode, theme, subfolder = row
     
     script_path = os.path.join(os.path.dirname(__file__), 'nllm-aws-asl-add-generate-gnl_v2.py')
     # script_path = os.path.join(os.path.dirname(__file__), 'nllm-aws-asl-add-generate-gnl_v2_playwright.py')
@@ -62,18 +81,13 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, par
         print(f"Records remaining: {count}")
         print(f"{'='*60}\n")
         
-        result = subprocess.run([
-            'python', script_path,
-            source_type, generation_mode, theme, subfolder
-        ])
+        cmd = ['python', script_path, source_type, generation_mode, theme, subfolder]
+        result = subprocess.run(cmd)
         
         if result.returncode != 0:
-            print(f"\n✗ Script failed. Stopping.")
-            sys.exit(1)
+            print(f"\n⚠ Script failed on one record. Continuing with next...")
+            continue
 
 if __name__ == "__main__":
-    if len(sys.argv) != 5:
-        print("Usage: python process_all_records.py <source_type> <generation_mode> <theme> <subfolder>")
-        sys.exit(1)
-    
-    main(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
+    import fire
+    fire.Fire(main)

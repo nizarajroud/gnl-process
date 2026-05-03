@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-04-30T19:00:46.537Z",
+  "updatedAt": "2026-05-03T09:20:37.844Z",
   "createdAt": "2026-04-27T09:45:26.612Z",
   "id": "Jp4HFw5LYwnktOR2jvr0U",
   "name": "GNL",
@@ -14,8 +14,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10544,
-        2688
+        9920,
+        2528
       ],
       "id": "ddbe66d2-3b70-44df-b326-3da2167abd02",
       "name": "Clean All podcasts",
@@ -29,8 +29,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        9680,
-        2672
+        9344,
+        2528
       ],
       "id": "e15c99f4-7406-4b87-935c-6b5336135622",
       "name": "remove the lock on chrome",
@@ -44,8 +44,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10112,
-        2688
+        9648,
+        2528
       ],
       "id": "a39e03c1-12d5-43df-b70a-b63538229612",
       "name": "configure chrome profile",
@@ -61,17 +61,11 @@
             {
               "fieldLabel": "Phase",
               "fieldType": "dropdown",
-              "defaultValue": "Subscribe",
+              "defaultValue": "Generate",
               "fieldOptions": {
                 "values": [
                   {
-                    "option": "Subscribe"
-                  },
-                  {
-                    "option": "Process"
-                  },
-                  {
-                    "option": "Deliver"
+                    "option": "Generate"
                   },
                   {
                     "option": "All Phases"
@@ -129,12 +123,6 @@
                   }
                 ]
               }
-            },
-            {
-              "fieldLabel": "Parent ID",
-              "fieldType": "number",
-              "defaultValue": "",
-              "requiredField": false
             }
           ]
         },
@@ -143,8 +131,8 @@
       "type": "n8n-nodes-base.formTrigger",
       "typeVersion": 2.2,
       "position": [
-        9168,
-        3424
+        9024,
+        3056
       ],
       "id": "2ff9b58a-2cb4-4f69-a7f0-8f3e5277a50b",
       "name": "MainForm",
@@ -163,63 +151,7 @@
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{ $('MainForm').item.json.Phase }}",
-                    "rightValue": "Subscribe",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ]
-              },
-              "renameOutput": "Subscribe"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": ""
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $('MainForm').item.json.Phase }}",
-                    "rightValue": "Process",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ]
-              },
-              "renameOutput": "Process"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": ""
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $('MainForm').item.json.Phase }}",
-                    "rightValue": "Deliver",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ]
-              },
-              "renameOutput": "Deliver"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": ""
-                },
-                "conditions": [
-                  {
+                    "id": "phase-all",
                     "leftValue": "={{ $('MainForm').item.json.Phase }}",
                     "rightValue": "All Phases",
                     "operator": {
@@ -227,9 +159,31 @@
                       "operation": "equals"
                     }
                   }
-                ]
+                ],
+                "combinator": "and"
               },
               "renameOutput": "All Phases"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": ""
+                },
+                "conditions": [
+                  {
+                    "id": "phase-generate",
+                    "leftValue": "={{ $('MainForm').item.json.Phase }}",
+                    "rightValue": "Generate",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": "Generate"
             }
           ]
         },
@@ -238,8 +192,8 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.4,
       "position": [
-        9552,
-        3392
+        9344,
+        3056
       ],
       "id": "21e7c195-0c47-436f-8547-515c927eac14",
       "name": "Switch"
@@ -251,8 +205,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10784,
-        3088
+        10256,
+        3056
       ],
       "id": "f871b61c-1aec-418d-9c52-9e5d7badc0c2",
       "name": "CollectAndSave",
@@ -266,8 +220,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        9392,
-        3424
+        9184,
+        3056
       ],
       "id": "868eef14-5620-480d-960a-cfec4bdea750",
       "name": "mount g-drive",
@@ -276,13 +230,13 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_generation.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_generation.py --parent_id=\"{{ $(\"Process Form\").item.json[\"Parent ID\"] }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11120,
-        3264
+        10912,
+        3040
       ],
       "id": "0c63741e-1f87-4972-96e5-d51878ffdbda",
       "name": "Generate Bulk Podcasts",
@@ -296,8 +250,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10944,
-        3088
+        10448,
+        3056
       ],
       "id": "b9efedb6-3236-438a-8f7a-5a192ffe70d9",
       "name": "Generate bulk titles",
@@ -311,8 +265,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11328,
-        3264
+        11152,
+        3040
       ],
       "id": "03323c96-8825-42fb-84d5-b15f3927c8a7",
       "name": "download Bulk Podcasts",
@@ -326,8 +280,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11952,
-        3616
+        11808,
+        3168
       ],
       "id": "5449fa4e-0dad-41aa-a695-b5a4c4ce7b7d",
       "name": "convert Bulk Podcasts",
@@ -341,8 +295,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10624,
-        3088
+        10096,
+        3056
       ],
       "id": "6b87f46c-0a56-489f-93af-7e40981fc433",
       "name": "split pdf",
@@ -405,8 +359,8 @@
       "type": "n8n-nodes-base.form",
       "typeVersion": 2.4,
       "position": [
-        10064,
-        3184
+        9568,
+        3056
       ],
       "id": "87458a24-9376-4573-a690-31a79a040d31",
       "name": "LocalStorage1",
@@ -419,8 +373,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10256,
-        3088
+        9728,
+        3056
       ],
       "id": "b6380021-035e-48e9-b44e-7b610981bdb0",
       "name": "find_local_main_source",
@@ -434,8 +388,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        10432,
-        3088
+        9920,
+        3056
       ],
       "id": "d8c6a1d2-b49c-4077-b9ea-57d3c754a800",
       "name": "Code in JavaScript"
@@ -447,8 +401,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        12192,
-        3616
+        12016,
+        3184
       ],
       "id": "b2548e54-49ea-4a35-bb8d-22d7904a799f",
       "name": "combine Bulk Podcasts",
@@ -462,8 +416,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        9984,
-        4240
+        9504,
+        3840
       ],
       "id": "e4dd399f-6363-44b8-8257-fbab45abd0be",
       "name": "highlight_correct_options",
@@ -477,8 +431,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10656,
-        4160
+        10176,
+        3760
       ],
       "id": "8409fa9c-c650-4c8c-a7e8-78b4957f236e",
       "name": "generate_ankycards",
@@ -492,8 +446,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        9504,
-        4160
+        9024,
+        3760
       ],
       "id": "edc5e5d3-3a15-4a52-b513-a8554dd65b53",
       "name": "formatPdfFromUdemy",
@@ -507,8 +461,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10288,
-        4240
+        9808,
+        3840
       ],
       "id": "0a4fc946-5a89-4c4b-b7da-9476f339b97d",
       "name": "GenerateCompactExamVersion",
@@ -522,8 +476,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10656,
-        4336
+        10176,
+        3936
       ],
       "id": "73784171-0b41-445f-9df3-e1901e00c34c",
       "name": "extract_keywords",
@@ -537,8 +491,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10000,
-        4048
+        9520,
+        3648
       ],
       "id": "38358869-1110-4453-af1f-6468555dc881",
       "name": "you can start the worflow of gnl",
@@ -552,8 +506,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10944,
-        2704
+        10208,
+        2544
       ],
       "id": "415e6a64-77d2-4280-a386-84093addf2fd",
       "name": "combine_mp3_simple",
@@ -562,6 +516,8 @@
     },
     {
       "parameters": {
+        "formTitle": "What's New Report",
+        "formDescription": "Generate a What's New report for a given month",
         "formFields": {
           "values": [
             {
@@ -630,15 +586,13 @@
             }
           ]
         },
-        "options": {},
-        "formTitle": "What's New Report",
-        "formDescription": "Generate a What's New report for a given month"
+        "options": {}
       },
       "type": "n8n-nodes-base.formTrigger",
       "typeVersion": 2.4,
       "position": [
-        10064,
-        3472
+        9024,
+        2848
       ],
       "id": "18c485d2-f23e-4a31-831f-3cce924cb89d",
       "name": "What's New Form",
@@ -651,8 +605,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10288,
-        3472
+        9328,
+        2848
       ],
       "id": "e21633fc-4db5-46a1-9651-7ef010c74764",
       "name": "Generate What's New Report",
@@ -666,8 +620,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11552,
-        3440
+        11408,
+        3168
       ],
       "id": "validate-states-001",
       "name": "Validate States"
@@ -680,8 +634,8 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        11760,
-        3616
+        11600,
+        3168
       ],
       "id": "wait-approval-001",
       "name": "Wait for Approval",
@@ -694,8 +648,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        800,
-        3400
+        10624,
+        3248
       ],
       "id": "list-parents-process",
       "name": "List Parents (Process)"
@@ -707,8 +661,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        800,
-        3600
+        10608,
+        3408
       ],
       "id": "list-parents-deliver",
       "name": "List Parents (Deliver)"
@@ -722,42 +676,96 @@
           },
           "conditions": [
             {
+              "id": "phase-check",
               "leftValue": "={{ $('MainForm').item.json.Phase }}",
-              "rightValue": "Subscribe",
+              "rightValue": "All Phases",
               "operator": {
                 "type": "string",
-                "operation": "notEquals"
+                "operation": "equals"
               }
             }
-          ]
-        }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        10800,
-        3184
+        10624,
+        3056
       ],
       "id": "check-phase-continue",
-      "name": "Continue if not Subscribe"
+      "name": "Continue to Deliver"
     },
     {
       "parameters": {
-        "formTitle": "\u26d4 Emergency Stop",
-        "formDescription": "Click Submit to stop all running processes immediately.",
+        "path": "gnl-stop",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        12112,
+        4576
+      ],
+      "id": "emergency-stop-trigger",
+      "name": "Emergency Stop",
+      "webhookId": "gnl-emergency-stop"
+    },
+    {
+      "parameters": {
+        "command": "touch /tmp/gnl-stop; pkill -9 -f 'process_all_records' 2>/dev/null; pkill -9 -f 'nllm-aws-asl' 2>/dev/null; pkill -9 -f 'nova_act' 2>/dev/null; pkill -9 -f 'setup_chrome_user_data_dir' 2>/dev/null; pkill -9 -f 'Clone-Chrome-profile' 2>/dev/null; rm -f '/home/nizar/Clone-Chrome-profile/User Data/SingletonLock' 2>/dev/null; echo 'All processes stopped'; exit 0"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        12368,
+        4576
+      ],
+      "id": "stop-all-processes",
+      "name": "Stop All Processes",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "path": "gnl-clean-db",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        11584,
+        5072
+      ],
+      "id": "clean-db-trigger",
+      "name": "Clean Database",
+      "webhookId": "4886114c-5ca0-486e-903c-e53d61cdaf3a"
+    },
+    {
+      "parameters": {
+        "command": "python /home/nizar/workspace/gnl-process/delete_all_records.py"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        11840,
+        5072
+      ],
+      "id": "clean-db-command",
+      "name": "Delete All Records"
+    },
+    {
+      "parameters": {
+        "formTitle": "Process - Generate & Download",
+        "formDescription": "Select a parent configuration to process",
         "formFields": {
           "values": [
             {
-              "fieldLabel": "Confirm",
-              "fieldType": "dropdown",
-              "defaultValue": "STOP ALL",
-              "fieldOptions": {
-                "values": [
-                  {
-                    "option": "STOP ALL"
-                  }
-                ]
-              },
+              "fieldLabel": "Parent ID",
+              "fieldType": "number",
               "requiredField": true
             }
           ]
@@ -767,25 +775,37 @@
       "type": "n8n-nodes-base.formTrigger",
       "typeVersion": 2.2,
       "position": [
-        200,
-        4000
+        10240,
+        3248
       ],
-      "id": "emergency-stop-trigger",
-      "name": "Emergency Stop",
-      "webhookId": "gnl-emergency-stop"
+      "id": "process-form-trigger",
+      "name": "Process Form",
+      "webhookId": "7885c519-f210-44cb-80f4-85ae8a5a92dc"
     },
     {
       "parameters": {
-        "command": "touch /tmp/gnl-stop; pkill -f 'process_all_records_for_generation' 2>/dev/null; pkill -f 'process_all_records_for_download' 2>/dev/null; pkill -f 'process_all_records_for_conversion' 2>/dev/null; pkill -f 'nllm-aws-asl-add-generate-gnl' 2>/dev/null; pkill -f 'nllm-aws-asl-download-rename-gnl' 2>/dev/null; echo 'All processes stopped'; exit 0"
+        "formTitle": "Deliver - Convert & Combine",
+        "formDescription": "Select a parent configuration to deliver",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Parent ID",
+              "fieldType": "number",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
       },
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
       "position": [
-        450,
-        4000
+        10224,
+        3424
       ],
-      "id": "stop-all-processes",
-      "name": "Stop All Processes"
+      "id": "deliver-form-trigger",
+      "name": "Deliver Form",
+      "webhookId": "a736d4fe-f5fc-4c73-8ad1-09d8f521b753"
     }
   ],
   "connections": {
@@ -805,20 +825,6 @@
         [
           {
             "node": "LocalStorage1",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Generate Bulk Podcasts",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Validate States",
             "type": "main",
             "index": 0
           }
@@ -847,7 +853,7 @@
       "main": [
         [
           {
-            "node": "Continue if not Subscribe",
+            "node": "Generate bulk titles",
             "type": "main",
             "index": 0
           }
@@ -858,7 +864,7 @@
       "main": [
         [
           {
-            "node": "download Bulk Podcasts",
+            "node": "Continue to Deliver",
             "type": "main",
             "index": 0
           }
@@ -1022,7 +1028,7 @@
       "main": [
         [
           {
-            "node": "Generate bulk titles",
+            "node": "Generate Bulk Podcasts",
             "type": "main",
             "index": 0
           }
@@ -1040,6 +1046,73 @@
           }
         ]
       ]
+    },
+    "Clean Database": {
+      "main": [
+        [
+          {
+            "node": "Delete All Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Parents (Process)": {
+      "main": [
+        [
+          {
+            "node": "Generate Bulk Podcasts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Parents (Deliver)": {
+      "main": [
+        [
+          {
+            "node": "Validate States",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Form": {
+      "main": [
+        [
+          {
+            "node": "List Parents (Process)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deliver Form": {
+      "main": [
+        [
+          {
+            "node": "download Bulk Podcasts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Continue to Deliver": {
+      "main": [
+        [
+          {
+            "node": "download Bulk Podcasts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
     }
   },
   "settings": {
@@ -1049,9 +1122,9 @@
   "staticData": null,
   "meta": null,
   "pinData": {},
-  "versionId": "77bbdaea-4897-4995-b42c-0feeadb0e3a7",
+  "versionId": "7ff90301-aaf7-407e-9e5c-103c20b2e118",
   "activeVersionId": null,
-  "versionCounter": 11,
+  "versionCounter": 14,
   "triggerCount": 0,
   "tags": [],
   "shared": [

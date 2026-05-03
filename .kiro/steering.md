@@ -37,11 +37,26 @@ Automated workflow for processing content sources into NotebookLM podcasts with 
 ## Workflow Pipeline
 1. `split_pdf.py` → splits source PDF into chunks
 2. `CollectAndSave.py` → inserts records into DB (loads .env from script directory)
-3. `nllm-aws-asl-add-generate-gnl_v2.py` → uploads to NotebookLM + triggers audio generation
-4. **Validate States** → checks all generation_state and download_state = 1 (n8n Wait node for manual approval)
-5. `nllm-aws-asl-download-rename-gnl_v2.py` → downloads generated audio
-6. `batch_convert_to_mp3_v2.py` → converts m4a to mp3
-7. `combine_mp3_v2.py` → concatenates mp3 files into final podcast
+3. `get_title_v2.py` → generates podcast names
+4. `nllm-aws-asl-add-generate-gnl_v2.py` → uploads to NotebookLM + triggers audio generation
+5. **Phase checkpoint** → Generate phase stops here. User verifies on NotebookLM UI.
+6. `nllm-aws-asl-download-rename-gnl_v2.py` → downloads generated audio
+7. `validate_states.py` → checks all states = 1
+8. **Wait for Approval** → manual approval in n8n before convert
+9. `batch_convert_to_mp3_v2.py` → converts m4a to mp3
+10. `combine_mp3_v2.py` → concatenates mp3 files into final podcast
+
+## Workflow Phases (2 independent phases)
+- **Generate** (steps 1-4): split → save to DB → generate titles → generate podcasts → STOP
+- **Deliver** (steps 6-10): download → validate → approve → convert → combine
+- **All Phases**: runs Generate then Deliver end-to-end
+
+## Entry Points (n8n)
+- **MainForm**: Generate or All Phases (file upload, split config, theme)
+- **Deliver Form**: Parent ID only (download + convert + combine)
+- **What's New Form**: Independent workflow for What's New reports
+- **Emergency Stop**: `gnl-stop` alias kills all processes
+- **Clean Database**: `gnl-clean` alias deletes all records
 
 ## Important Notes
 - Nova Act uses a cloned Chrome profile with persistent Google session
