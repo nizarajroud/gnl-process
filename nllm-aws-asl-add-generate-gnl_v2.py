@@ -139,6 +139,7 @@ def main(source_type: str = None, generation_mode: str = None, theme: str = None
             file_dir = os.path.dirname(full_path)
             security_opts = SecurityOptions(allowed_file_upload_paths=[f'{file_dir}/*'])
         
+        print(f"DEBUG: headless={headless}, type={type(headless)}", flush=True)
         with NovaAct(
             starting_page="http://notebooklm.google.com/",
             user_data_dir=user_data_dir,
