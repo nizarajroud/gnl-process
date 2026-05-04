@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-03T16:41:13.746Z",
+  "updatedAt": "2026-05-04T18:41:13.087Z",
   "createdAt": "2026-04-27T09:45:26.612Z",
   "id": "Jp4HFw5LYwnktOR2jvr0U",
   "name": "GNL",
@@ -270,8 +270,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11536,
-        3088
+        11488,
+        2848
       ],
       "id": "03323c96-8825-42fb-84d5-b15f3927c8a7",
       "name": "download Bulk Podcasts",
@@ -285,8 +285,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11744,
-        3088
+        11712,
+        2880
       ],
       "id": "5449fa4e-0dad-41aa-a695-b5a4c4ce7b7d",
       "name": "convert Bulk Podcasts",
@@ -406,8 +406,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        12128,
-        3072
+        12272,
+        2832
       ],
       "id": "b2548e54-49ea-4a35-bb8d-22d7904a799f",
       "name": "combine Bulk Podcasts",
@@ -625,8 +625,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11568,
-        2576
+        11600,
+        3088
       ],
       "id": "validate-states-001",
       "name": "Validate States",
@@ -649,7 +649,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const output = JSON.parse($('CollectAndSave').item.json.stdout);\nreturn [{ json: { parent_id: output.parent_id } }];"
+        "jsCode": "const parentId = parseInt($('CollectAndSave').item.json.stdout.trim());\nreturn [{ json: { parent_id: parentId } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -685,11 +685,26 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        12200,
-        3184
+        11872,
+        3088
       ],
       "id": "validate-check-if",
       "name": "All Complete?"
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        12400,
+        3384
+      ],
+      "id": "wait-retry-approval",
+      "name": "Wait for Retry",
+      "webhookId": "retry-approval"
     }
   ],
   "connections": {
@@ -743,7 +758,7 @@
       "main": [
         [
           {
-            "node": "download Bulk Podcasts",
+            "node": "Validate States",
             "type": "main",
             "index": 0
           }
@@ -763,13 +778,7 @@
     },
     "convert Bulk Podcasts": {
       "main": [
-        [
-          {
-            "node": "Validate States",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "LocalStorage1": {
@@ -905,13 +914,18 @@
     },
     "All Complete?": {
       "main": [
+        [],
         [
           {
-            "node": "combine Bulk Podcasts",
+            "node": "Wait for Retry",
             "type": "main",
             "index": 0
           }
-        ],
+        ]
+      ]
+    },
+    "Wait for Retry": {
+      "main": [
         [
           {
             "node": "Generate Bulk Podcasts",
@@ -929,9 +943,9 @@
   "staticData": null,
   "meta": null,
   "pinData": {},
-  "versionId": "63b31046-e246-4416-bd8d-908008339e39",
+  "versionId": "ff135964-5642-4b3e-ae2b-31095845bbf1",
   "activeVersionId": null,
-  "versionCounter": 15,
+  "versionCounter": 19,
   "triggerCount": 0,
   "tags": [],
   "shared": [

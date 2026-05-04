@@ -42,6 +42,7 @@ def main(source_type: str = None, generation_mode: str = None, theme: str = None
         AND pc.podcast_subtheme = ? 
         AND pd.generation_state = 1
         AND pd.download_state = 0
+        ORDER BY pd.parent_configuration_id ASC, CAST(REPLACE(REPLACE(REPLACE(pd.source_id, 'p', ''), 'q', ''), '.pdf', '') AS INTEGER) ASC
     """, (source_type, generation_mode, theme, subfolder))
     
     records = cursor.fetchall()

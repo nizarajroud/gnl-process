@@ -70,8 +70,6 @@ def collect_and_save(json_input):
               split_configuration, generation_mode))
         parent_config_id = cursor.lastrowid
     
-    parent_config_id = cursor.lastrowid
-    
     # Insert files into podcast_download table
     for file in files:
         cursor.execute('''
@@ -84,7 +82,7 @@ def collect_and_save(json_input):
     conn.commit()
     print(f"Inserted {len(files)} records into podcast_download and 1 parent configuration", file=sys.stderr)
     # Output parent_id as JSON for n8n to capture
-    print(json.dumps({"parent_id": parent_config_id}))
+    print(parent_config_id)
     conn.close()
 
 if __name__ == '__main__':

@@ -53,18 +53,31 @@ def validate(source_type: str = None, generation_mode: str = None, theme: str = 
         conn.close()
         sys.exit(2)
 
+    # VALIDATE_CHECKS: comma-separated list of states to validate (generation,download,conversion)
+    checks = os.getenv('VALIDATE_CHECKS', 'generation,download,conversion').split(',')
+    
     total = len(records)
-    complete = [r for r in records if r[2] == 1 and r[3] == 1 and r[4] == 1]
-    failed_gen = [r for r in records if r[2] == 2]
-    failed_dl = [r for r in records if r[2] == 1 and r[3] == 0]
-    failed_conv = [r for r in records if r[3] == 1 and r[4] == 0]
+    # r[2]=generation_state, r[3]=download_state, r[4]=conversion_state
+    def is_complete(r):
+        if 'generation' in checks and r[2] != 1:
+            return False
+        if 'download' in checks and r[3] != 1:
+            return False
+        if 'conversion' in checks and r[4] != 1:
+            return False
+        return True
+
+    complete = [r for r in records if is_complete(r)]
+    pending_gen = [r for r in records if r[2] != 1]
+    failed_dl = [r for r in records if 'download' in checks and r[2] == 1 and r[3] == 0]
+    failed_conv = [r for r in records if 'conversion' in checks and r[3] == 1 and r[4] == 0]
 
     print("=" * 50)
     print("VALIDATION REPORT")
     print("=" * 50)
-    print(f"Total: {total} | Complete: {len(complete)} | Failed gen: {len(failed_gen)} | Pending download: {len(failed_dl)} | Pending convert: {len(failed_conv)}")
-    if failed_gen:
-        print(f"  Failed generation: {', '.join(r[1] for r in failed_gen)}")
+    print(f"Total: {total} | Complete: {len(complete)} | Pending gen: {len(pending_gen)} | Pending download: {len(failed_dl)} | Pending convert: {len(failed_conv)}")
+    if pending_gen:
+        print(f"  Pending generation: {', '.join(r[1] for r in pending_gen)}")
     if failed_dl:
         print(f"  Pending download: {', '.join(r[1] for r in failed_dl)}")
     if failed_conv:
@@ -98,16 +111,11 @@ def validate(source_type: str = None, generation_mode: str = None, theme: str = 
     with open(LOOP_FILE, 'w') as f:
         f.write(str(loop_count))
 
-    # Reset failed records so they get retried
-    reset_count = 0
-    for r in failed_gen:
-        cursor.execute("UPDATE podcast_download SET generation_state = 0 WHERE id = ?", (r[0],))
-        reset_count += 1
-    
-    conn.commit()
+    # No reset needed — records stay at 0 until successfully processed
+    conn.close()
     conn.close()
 
-    print(f"🔄 Loop {loop_count}/{MAX_LOOPS} — Reset {reset_count} failed records. Retrying...")
+    print(f"🔄 Loop {loop_count}/{MAX_LOOPS} — {len(pending_gen)} records still pending. Retrying...")
     sys.exit(1)
 
 
