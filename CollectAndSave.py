@@ -34,6 +34,15 @@ def collect_and_save(json_input):
     podcast_theme = files[0].get('podcastTheme', '') if files else ''
     podcast_subtheme = files[0].get('podcastSubfolder', '').lower() if files else ''
     
+    # Clean existing audio parts folder for this parent
+    import shutil
+    audio_parts_folder = os.getenv('AUDIO_PARTS_FOLDER', '')
+    if audio_parts_folder and podcast_subtheme and parent_file:
+        audio_dir = os.path.join(audio_parts_folder, podcast_subtheme, parent_file)
+        if os.path.exists(audio_dir):
+            shutil.rmtree(audio_dir)
+            print(f"Cleaned audio parts: {audio_dir}", file=sys.stderr)
+    
     # Check if parent with same parent_file + podcast_subtheme already exists
     cursor.execute('''
         SELECT id FROM parent_configuration 
@@ -50,7 +59,7 @@ def collect_and_save(json_input):
                 generation_mode=?, combination_state=0
             WHERE id=?
         ''', (source_path, source_type, podcast_theme, split_configuration, generation_mode, parent_config_id))
-        print(f"Replaced existing parent {parent_config_id} ({parent_file}/{podcast_subtheme})")
+        print(f"Replaced existing parent {parent_config_id} ({parent_file}/{podcast_subtheme})", file=sys.stderr)
     else:
         cursor.execute('''
             INSERT INTO parent_configuration 
@@ -60,8 +69,6 @@ def collect_and_save(json_input):
         ''', (parent_file, source_path, source_type, podcast_theme, podcast_subtheme, 
               split_configuration, generation_mode))
         parent_config_id = cursor.lastrowid
-    
-    parent_config_id = cursor.lastrowid
     
     # Insert files into podcast_download table
     for file in files:
@@ -73,7 +80,9 @@ def collect_and_save(json_input):
         ''', (parent_config_id, file.get('fileName', '')))
     
     conn.commit()
-    print(f"Inserted {len(files)} records into podcast_download and 1 parent configuration")
+    print(f"Inserted {len(files)} records into podcast_download and 1 parent configuration", file=sys.stderr)
+    # Output parent_id as JSON for n8n to capture
+    print(parent_config_id)
     conn.close()
 
 if __name__ == '__main__':

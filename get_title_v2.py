@@ -31,56 +31,62 @@ def generate_title(source_id: str, source_type: str, parent_file: str) -> str:
         return f"{now.day:02d}-{now.month:02d}-{base_title}"
 
 if __name__ == "__main__":
-    source_type = sys.argv[1] if len(sys.argv) > 1 else None
-    generation_mode = sys.argv[2].lower() if len(sys.argv) > 2 else None
-    podcast_theme = sys.argv[3] if len(sys.argv) > 3 else None
-    podcast_subtheme = sys.argv[4].lower() if len(sys.argv) > 4 else None
+    import fire
     
-    db_path = os.path.join(os.path.dirname(__file__), 'gnl.db')
-    if not os.path.exists(db_path):
-        print(f"Error: Database not found at {db_path}")
-        sys.exit(1)
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    query = """SELECT pd.id, pd.source_id, pc.source_type, pc.parent_file 
-               FROM podcast_download pd
-               JOIN parent_configuration pc ON pd.parent_configuration_id = pc.id
-               WHERE (pd.podcast_name IS NULL OR pd.podcast_name = '') AND pd.generation_state = 0"""
-    params = []
-    
-    if source_type:
-        query += " AND pc.source_type = ?"
-        params.append(source_type)
-    if generation_mode:
-        query += " AND pc.generation_mode = ?"
-        params.append(generation_mode)
-    if podcast_theme:
-        query += " AND pc.podcast_theme = ?"
-        params.append(podcast_theme)
-    if podcast_subtheme:
-        query += " AND pc.podcast_subtheme = ?"
-        params.append(podcast_subtheme)
-    
-    cursor.execute(query, params)
-    records = cursor.fetchall()
-    
-    if not records:
-        print("No records to process (all have generation_state = 1 or podcast_name set)")
-        conn.close()
-        sys.exit(0)
-    
-    for record_id, source_id, source_type, parent_file in records:
-        # Check if podcast_name is already set
-        cursor.execute("SELECT podcast_name FROM podcast_download WHERE id = ?", (record_id,))
-        result = cursor.fetchone()
-        if result and result[0]:
-            print(f"Skipping record {record_id}: podcast_name already set")
-            continue
+    def main(source_type: str = None, generation_mode: str = None, theme: str = None, subfolder: str = None, parent_id: int = None):
+        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gnl.db')
+        if not os.path.exists(db_path):
+            print(f"Error: Database not found at {db_path}")
+            sys.exit(1)
+
+        if parent_id:
+            from resolve_parent import resolve_parent
+            source_type, generation_mode, theme, subfolder = resolve_parent(db_path, source_type, generation_mode, theme, subfolder, parent_id)
+
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
         
-        title = generate_title(source_id, source_type, parent_file)
-        cursor.execute("UPDATE podcast_download SET podcast_name = ? WHERE id = ?", (title, record_id))
-        print(f"Updated record {record_id}: {title}")
-    
-    conn.commit()
-    conn.close()
+        query = """SELECT pd.id, pd.source_id, pc.source_type, pc.parent_file 
+                   FROM podcast_download pd
+                   JOIN parent_configuration pc ON pd.parent_configuration_id = pc.id
+                   WHERE (pd.podcast_name IS NULL OR pd.podcast_name = '') AND pd.generation_state = 0"""
+        params = []
+        
+        if parent_id:
+            query += " AND pd.parent_configuration_id = ?"
+            params.append(parent_id)
+        else:
+            if source_type:
+                query += " AND pc.source_type = ?"
+                params.append(source_type)
+            if generation_mode:
+                query += " AND pc.generation_mode = ?"
+                params.append(generation_mode)
+            if theme:
+                query += " AND pc.podcast_theme = ?"
+                params.append(theme)
+            if subfolder:
+                query += " AND pc.podcast_subtheme = ?"
+                params.append(subfolder)
+        
+        cursor.execute(query, params)
+        records = cursor.fetchall()
+        
+        if not records:
+            print("No records to process (all have generation_state = 1 or podcast_name set)")
+            conn.close()
+            sys.exit(0)
+        
+        for record_id, source_id, src_type, parent_file in records:
+            cursor.execute("SELECT podcast_name FROM podcast_download WHERE id = ?", (record_id,))
+            result = cursor.fetchone()
+            if result and result[0]:
+                continue
+            title = generate_title(source_id, src_type, parent_file)
+            cursor.execute("UPDATE podcast_download SET podcast_name = ? WHERE id = ?", (title, record_id))
+            print(f"Updated record {record_id}: {title}")
+        
+        conn.commit()
+        conn.close()
+
+    fire.Fire(main)

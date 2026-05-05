@@ -17,7 +17,10 @@ from nova_act import NovaAct
 
 load_dotenv()
 
-def main(source_type: str, generation_mode: str, theme: str, subfolder: str, user_data_dir: str = None, headless: bool = None) -> None:
+def main(source_type: str = None, generation_mode: str = None, theme: str = None, subfolder: str = None, user_data_dir: str = None, headless: bool = None, parent_id: int = None) -> None:
+    from resolve_parent import resolve_parent
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gnl.db')
+    source_type, generation_mode, theme, subfolder = resolve_parent(db_path, source_type, generation_mode, theme, subfolder, parent_id)
     generation_mode = generation_mode.lower()
     subfolder = subfolder.lower()
     
@@ -39,6 +42,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
         AND pc.podcast_subtheme = ? 
         AND pd.generation_state = 1
         AND pd.download_state = 0
+        ORDER BY pd.parent_configuration_id ASC, CAST(REPLACE(REPLACE(REPLACE(pd.source_id, 'p', ''), 'q', ''), '.pdf', '') AS INTEGER) ASC
     """, (source_type, generation_mode, theme, subfolder))
     
     records = cursor.fetchall()
@@ -77,17 +81,31 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
     
     # Clean stale SingletonLock
     singleton_lock = os.path.join(user_data_dir, 'SingletonLock')
-    if os.path.exists(singleton_lock):
-        os.remove(singleton_lock)
+    try:
+        os.unlink(singleton_lock)
         print("🔓 Removed stale SingletonLock")
+    except OSError:
+        pass
+
+    nova_mode = os.getenv('NOVA_ACT_MODE', 'free')
+    if nova_mode == 'paid':
+        os.environ.pop('NOVA_ACT_API_KEY', None)
+        from nova_act import Workflow
+        workflow_name = os.getenv('NOVA_ACT_WORKFLOW_NAME', 'gnl-generation')
+        wf_context = Workflow(workflow_definition_name=workflow_name, model_id="nova-act-latest")
+        wf_context.__enter__()
 
     try:
-        with NovaAct(
-            starting_page=os.getenv('NOTEBOOKLM_URL', 'http://notebooklm.google.com/'),
-            user_data_dir=user_data_dir,
-            headless=headless,
-            clone_user_data_dir=False,
-        ) as nova:
+        nova_kwargs = {
+            "starting_page": os.getenv('NOTEBOOKLM_URL', 'http://notebooklm.google.com/'),
+            "user_data_dir": user_data_dir,
+            "headless": headless,
+            "clone_user_data_dir": False,
+        }
+        if nova_mode == 'paid':
+            nova_kwargs["workflow"] = wf_context
+
+        with NovaAct(**nova_kwargs) as nova:
             time.sleep(3)
      
             nova.act(
@@ -116,14 +134,8 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                     print("✓ Audio already generated!")
                     generation_complete = True
                 elif initial_check.response and 'missing' in initial_check.response.lower():
-                    print("✗ No audio overview found - generation may not have started")
-                    conn = sqlite3.connect(db_path)
-                    cursor = conn.cursor()
-                    cursor.execute("UPDATE podcast_download SET generation_state = 0 WHERE id = ?", (record_id,))
-                    conn.commit()
-                    conn.close()
-                    print(f"Updated generation_state to 0 for record {record_id}")
-                    sys.exit(0)  # Exit cleanly so batch processor continues
+                    print("✗ No audio overview found - skipping this record")
+                    sys.exit(1)
                 else:
                     generation_complete = False
             except Exception as e:
@@ -242,6 +254,9 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
     except Exception as e:
         print(f"\n✗ Failed to process record {record_id}: {str(e)}")
         sys.exit(1)
+    finally:
+        if nova_mode == 'paid' and 'wf_context' in locals():
+            wf_context.__exit__(None, None, None)
 
 
 if __name__ == "__main__":

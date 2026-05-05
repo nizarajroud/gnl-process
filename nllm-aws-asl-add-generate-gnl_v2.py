@@ -16,9 +16,17 @@ from pyfzf.pyfzf import FzfPrompt
 from nova_act import NovaAct, SecurityOptions
 from daily_quota import check_and_update_quota, decrement_quota
 
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
-def main(source_type: str, generation_mode: str, theme: str, subfolder: str, user_data_dir: str = None, headless: bool = None) -> None:
+TEST_MODE = os.getenv('TEST_MODE', '0') == '1'  # Set TEST_MODE=1 in .env for simulation
+
+def main(source_type: str = None, generation_mode: str = None, theme: str = None, subfolder: str = None, user_data_dir: str = None, headless: bool = None, parent_id: int = None) -> None:
+    from resolve_parent import resolve_parent
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gnl.db')
+    if not os.path.exists(db_path):
+        print(f"Error: Database not found at {db_path}")
+        sys.exit(1)
+    source_type, generation_mode, theme, subfolder = resolve_parent(db_path, source_type, generation_mode, theme, subfolder, parent_id)
     # Normalize case-sensitive parameters
     generation_mode = generation_mode.lower()
     subfolder = subfolder.lower()
@@ -49,8 +57,9 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
         AND pc.podcast_theme = ? 
         AND pc.podcast_subtheme = ? 
         AND pd.generation_state = 0
+        """ + ("AND pd.parent_configuration_id = ? " if parent_id else "") + """
         ORDER BY CAST(REPLACE(REPLACE(REPLACE(pd.source_id, 'p', ''), 'q', ''), '.pdf', '') AS INTEGER) ASC
-    """, (source_type, generation_mode, theme, subfolder))
+    """, (source_type, generation_mode, theme, subfolder) + ((parent_id,) if parent_id else ()))
     
     records = cursor.fetchall()
     conn.close()
@@ -103,31 +112,58 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
     
     # Clean stale SingletonLock to prevent "profile already in use" errors
     singleton_lock = os.path.join(user_data_dir, 'SingletonLock')
-    if os.path.exists(singleton_lock):
-        os.remove(singleton_lock)
+    try:
+        os.unlink(singleton_lock)
         print("🔓 Removed stale SingletonLock")
+    except OSError:
+        pass
 
     try:
+        if TEST_MODE:
+            # Simulate success without launching browser
+            print(f"🧪 [TEST MODE] Simulating upload + generation for record {record_id}")
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute("UPDATE podcast_download SET generation_state = 1, date = ? WHERE id = ?", (time.strftime("%Y-%m-%d"), record_id))
+            conn.commit()
+            conn.close()
+            print(f"✓ [TEST MODE] Record {record_id} marked as complete")
+            decrement_quota(db_path, 1)
+            remaining = check_and_update_quota(db_path)
+            print(f"📊 Daily quota updated: {remaining}/20 remaining")
+            sys.exit(0)
+
         # For LocalStorage, allow file uploads from the specific file's directory
         security_opts = None
-        upload_success = False
         
         if source_type == 'LocalStorage':
-            # Build full path: source_path is now the folder, source_id is the filename
             full_path = f"{source_path}/{sourceIdentifier}"
             file_dir = os.path.dirname(full_path)
             security_opts = SecurityOptions(allowed_file_upload_paths=[f'{file_dir}/*'])
         
-        with NovaAct(
-            starting_page="http://notebooklm.google.com/",
-            user_data_dir=user_data_dir,
-            headless=headless,
-            clone_user_data_dir=False,
-            security_options=security_opts,
-        ) as nova:
-            time.sleep(3)
+        nova_mode = os.getenv('NOVA_ACT_MODE', 'free')
+
+        if nova_mode == 'paid':
+            # Remove API key so Nova Act uses AWS credentials
+            os.environ.pop('NOVA_ACT_API_KEY', None)
+            from nova_act import Workflow
+            workflow_name = os.getenv('NOVA_ACT_WORKFLOW_NAME', 'gnl-generation')
+            wf_context = Workflow(workflow_definition_name=workflow_name, model_id="nova-act-latest")
+            wf_context.__enter__()
+
+        nova_kwargs = {
+            "starting_page": "http://notebooklm.google.com/",
+            "user_data_dir": user_data_dir,
+            "headless": headless,
+            "clone_user_data_dir": False,
+            "security_options": security_opts,
+        }
+        if nova_mode == 'paid':
+            nova_kwargs["workflow"] = wf_context
+
+        with NovaAct(**nova_kwargs) as nova:
+            time.sleep(int(os.getenv("NAV_WAIT_SECONDS", "3")))
             
-            # Handle different content types
             if source_type == 'WebAndYoutube':
                 nova.act(
                     'Click on "+ Create new" button on the right hight corner '
@@ -136,7 +172,6 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                     'Click on "insert" button '
                     'Wait until the source finishes loading'
                 )
-                upload_success = True
             elif source_type == 'GoogleDrive':
                 nova.act(
                     'Click on "+ Create new" button on the right hight corner '
@@ -146,81 +181,45 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
                     'Click on "insert" button '
                     'Wait until the source finishes loading'
                 )
-                upload_success = True
             elif source_type == 'LocalStorage':
-                # Build full path: source_path is the folder, source_id is the filename
                 full_path = f"{source_path}/{sourceIdentifier}"
-                try:
-                    nova.act(
-                        f'Click on "+ Create new" button '
-                        f'Use agentType to provide the file path {full_path} to the hidden file input element'
-                    )
-                    time.sleep(5)
-
-                    # Wait for upload to complete with retry logic
-                    print("Waiting for upload to complete...")
-                    upload_success = False
-                    max_attempts = 5
-                    attempt = 0
-                    
-                    while not upload_success and attempt < max_attempts:
-                        attempt += 1
-                        print(f"Attempt {attempt}/{max_attempts}: Checking if upload is complete...")
-                        
-                        try:
-                            result = nova.act_get(
-                                'Check if a source file is visible in the notebook. '
-                                'If you see a source file loaded, return "yes". '
-                                'If no source is visible yet, return "no". '
-                                'Do NOT click anything, just observe and return only one word: "yes" or "no".'
-                            )
-                            
-                            print(f"Nova Act returned: {result.response}")
-                            
-                            if result.response and 'yes' in result.response.lower():
-                                upload_success = True
-                                print(f"✓ Upload verified: {full_path}")
-                                break
-                            else:
-                                print(f"Upload still in progress...")
-                                time.sleep(3)
-                                
-                        except Exception as check_error:
-                            if 'ActExceededMaxStepsError' in str(type(check_error).__name__):
-                                print(f"Max steps reached, retrying...")
-                                time.sleep(3)
-                            else:
-                                raise
-                    
-                    if not upload_success:
-                        print(f"⚠ Upload verification failed after {max_attempts} attempts")
-                        
-                except Exception as upload_error:
-                    print(f"⚠ Upload failed: {str(upload_error)}")
-                    upload_success = False
+                nova.act(
+                    f'Click on "+ Create new" button '
+                    f'Use agentType to provide the file path {full_path} to the hidden file input element'
+                )
+                time.sleep(int(os.getenv('UPLOAD_WAIT_SECONDS', '5')))
             
-            if not upload_success:
-                print("ERROR: Upload was not successful, raising exception")
-                raise Exception("Source upload failed - cannot proceed with audio generation")
+            print("✓ Upload successful")
             
-            print("✓ Upload successful, proceeding to audio generation")
+            # Rename notebook immediately after upload
+            print("Navigating back to notebooks list...")
+            nova.act(
+                'Click on the black fingerprint icon in the top left corner'
+            )
             
+            print("Opening edit menu...")
+            nova.act(
+                'Click on the kebab menu (three dots) of the first notebook in the list '
+                'Click on "Edit title" option'
+            )
+            
+            print(f"Renaming to: {GNL_NAME_VAR}")
+            nova.act(
+                f'Clear the title field completely '
+                f'Type exactly: {GNL_NAME_VAR} '
+                'Click on "Save" button'
+            )
+            time.sleep(int(os.getenv("NAV_WAIT_SECONDS", "3")))
+            
+            # Navigate into the renamed notebook
+            nova.act(
+                f'Click on the notebook titled "{GNL_NAME_VAR}" in the list'
+            )
+            time.sleep(int(os.getenv("NAV_WAIT_SECONDS", "3")))
+            
+            # --- AUDIO GENERATION (common for both cases) ---
             print("Starting audio generation...")
-            # try:
-            #     nova.act(
-            #         'In the Notebook guide section on the right side, find the Audio Overview card. '
-            #         'Click directly on the "Audio Overview" button inside that card. '
-            #         'Wait for and verify that a message appears containing both: '
-            #         '1) Text indicating generation is in progress (like "Generating Audio Overview...") '
-            #         '2) Text telling the user to wait (like "Come back in a few minutes") '
-            #         'Confirm you can see this complete status message before considering the task complete.'
-            #     )
-            #     print("✓ Audio generation started")
-            # except Exception as audio_error:
-            #     print(f"⚠ Audio generation failed: {str(audio_error)}")
-            #     raise
             try:
-                # Load prompt from file: looks for {subfolder}.txt, falls back to default.txt
                 prompts_dir = os.path.join(os.path.dirname(__file__), 'prompts')
                 prompt_file = os.path.join(prompts_dir, f"{subfolder}.txt")
                 if not os.path.exists(prompt_file):
@@ -254,28 +253,7 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
             print(f"✓ generation_state updated to 1 for record {record_id}")
 
             print("Waiting after audio generation...")
-            time.sleep(5)
-            
-            print("Navigating back to notebooks list...")
-            nova.act(
-                'Click on the black fingerprint icon in the top left corner'
-            )
-            
-            print("Opening edit menu...")
-            nova.act(
-                'Click on the kebab menu (three dots) of the first notebook in the list '
-                'Click on "Edit title" option'
-            )
-            
-            print(f"Renaming to: {GNL_NAME_VAR}")
-            nova.act(
-                f'Clear the title field completely '
-                f'Type exactly: {GNL_NAME_VAR} '
-                'Click on "Save" button'
-            )
-            
-            print("Waiting after rename...")
-            time.sleep(3)
+            time.sleep(int(os.getenv("POST_GEN_WAIT_SECONDS", "5")))
             
         print(f"\n✓ Successfully processed record {record_id}")
         
@@ -286,10 +264,10 @@ def main(source_type: str, generation_mode: str, theme: str, subfolder: str, use
         
     except Exception as e:
         print(f"\n✗ Failed to process record {record_id}: {str(e)}")
-        sys.exit(1) 
-  
-     
-        
+        sys.exit(1)
+    finally:
+        if nova_mode == 'paid' and 'wf_context' in locals():
+            wf_context.__exit__(None, None, None)
 
 
 if __name__ == "__main__":

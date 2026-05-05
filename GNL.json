@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-03T15:52:25.157Z",
+  "updatedAt": "2026-05-05T17:15:10.875Z",
   "createdAt": "2026-04-27T09:45:26.612Z",
   "id": "Jp4HFw5LYwnktOR2jvr0U",
   "name": "GNL",
@@ -235,12 +235,12 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_generation.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_generation.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parent_id }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11120,
+        11328,
         3088
       ],
       "id": "0c63741e-1f87-4972-96e5-d51878ffdbda",
@@ -250,12 +250,12 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/get_title_v2.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/get_title_v2.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parent_id }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        10944,
+        11136,
         3088
       ],
       "id": "b9efedb6-3236-438a-8f7a-5a192ffe70d9",
@@ -265,13 +265,13 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_download.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_download.py --parent_id=\"{{ $(\"Download Form\").item.json[\"Parent ID\"] || $(\"Extract Parent ID\").item.json.parent_id }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11328,
-        3088
+        12032,
+        3072
       ],
       "id": "03323c96-8825-42fb-84d5-b15f3927c8a7",
       "name": "download Bulk Podcasts",
@@ -280,13 +280,13 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_conversion.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\" "
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_conversion.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parent_id }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11536,
-        3088
+        12400,
+        3056
       ],
       "id": "5449fa4e-0dad-41aa-a695-b5a4c4ce7b7d",
       "name": "convert Bulk Podcasts",
@@ -337,7 +337,7 @@
               "fieldName": "pages_per_split",
               "fieldLabel": "pages_per_split",
               "fieldType": "number",
-              "defaultValue": "1",
+              "defaultValue": "4",
               "requiredField": true
             },
             {
@@ -401,13 +401,13 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/combine_mp3_v2.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\" \"{{ $('Code in JavaScript').item.json.parent_file }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/combine_mp3_v2.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parent_id }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11856,
-        3088
+        12640,
+        3056
       ],
       "id": "b2548e54-49ea-4a35-bb8d-22d7904a799f",
       "name": "combine Bulk Podcasts",
@@ -536,7 +536,7 @@
                     "option": "01 - Janvier"
                   },
                   {
-                    "option": "02 - F\u00e9vrier"
+                    "option": "02 - Février"
                   },
                   {
                     "option": "03 - Mars"
@@ -554,7 +554,7 @@
                     "option": "07 - Juillet"
                   },
                   {
-                    "option": "08 - Ao\u00fbt"
+                    "option": "08 - Août"
                   },
                   {
                     "option": "09 - Septembre"
@@ -566,7 +566,7 @@
                     "option": "11 - Novembre"
                   },
                   {
-                    "option": "12 - D\u00e9cembre"
+                    "option": "12 - Décembre"
                   }
                 ]
               },
@@ -620,16 +620,17 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/validate_states.py \"{{ $('MainForm').item.json.Type }}\" \"{{ $('MainForm').item.json['Generation Mode'] }}\" \"{{ $('MainForm').item.json.THEME }}\" \"{{ $('Code in JavaScript').item.json.podcast_subtheme }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/validate_states.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parent_id }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11568,
-        2576
+        11536,
+        3088
       ],
       "id": "validate-states-001",
-      "name": "Validate States"
+      "name": "Validate States",
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -645,6 +646,90 @@
       "id": "wait-approval-001",
       "name": "Wait for Approval",
       "webhookId": "state-validation-approval"
+    },
+    {
+      "parameters": {
+        "jsCode": "const parentId = parseInt($('CollectAndSave').item.json.stdout.trim());\nreturn [{ json: { parent_id: parentId } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        10960,
+        3088
+      ],
+      "id": "extract-parent-id-from-collect",
+      "name": "Extract Parent ID"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": ""
+          },
+          "conditions": [
+            {
+              "id": "validate-exit-check",
+              "leftValue": "={{ $('Validate States').item.json.exitCode }}",
+              "rightValue": "0",
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        11728,
+        3088
+      ],
+      "id": "validate-check-if",
+      "name": "All Complete?"
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        12400,
+        3392
+      ],
+      "id": "wait-retry-approval",
+      "name": "Wait for Retry",
+      "webhookId": "retry-approval"
+    },
+    {
+      "parameters": {
+        "formTitle": "Download & Deliver",
+        "formDescription": "Enter Parent ID to start download, convert and combine",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Parent ID",
+              "fieldType": "number",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        11792,
+        3552
+      ],
+      "id": "download-form-trigger",
+      "name": "Download Form",
+      "webhookId": "488a2dbe-180e-4659-aa91-a32a3cff32c9"
     }
   ],
   "connections": {
@@ -687,7 +772,7 @@
       "main": [
         [
           {
-            "node": "Generate bulk titles",
+            "node": "Extract Parent ID",
             "type": "main",
             "index": 0
           }
@@ -698,7 +783,7 @@
       "main": [
         [
           {
-            "node": "download Bulk Podcasts",
+            "node": "Validate States",
             "type": "main",
             "index": 0
           }
@@ -718,7 +803,13 @@
     },
     "convert Bulk Podcasts": {
       "main": [
-        []
+        [
+          {
+            "node": "combine Bulk Podcasts",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "LocalStorage1": {
@@ -834,16 +925,56 @@
       "main": [
         [
           {
-            "node": "Wait for Approval",
+            "node": "All Complete?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Wait for Approval": {
+    "Extract Parent ID": {
+      "main": [
+        [
+          {
+            "node": "Generate bulk titles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "All Complete?": {
+      "main": [
+        [
+          {
+            "node": "download Bulk Podcasts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Bulk Podcasts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Retry": {
       "main": [
         []
+      ]
+    },
+    "Download Form": {
+      "main": [
+        [
+          {
+            "node": "download Bulk Podcasts",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
@@ -854,9 +985,9 @@
   "staticData": null,
   "meta": null,
   "pinData": {},
-  "versionId": "780d1fc7-3390-4fcc-ba31-5f76b076b895",
+  "versionId": "930da7f9-b04d-411b-87c5-80d491ce3df4",
   "activeVersionId": null,
-  "versionCounter": 14,
+  "versionCounter": 23,
   "triggerCount": 0,
   "tags": [],
   "shared": [

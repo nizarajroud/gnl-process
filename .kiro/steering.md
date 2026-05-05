@@ -67,3 +67,9 @@ Automated workflow for processing content sources into NotebookLM podcasts with 
 - Nova Act free version has daily limits; AWS Service version requires Workflow construct ($4.75/agent hour)
 - WSL memory constraints (~16GB RAM) can cause Chrome crashes — kill unused processes before generation
 - n8n workflow JSON (`GNL.json`) must be reimported after changes; Python script changes take effect immediately
+
+## Workflow with User
+1. **Plan first**: When asked to implement something, think step by step and propose a plan. Do NOT execute anything yet.
+2. **Wait for confirmation**: Only execute the plan after the user explicitly confirms.
+3. **No auto-commit/push**: After implementing, do NOT commit or push. Wait for the user to test and explicitly ask for commit/push.
+4. **Never commit/push without clear user confirmation.**
