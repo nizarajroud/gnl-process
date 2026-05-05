@@ -112,9 +112,11 @@ def main(source_type: str = None, generation_mode: str = None, theme: str = None
     
     # Clean stale SingletonLock to prevent "profile already in use" errors
     singleton_lock = os.path.join(user_data_dir, 'SingletonLock')
-    if os.path.exists(singleton_lock):
-        os.remove(singleton_lock)
+    try:
+        os.unlink(singleton_lock)
         print("🔓 Removed stale SingletonLock")
+    except OSError:
+        pass
 
     try:
         if TEST_MODE:

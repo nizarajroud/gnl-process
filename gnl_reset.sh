@@ -14,3 +14,4 @@ echo "⛔ All processes stopped"
 
 # Clean database
 python /home/nizar/workspace/gnl-process/delete_all_records.py
+rm -Rf logs/*
