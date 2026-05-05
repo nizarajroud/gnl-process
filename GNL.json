@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-04T18:41:13.087Z",
+  "updatedAt": "2026-05-05T17:15:10.875Z",
   "createdAt": "2026-04-27T09:45:26.612Z",
   "id": "Jp4HFw5LYwnktOR2jvr0U",
   "name": "GNL",
@@ -265,13 +265,13 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_download.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parent_id }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_download.py --parent_id=\"{{ $(\"Download Form\").item.json[\"Parent ID\"] || $(\"Extract Parent ID\").item.json.parent_id }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11488,
-        2848
+        12032,
+        3072
       ],
       "id": "03323c96-8825-42fb-84d5-b15f3927c8a7",
       "name": "download Bulk Podcasts",
@@ -285,8 +285,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11712,
-        2880
+        12400,
+        3056
       ],
       "id": "5449fa4e-0dad-41aa-a695-b5a4c4ce7b7d",
       "name": "convert Bulk Podcasts",
@@ -337,7 +337,7 @@
               "fieldName": "pages_per_split",
               "fieldLabel": "pages_per_split",
               "fieldType": "number",
-              "defaultValue": "1",
+              "defaultValue": "4",
               "requiredField": true
             },
             {
@@ -406,8 +406,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        12272,
-        2832
+        12640,
+        3056
       ],
       "id": "b2548e54-49ea-4a35-bb8d-22d7904a799f",
       "name": "combine Bulk Podcasts",
@@ -536,7 +536,7 @@
                     "option": "01 - Janvier"
                   },
                   {
-                    "option": "02 - F\u00e9vrier"
+                    "option": "02 - Février"
                   },
                   {
                     "option": "03 - Mars"
@@ -554,7 +554,7 @@
                     "option": "07 - Juillet"
                   },
                   {
-                    "option": "08 - Ao\u00fbt"
+                    "option": "08 - Août"
                   },
                   {
                     "option": "09 - Septembre"
@@ -566,7 +566,7 @@
                     "option": "11 - Novembre"
                   },
                   {
-                    "option": "12 - D\u00e9cembre"
+                    "option": "12 - Décembre"
                   }
                 ]
               },
@@ -625,7 +625,7 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        11600,
+        11536,
         3088
       ],
       "id": "validate-states-001",
@@ -685,7 +685,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        11872,
+        11728,
         3088
       ],
       "id": "validate-check-if",
@@ -700,11 +700,36 @@
       "typeVersion": 1.1,
       "position": [
         12400,
-        3384
+        3392
       ],
       "id": "wait-retry-approval",
       "name": "Wait for Retry",
       "webhookId": "retry-approval"
+    },
+    {
+      "parameters": {
+        "formTitle": "Download & Deliver",
+        "formDescription": "Enter Parent ID to start download, convert and combine",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Parent ID",
+              "fieldType": "number",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        11792,
+        3552
+      ],
+      "id": "download-form-trigger",
+      "name": "Download Form",
+      "webhookId": "488a2dbe-180e-4659-aa91-a32a3cff32c9"
     }
   ],
   "connections": {
@@ -778,7 +803,13 @@
     },
     "convert Bulk Podcasts": {
       "main": [
-        []
+        [
+          {
+            "node": "combine Bulk Podcasts",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "LocalStorage1": {
@@ -914,10 +945,16 @@
     },
     "All Complete?": {
       "main": [
-        [],
         [
           {
-            "node": "Wait for Retry",
+            "node": "download Bulk Podcasts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Bulk Podcasts",
             "type": "main",
             "index": 0
           }
@@ -926,9 +963,14 @@
     },
     "Wait for Retry": {
       "main": [
+        []
+      ]
+    },
+    "Download Form": {
+      "main": [
         [
           {
-            "node": "Generate Bulk Podcasts",
+            "node": "download Bulk Podcasts",
             "type": "main",
             "index": 0
           }
@@ -943,9 +985,9 @@
   "staticData": null,
   "meta": null,
   "pinData": {},
-  "versionId": "ff135964-5642-4b3e-ae2b-31095845bbf1",
+  "versionId": "930da7f9-b04d-411b-87c5-80d491ce3df4",
   "activeVersionId": null,
-  "versionCounter": 19,
+  "versionCounter": 23,
   "triggerCount": 0,
   "tags": [],
   "shared": [
