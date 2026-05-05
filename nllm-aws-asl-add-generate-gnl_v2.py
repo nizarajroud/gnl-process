@@ -141,14 +141,27 @@ def main(source_type: str = None, generation_mode: str = None, theme: str = None
             file_dir = os.path.dirname(full_path)
             security_opts = SecurityOptions(allowed_file_upload_paths=[f'{file_dir}/*'])
         
-        print(f"DEBUG: headless={headless}, type={type(headless)}", flush=True)
-        with NovaAct(
-            starting_page="http://notebooklm.google.com/",
-            user_data_dir=user_data_dir,
-            headless=headless,
-            clone_user_data_dir=False,
-            security_options=security_opts,
-        ) as nova:
+        nova_mode = os.getenv('NOVA_ACT_MODE', 'free')
+
+        if nova_mode == 'paid':
+            # Remove API key so Nova Act uses AWS credentials
+            os.environ.pop('NOVA_ACT_API_KEY', None)
+            from nova_act import Workflow
+            workflow_name = os.getenv('NOVA_ACT_WORKFLOW_NAME', 'gnl-generation')
+            wf_context = Workflow(workflow_definition_name=workflow_name, model_id="nova-act-latest")
+            wf_context.__enter__()
+
+        nova_kwargs = {
+            "starting_page": "http://notebooklm.google.com/",
+            "user_data_dir": user_data_dir,
+            "headless": headless,
+            "clone_user_data_dir": False,
+            "security_options": security_opts,
+        }
+        if nova_mode == 'paid':
+            nova_kwargs["workflow"] = wf_context
+
+        with NovaAct(**nova_kwargs) as nova:
             time.sleep(int(os.getenv("NAV_WAIT_SECONDS", "3")))
             
             if source_type == 'WebAndYoutube':
@@ -252,6 +265,9 @@ def main(source_type: str = None, generation_mode: str = None, theme: str = None
     except Exception as e:
         print(f"\n✗ Failed to process record {record_id}: {str(e)}")
         sys.exit(1)
+    finally:
+        if nova_mode == 'paid' and 'wf_context' in locals():
+            wf_context.__exit__(None, None, None)
 
 
 if __name__ == "__main__":
