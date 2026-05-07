@@ -2,6 +2,7 @@
 """Download podcast audio from NotebookLM via MCP library (no browser needed).
 
 Uses notebooklm_tools directly to list notebooks, check audio status, and download.
+Polls until all audios are completed or timeout is reached.
 
 Usage:
     python download_via_mcp.py --parent_id=1
@@ -10,11 +11,15 @@ Usage:
 import os
 import sys
 import sqlite3
+import time
+import asyncio
 import fire
 from dotenv import load_dotenv
 from resolve_parent import resolve_parent
 
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
+
+POLL_INTERVAL = 60  # seconds between polls
 
 
 def main(source_type: str = None, generation_mode: str = None, theme: str = None, subfolder: str = None, parent_id: int = None):
@@ -51,7 +56,6 @@ def main(source_type: str = None, generation_mode: str = None, theme: str = None
     from notebooklm_tools.services.notebooks import list_notebooks
     from notebooklm_tools.services.studio import get_studio_status
     from notebooklm_tools.services.downloads import download_async
-    import asyncio
 
     client = get_client()
 
@@ -62,57 +66,69 @@ def main(source_type: str = None, generation_mode: str = None, theme: str = None
     print(f"Found {len(notebooks)} notebooks")
 
     audio_parts_folder = os.getenv('AUDIO_PARTS_FOLDER', '')
+    timeout = int(os.getenv('MCP_DOWNLOAD_TIMEOUT', '2700'))  # 45 min default
     total = len(records)
     succeeded = []
     failed = []
 
-    print(f"\nStarting MCP download for {total} records (parent_id={parent_id})\n")
-
-    for i, (record_id, source_id, podcast_name, parent_file) in enumerate(records, 1):
-        print(f"[{i}/{total}] {podcast_name}...", end=" ")
-
-        # Find notebook by title
+    # Build pending list
+    pending = []
+    for record_id, source_id, podcast_name, parent_file in records:
         if podcast_name not in notebooks:
-            print("⚠ Notebook not found")
             failed.append((record_id, source_id, "Notebook not found"))
-            continue
+        else:
+            pending.append((record_id, source_id, podcast_name, parent_file, notebooks[podcast_name]['id']))
 
-        notebook_id = notebooks[podcast_name]['id']
+    print(f"\nStarting MCP download for {len(pending)} records (parent_id={parent_id}, timeout={timeout}s)\n")
 
-        # Check audio status
-        try:
-            status = get_studio_status(client, notebook_id)
-            artifacts = status.get('artifacts', [])
-            audio = next((a for a in artifacts if a.get('type') == 'audio' and a.get('status') == 'completed'), None)
+    start_time = time.time()
+
+    while pending and (time.time() - start_time) < timeout:
+        still_pending = []
+
+        for record_id, source_id, podcast_name, parent_file, notebook_id in pending:
+            # Check audio status
+            try:
+                status = get_studio_status(client, notebook_id)
+                artifacts = status.get('artifacts', [])
+                audio = next((a for a in artifacts if a.get('type') == 'audio' and a.get('status') == 'completed'), None)
+            except Exception as e:
+                print(f"  [{podcast_name}] ⚠ Status check failed: {e}")
+                still_pending.append((record_id, source_id, podcast_name, parent_file, notebook_id))
+                continue
 
             if not audio:
-                print("⚠ No completed audio")
-                failed.append((record_id, source_id, "No completed audio"))
+                still_pending.append((record_id, source_id, podcast_name, parent_file, notebook_id))
                 continue
-        except Exception as e:
-            print(f"⚠ Status check failed: {e}")
-            failed.append((record_id, source_id, str(e)))
-            continue
 
-        # Download audio
-        dest_dir = os.path.join(audio_parts_folder, subfolder, parent_file)
-        dest_file = os.path.join(dest_dir, f"{podcast_name}.m4a")
-        os.makedirs(dest_dir, exist_ok=True)
+            # Download audio
+            dest_dir = os.path.join(audio_parts_folder, subfolder, parent_file)
+            dest_file = os.path.join(dest_dir, f"{podcast_name}.m4a")
+            os.makedirs(dest_dir, exist_ok=True)
 
-        try:
-            result = asyncio.run(download_async(client, notebook_id, "audio", dest_file, artifact_id=audio.get('artifact_id')))
-            print(f"✓ Downloaded")
+            try:
+                asyncio.run(download_async(client, notebook_id, "audio", dest_file, artifact_id=audio.get('artifact_id')))
+                conn = sqlite3.connect(db_path)
+                cursor = conn.cursor()
+                cursor.execute("UPDATE podcast_download SET download_state = 1 WHERE id = ?", (record_id,))
+                conn.commit()
+                conn.close()
+                print(f"  [{podcast_name}] ✓ Downloaded")
+                succeeded.append((record_id, source_id))
+            except Exception as e:
+                print(f"  [{podcast_name}] ⚠ Download failed: {e}")
+                failed.append((record_id, source_id, str(e)[:80]))
 
-            # Update DB
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            cursor.execute("UPDATE podcast_download SET download_state = 1 WHERE id = ?", (record_id,))
-            conn.commit()
-            conn.close()
-            succeeded.append((record_id, source_id))
-        except Exception as e:
-            print(f"⚠ Download failed: {e}")
-            failed.append((record_id, source_id, str(e)))
+        pending = still_pending
+
+        if pending:
+            elapsed = int(time.time() - start_time)
+            print(f"\n  ⏳ {len(pending)} pending, {len(succeeded)} done | {elapsed}s elapsed | next poll in {POLL_INTERVAL}s...")
+            time.sleep(POLL_INTERVAL)
+
+    # Timeout remaining
+    for record_id, source_id, podcast_name, parent_file, notebook_id in pending:
+        failed.append((record_id, source_id, "Timeout"))
 
     # Summary
     print(f"\n{'='*60}")
