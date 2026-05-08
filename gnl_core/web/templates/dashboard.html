@@ -125,6 +125,22 @@
     <script>
         const ws = new WebSocket(`ws://${window.location.host}/ws/logs`);
         const logsDiv = document.getElementById('logs');
+
+        // Disable row buttons on click
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[hx-post]');
+            if (!btn) return;
+            const row = btn.closest('tr');
+            if (row) {
+                row.querySelectorAll('button').forEach(b => {
+                    b.disabled = true;
+                    b.classList.add('opacity-50', 'cursor-not-allowed');
+                });
+                btn.dataset.originalText = btn.textContent;
+                btn.textContent = '...';
+            }
+        });
+
         ws.onmessage = (e) => {
             const data = JSON.parse(e.data);
             if (data.type === 'log') {
