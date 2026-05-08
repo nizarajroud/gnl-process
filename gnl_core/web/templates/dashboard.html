@@ -11,7 +11,9 @@
     <div class="max-w-4xl mx-auto">
         <div class="flex justify-between items-center mb-8">
             <h1 class="text-3xl font-bold">🎙️ GNL Process</h1>
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-4">
+                <button hx-post="/action/reset/0" hx-swap="none" hx-confirm="Tout supprimer ?"
+                    class="px-3 py-1 bg-red-800 hover:bg-red-700 rounded text-xs">🔄 Reset</button>
                 <span class="text-xs text-gray-400">TEST</span>
                 <button id="test-toggle" hx-post="/toggle-test-mode" hx-swap="none"
                     onclick="this.classList.toggle('bg-green-600');this.classList.toggle('bg-gray-600')"

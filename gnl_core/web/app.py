@@ -198,6 +198,17 @@ async def _run_action(action: str, parent_id: int):
             from gnl_core.clean import clean
             d, f = clean(str(parent_id))
             await broadcast_log(f"✓ Cleaned {d} notebooks")
+        elif action == "reset":
+            from gnl_core.clean import clean
+            from gnl_core.db import get_db
+            # Clean all notebooks
+            d, f = clean("all")
+            # Wipe DB
+            with get_db() as conn:
+                conn.execute("DELETE FROM podcast_download")
+                conn.execute("DELETE FROM parent_configuration")
+                conn.commit()
+            await broadcast_log(f"🔄 Full reset: {d} notebooks deleted, DB wiped")
     except Exception as e:
         await broadcast_log(f"⚠ Error: {str(e)[:100]}")
     finally:
