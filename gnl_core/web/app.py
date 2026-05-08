@@ -69,15 +69,32 @@ async def broadcast_status():
     html_rows = ""
     for row in rows:
         s = parent_status(row['id'])
-        gen_class = "text-green-400" if s['generated'] == s['total'] else "text-yellow-400"
-        dl_class = "text-green-400" if s['downloaded'] == s['total'] else "text-yellow-400"
-        conv_class = "text-green-400" if s['converted'] == s['total'] else "text-yellow-400"
+        total = s['total'] or 1
+        gen_pct = s['generated'] / total * 100
+        dl_pct = s['downloaded'] / total * 100
+        conv_pct = s['converted'] / total * 100
+        launched_bar = max(0, gen_pct - dl_pct)
+        dl_bar = max(0, dl_pct - conv_pct)
+
         html_rows += f"""<tr class="border-b border-gray-700">
             <td class="py-2">{row['id']}</td>
             <td class="py-2">{row['podcast_subtheme']}</td>
-            <td class="py-2"><span class="{gen_class}">{s['generated']}/{s['total']}</span></td>
-            <td class="py-2"><span class="{dl_class}">{s['downloaded']}/{s['total']}</span></td>
-            <td class="py-2"><span class="{conv_class}">{s['converted']}/{s['total']}</span></td>
+            <td class="py-3 w-1/3">
+                <div class="flex items-center gap-1 text-xs">
+                    <div class="flex-1">
+                        <div class="flex justify-between text-gray-400 mb-1">
+                            <span>Launched {s['generated']}/{s['total']}</span>
+                            <span>Downloaded {s['downloaded']}/{s['total']}</span>
+                            <span>Converted {s['converted']}/{s['total']}</span>
+                        </div>
+                        <div class="w-full bg-gray-700 rounded-full h-2 flex overflow-hidden">
+                            <div class="bg-yellow-500 h-2" style="width: {launched_bar}%"></div>
+                            <div class="bg-blue-500 h-2" style="width: {dl_bar}%"></div>
+                            <div class="bg-green-500 h-2" style="width: {conv_pct}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </td>
             <td class="py-2 space-x-1">
                 <button hx-post="/action/generate/{row['id']}" hx-swap="none" class="px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs">Gen</button>
                 <button hx-post="/action/download/{row['id']}" hx-swap="none" class="px-2 py-1 bg-purple-600 hover:bg-purple-500 rounded text-xs">DL</button>
@@ -87,7 +104,7 @@ async def broadcast_status():
             </td></tr>"""
     
     if not html_rows:
-        html_rows = '<tr><td colspan="6" class="py-4 text-center text-gray-500">No parents in database</td></tr>'
+        html_rows = '<tr><td colspan="4" class="py-4 text-center text-gray-500">No parents in database</td></tr>'
 
     for ws in ws_clients[:]:
         try:
