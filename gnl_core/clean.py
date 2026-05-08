@@ -7,19 +7,27 @@ from .db import get_db
 
 
 def clean(target="all", db_path=None):
-    """Delete notebooks. target='all' or a parent_id number. Returns (deleted, failed) counts."""
+    """Delete notebooks and reset DB states. target='all' or a parent_id number. Returns (deleted, failed) counts."""
     client = get_client()
     nb_result = list_notebooks(client)
     notebooks = nb_result['notebooks']
 
-    if not notebooks:
-        return 0, 0
-
     if target != "all":
+        parent_id = int(target)
         with get_db(db_path) as conn:
-            rows = conn.execute("SELECT podcast_name FROM podcast_download WHERE parent_configuration_id = ?", (int(target),)).fetchall()
+            rows = conn.execute("SELECT podcast_name FROM podcast_download WHERE parent_configuration_id = ?", (parent_id,)).fetchall()
         names = {r['podcast_name'] for r in rows}
         notebooks = [nb for nb in notebooks if nb['title'] in names]
+
+        # Reset DB states
+        with get_db(db_path) as conn:
+            conn.execute("UPDATE podcast_download SET generation_state=0, download_state=0, conversion_state=0 WHERE parent_configuration_id=?", (parent_id,))
+            conn.commit()
+    else:
+        # Reset all
+        with get_db(db_path) as conn:
+            conn.execute("UPDATE podcast_download SET generation_state=0, download_state=0, conversion_state=0")
+            conn.commit()
 
     deleted, failed_count = 0, 0
     for nb in notebooks:
