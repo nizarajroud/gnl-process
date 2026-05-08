@@ -103,3 +103,10 @@ Every story must include:
 - Framework: pytest
 - Location: `tests/` directory (unit/ and integration/ subdirectories)
 - Run: `pytest` before any merge to main
+
+## Test Mode (Quota Protection)
+- `TEST_MODE=1` in .env → no NotebookLM API calls, no quota consumed
+- Generate: marks records as generated immediately (no notebook creation)
+- Download: waits `TEST_GENERATION_DELAY` seconds then creates dummy .m4a files
+- Use TEST_MODE for all UI/flow development. Only disable for real production runs.
+- **Rule**: Never test with real API during development. Always use TEST_MODE=1.

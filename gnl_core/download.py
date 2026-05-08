@@ -3,14 +3,13 @@
 import os
 import time
 import asyncio
-from notebooklm_tools.mcp.tools._utils import get_client
-from notebooklm_tools.services.notebooks import list_notebooks
-from notebooklm_tools.services.studio import get_studio_status
-from notebooklm_tools.services.downloads import download_async
-
 from .db import get_records, update_state, resolve_parent
 
 POLL_INTERVAL = 60
+
+
+def _is_test_mode():
+    return os.getenv('TEST_MODE', '0') == '1'
 
 
 def download(parent_id, db_path=None, timeout=None):
@@ -20,6 +19,14 @@ def download(parent_id, db_path=None, timeout=None):
     records = get_records(parent_id, db_path, generation_state=1, download_state=0)
     if not records:
         return [], []
+
+    if _is_test_mode():
+        return _download_test(records, parent_id, db_path)
+
+    from notebooklm_tools.mcp.tools._utils import get_client
+    from notebooklm_tools.services.notebooks import list_notebooks
+    from notebooklm_tools.services.studio import get_studio_status
+    from notebooklm_tools.services.downloads import download_async
 
     client = get_client()
     nb_result = list_notebooks(client)
@@ -75,3 +82,25 @@ def download(parent_id, db_path=None, timeout=None):
         failed.append({**rec, 'reason': 'Timeout'})
 
     return succeeded, failed
+
+
+def _download_test(records, parent_id, db_path):
+    """Test mode: simulate download with delay then create dummy file."""
+    _, _, _, subfolder = resolve_parent(parent_id, db_path)
+    audio_parts_folder = os.getenv('AUDIO_PARTS_FOLDER', '')
+    delay = int(os.getenv('TEST_GENERATION_DELAY', '5'))
+
+    time.sleep(delay)
+
+    succeeded = []
+    for rec in records:
+        dest_dir = os.path.join(audio_parts_folder, subfolder, rec['parent_file'])
+        dest_file = os.path.join(dest_dir, f"{rec['podcast_name']}.m4a")
+        os.makedirs(dest_dir, exist_ok=True)
+        # Create a small dummy file
+        with open(dest_file, 'wb') as f:
+            f.write(b'\x00' * 1024)
+        update_state(rec['id'], db_path, download_state=1)
+        succeeded.append(rec)
+
+    return succeeded, []

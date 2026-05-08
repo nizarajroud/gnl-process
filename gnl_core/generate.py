@@ -2,19 +2,19 @@
 
 import os
 import time
-from notebooklm_tools.mcp.tools._utils import get_client
-from notebooklm_tools.services.notebooks import create_notebook, delete_notebook
-from notebooklm_tools.services.sources import add_source
-from notebooklm_tools.services.studio import create_artifact, get_studio_status
-
 from .db import get_records, update_state
 
 CONFIRM_TIMEOUT = 120
 CONFIRM_POLL_INTERVAL = 10
 
 
+def _is_test_mode():
+    return os.getenv('TEST_MODE', '0') == '1'
+
+
 def _confirm_generation(client, notebook_id):
     """Poll until audio is in_progress or completed."""
+    from notebooklm_tools.services.studio import get_studio_status
     start = time.time()
     while (time.time() - start) < CONFIRM_TIMEOUT:
         try:
@@ -36,6 +36,14 @@ def generate(parent_id, db_path=None, prompt_dir=None, language=None):
     records = get_records(parent_id, db_path, generation_state=0)
     if not records:
         return [], []
+
+    if _is_test_mode():
+        return _generate_test(records, db_path)
+
+    from notebooklm_tools.mcp.tools._utils import get_client
+    from notebooklm_tools.services.notebooks import create_notebook, delete_notebook
+    from notebooklm_tools.services.sources import add_source
+    from notebooklm_tools.services.studio import create_artifact
 
     client = get_client()
 
@@ -78,3 +86,12 @@ def generate(parent_id, db_path=None, prompt_dir=None, language=None):
             failed.append({**rec, 'reason': str(e)[:80]})
 
     return succeeded, failed
+
+
+def _generate_test(records, db_path):
+    """Test mode: simulate generation without API calls."""
+    succeeded = []
+    for rec in records:
+        update_state(rec['id'], db_path, generation_state=1, date=time.strftime("%Y-%m-%d"))
+        succeeded.append(rec)
+    return succeeded, []
