@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gnl-process"
+version = "2.0.0"
+description = "NotebookLM Podcast Pipeline"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.0",
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+gnl = "gnl_core.cli:cli"
+
+[tool.setuptools.packages.find]
+include = ["gnl_core*"]

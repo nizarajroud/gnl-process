@@ -64,9 +64,22 @@ Automated workflow for processing content sources into NotebookLM podcasts with 
 
 ## Utility Scripts
 - `clean_notebooks_mcp.py` — delete notebooks by parent_id or all
-- `gnl_reset.sh` — kill processes + clean DB
+- `gnl_reset.sh` — kill processes + clean DB + delete all notebooks
 - `validate_states.py` — check state consistency
 - `delete_all_records.py` — wipe all DB tables
+
+## CLI (gnl command)
+Installed via `pip install -e .` — unified interface:
+```bash
+gnl status                    # show all parents with state
+gnl generate --parent_id=1    # generate podcasts
+gnl download --parent_id=1    # download audio
+gnl convert --parent_id=1     # m4a → mp3
+gnl combine --parent_id=1 --output=file.mp3
+gnl deliver --parent_id=1     # full pipeline
+gnl deliver --all             # all active parents
+gnl clean --target=1 --confirm
+```
 
 ## Important Notes
 - NotebookLM quota: 20 audio overviews/day (Google AI Pro plan)
