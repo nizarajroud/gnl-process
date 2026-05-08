@@ -130,3 +130,13 @@ def status(parent_id):
             click.echo(f"{pid:<5} {sub:<25} {s['generated']}/{s['total']:<6} {s['downloaded']}/{s['total']:<6} {s['converted']}/{s['total']:<6}")
         except Exception:
             pass
+
+
+@cli.command()
+@click.option('--host', default='0.0.0.0')
+@click.option('--port', default=8000, type=int)
+def serve(host, port):
+    """Start the web dashboard."""
+    import uvicorn
+    click.echo(f"Starting GNL Web UI at http://{host}:{port}")
+    uvicorn.run("gnl_core.web.app:app", host=host, port=port, reload=True)

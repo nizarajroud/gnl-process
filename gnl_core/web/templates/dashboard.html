@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GNL Process</title>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-6">
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-3xl font-bold mb-6">🎙️ GNL Process</h1>
+
+        <!-- Status Table -->
+        <div class="bg-gray-800 rounded-lg p-4 mb-6">
+            <h2 class="text-xl font-semibold mb-3">Pipeline Status</h2>
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-gray-400 border-b border-gray-700">
+                        <th class="text-left py-2">ID</th>
+                        <th class="text-left py-2">Subtheme</th>
+                        <th class="text-left py-2">Generated</th>
+                        <th class="text-left py-2">Downloaded</th>
+                        <th class="text-left py-2">Converted</th>
+                        <th class="text-left py-2">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in parents %}
+                    <tr class="border-b border-gray-700">
+                        <td class="py-2">{{ p.id }}</td>
+                        <td class="py-2">{{ p.subtheme }}</td>
+                        <td class="py-2">
+                            <span class="{% if p.generated == p.total %}text-green-400{% else %}text-yellow-400{% endif %}">
+                                {{ p.generated }}/{{ p.total }}
+                            </span>
+                        </td>
+                        <td class="py-2">
+                            <span class="{% if p.downloaded == p.total %}text-green-400{% else %}text-yellow-400{% endif %}">
+                                {{ p.downloaded }}/{{ p.total }}
+                            </span>
+                        </td>
+                        <td class="py-2">
+                            <span class="{% if p.converted == p.total %}text-green-400{% else %}text-yellow-400{% endif %}">
+                                {{ p.converted }}/{{ p.total }}
+                            </span>
+                        </td>
+                        <td class="py-2 space-x-1">
+                            <button hx-post="/action/generate/{{ p.id }}" hx-swap="none"
+                                class="px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs">Gen</button>
+                            <button hx-post="/action/download/{{ p.id }}" hx-swap="none"
+                                class="px-2 py-1 bg-purple-600 hover:bg-purple-500 rounded text-xs">DL</button>
+                            <button hx-post="/action/convert/{{ p.id }}" hx-swap="none"
+                                class="px-2 py-1 bg-orange-600 hover:bg-orange-500 rounded text-xs">Conv</button>
+                            <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none"
+                                class="px-2 py-1 bg-green-600 hover:bg-green-500 rounded text-xs">Deliver</button>
+                            <button hx-post="/action/clean/{{ p.id }}" hx-swap="none"
+                                class="px-2 py-1 bg-red-600 hover:bg-red-500 rounded text-xs">Clean</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not parents %}
+                    <tr><td colspan="6" class="py-4 text-center text-gray-500">No parents in database</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Logs -->
+        <div class="bg-gray-800 rounded-lg p-4">
+            <h2 class="text-xl font-semibold mb-3">Live Logs</h2>
+            <div id="logs" class="font-mono text-xs h-64 overflow-y-auto bg-black rounded p-3 space-y-1">
+                <div class="text-gray-500">Waiting for actions...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ws = new WebSocket(`ws://${window.location.host}/ws/logs`);
+        const logsDiv = document.getElementById('logs');
+        ws.onmessage = (e) => {
+            const line = document.createElement('div');
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${e.data}`;
+            if (e.data.startsWith('✓')) line.className = 'text-green-400';
+            else if (e.data.startsWith('⚠')) line.className = 'text-red-400';
+            else if (e.data.startsWith('▶')) line.className = 'text-blue-400';
+            logsDiv.appendChild(line);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        };
+    </script>
+</body>
+</html>
