@@ -181,14 +181,17 @@ async def _run_action(action: str, parent_id: int):
             if s['generated'] < s['total']:
                 await broadcast_log("▶ GENERATE")
                 generate(parent_id)
+                await broadcast_status()
             s = parent_status(parent_id)
             if s['downloaded'] < s['generated']:
                 await broadcast_log("▶ DOWNLOAD")
                 download(parent_id)
+                await broadcast_status()
             s = parent_status(parent_id)
             if s['downloaded'] == s['total'] and s['converted'] < s['total']:
                 await broadcast_log("▶ CONVERT")
                 convert(parent_id)
+                await broadcast_status()
             s = parent_status(parent_id)
             await broadcast_log(f"✓ Deliver done: {s['converted']}/{s['total']} converted")
         elif action == "clean":
