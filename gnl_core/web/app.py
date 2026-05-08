@@ -128,10 +128,11 @@ async def dashboard(request: Request):
     schedule_time = os.getenv('GNL_SCHEDULE_TIME', '08:00')
     jobs = scheduler.get_jobs()
     next_run = str(jobs[0].next_run_time.strftime('%Y-%m-%d %H:%M')) if jobs else "Not scheduled"
+    test_mode = os.environ.get('TEST_MODE', '0') == '1'
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request, "parents": parents,
-        "schedule_time": schedule_time, "next_run": next_run
+        "schedule_time": schedule_time, "next_run": next_run, "test_mode": test_mode
     })
 
 
@@ -221,6 +222,16 @@ async def prepare_pdf(request: Request):
     except Exception as e:
         await broadcast_log(f"⚠ Prepare failed: {str(e)[:100]}")
         return {"status": "error", "error": str(e)}
+
+
+@app.post("/toggle-test-mode")
+async def toggle_test_mode():
+    """Toggle TEST_MODE on/off."""
+    current = os.environ.get('TEST_MODE', '0')
+    new_val = '0' if current == '1' else '1'
+    os.environ['TEST_MODE'] = new_val
+    await broadcast_log(f"{'🧪 TEST MODE ON' if new_val == '1' else '🚀 TEST MODE OFF (real API)'}")
+    return {"status": "ok", "test_mode": new_val == '1'}
 
 
 @app.post("/schedule")

@@ -111,14 +111,24 @@
 
         <!-- Scheduler -->
         <div class="bg-gray-800 rounded-lg p-4 mb-6">
-            <h2 class="text-xl font-semibold mb-3">⏰ Daily Schedule</h2>
-            <div class="flex items-center gap-4">
-                <form hx-post="/schedule" hx-swap="none" class="flex items-center gap-2">
-                    <label class="text-sm text-gray-400">Run deliver --all at:</label>
-                    <input type="time" name="time" value="{{ schedule_time }}" class="bg-gray-700 rounded px-2 py-1 text-sm">
-                    <button type="submit" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">Save</button>
-                </form>
-                <span class="text-sm text-gray-400">Next run: <span class="text-green-400">{{ next_run }}</span></span>
+            <div class="flex justify-between items-center">
+                <div>
+                    <h2 class="text-xl font-semibold mb-3">⏰ Daily Schedule</h2>
+                    <form hx-post="/schedule" hx-swap="none" class="flex items-center gap-2">
+                        <label class="text-sm text-gray-400">Run deliver --all at:</label>
+                        <input type="time" name="time" value="{{ schedule_time }}" class="bg-gray-700 rounded px-2 py-1 text-sm">
+                        <button type="submit" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">Save</button>
+                        <span class="text-sm text-gray-400 ml-2">Next: <span class="text-green-400">{{ next_run }}</span></span>
+                    </form>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm text-gray-400">TEST MODE</span>
+                    <button id="test-toggle" hx-post="/toggle-test-mode" hx-swap="none"
+                        onclick="this.classList.toggle('bg-green-600');this.classList.toggle('bg-gray-600')"
+                        class="relative w-12 h-6 rounded-full transition-colors {{ 'bg-green-600' if test_mode else 'bg-gray-600' }}">
+                        <span class="absolute top-0.5 {{ 'left-6' if test_mode else 'left-0.5' }} w-5 h-5 bg-white rounded-full transition-all"></span>
+                    </button>
+                </div>
             </div>
         </div>
 
