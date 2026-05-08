@@ -61,54 +61,68 @@ async def broadcast_log(msg: str):
 
 
 async def broadcast_status():
-    """Push updated status table HTML to all clients."""
+    """Push updated editions HTML to all clients."""
     from gnl_core.db import get_db, parent_status
     with get_db() as conn:
         rows = conn.execute("SELECT id, podcast_subtheme, parent_file FROM parent_configuration").fetchall()
-    
-    html_rows = ""
+
+    html = ""
     for row in rows:
         s = parent_status(row['id'])
-        total = s['total'] or 1
-        gen_pct = s['generated'] / total * 100
-        dl_pct = s['downloaded'] / total * 100
-        conv_pct = s['converted'] / total * 100
-        launched_bar = max(0, gen_pct - dl_pct)
-        dl_bar = max(0, dl_pct - conv_pct)
+        pid = row['id']
+        sub = row['podcast_subtheme']
+        total = s['total']
+        gen = s['generated']
+        dl = s['downloaded']
+        conv = s['converted']
 
-        html_rows += f"""<tr class="border-b border-gray-700">
-            <td class="py-2">{row['id']}</td>
-            <td class="py-2">{row['podcast_subtheme']}</td>
-            <td class="py-3 w-1/3">
-                <div class="flex items-center gap-1 text-xs">
-                    <div class="flex-1">
-                        <div class="flex justify-between text-gray-400 mb-1">
-                            <span>Launched {s['generated']}/{s['total']}</span>
-                            <span>Downloaded {s['downloaded']}/{s['total']}</span>
-                            <span>Converted {s['converted']}/{s['total']}</span>
-                        </div>
-                        <div class="w-full bg-gray-700 rounded-full h-2 flex overflow-hidden">
-                            <div class="bg-yellow-500 h-2" style="width: {launched_bar}%"></div>
-                            <div class="bg-blue-500 h-2" style="width: {dl_bar}%"></div>
-                            <div class="bg-green-500 h-2" style="width: {conv_pct}%"></div>
-                        </div>
-                    </div>
-                </div>
-            </td>
-            <td class="py-2 space-x-1">
-                <button hx-post="/action/generate/{row['id']}" hx-swap="none" class="px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs">Gen</button>
-                <button hx-post="/action/download/{row['id']}" hx-swap="none" class="px-2 py-1 bg-purple-600 hover:bg-purple-500 rounded text-xs">DL</button>
-                <button hx-post="/action/convert/{row['id']}" hx-swap="none" class="px-2 py-1 bg-orange-600 hover:bg-orange-500 rounded text-xs">Conv</button>
-                <button hx-post="/action/deliver/{row['id']}" hx-swap="none" class="px-2 py-1 bg-green-600 hover:bg-green-500 rounded text-xs">Deliver</button>
-                <button hx-post="/action/clean/{row['id']}" hx-swap="none" class="px-2 py-1 bg-red-600 hover:bg-red-500 rounded text-xs">Clean</button>
-            </td></tr>"""
-    
-    if not html_rows:
-        html_rows = '<tr><td colspan="4" class="py-4 text-center text-gray-500">No parents in database</td></tr>'
+        # Button
+        if conv == total and total > 0:
+            btn = '<span class="px-3 py-1 bg-green-900 text-green-300 rounded-full text-xs font-medium">✅ Terminé</span>'
+        elif gen == 0:
+            btn = f'<button hx-post="/action/deliver/{pid}" hx-swap="none" onclick="this.disabled=true;this.textContent=\'...\'" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium">▶ Lancer</button>'
+        elif dl < total:
+            btn = f'<button hx-post="/action/deliver/{pid}" hx-swap="none" onclick="this.disabled=true;this.textContent=\'...\'" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-sm font-medium">▶ Reprendre</button>'
+        else:
+            btn = f'<button hx-post="/action/deliver/{pid}" hx-swap="none" onclick="this.disabled=true;this.textContent=\'...\'" class="px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-sm font-medium">▶ Finaliser</button>'
+
+        clean_btn = f'<button hx-post="/action/clean/{pid}" hx-swap="none" onclick="this.disabled=true" class="px-2 py-1 text-red-400 hover:text-red-300 text-xs">🗑</button>'
+
+        # Timeline steps
+        steps = [("Préparé", total, total), ("Généré", gen, total), ("Téléchargé", dl, total), ("Converti", conv, total)]
+        timeline = '<div class="flex items-center justify-between">'
+        for i, (label, done, t) in enumerate(steps):
+            if done == t:
+                dot_cls = "bg-green-500 border-green-500"
+                txt_cls = "text-green-400"
+            elif done > 0:
+                dot_cls = "bg-yellow-500 border-yellow-500 animate-pulse"
+                txt_cls = "text-yellow-400"
+            else:
+                dot_cls = "bg-gray-700 border-gray-600"
+                txt_cls = "text-gray-500"
+            timeline += f'<div class="flex flex-col items-center flex-1"><div class="w-4 h-4 rounded-full border-2 {dot_cls}"></div><span class="text-xs mt-1 {txt_cls}">{label}</span><span class="text-xs text-gray-500">{done}/{t}</span></div>'
+            if i < 3:
+                line_cls = "bg-green-500" if done == t else ("bg-yellow-500" if done > 0 else "bg-gray-700")
+                timeline += f'<div class="flex-1 h-0.5 -mt-6 {line_cls}"></div>'
+        timeline += '</div>'
+
+        quota_msg = f'<p class="text-xs text-gray-400 mt-3">⏳ Quota — reprend automatiquement demain</p>' if 0 < gen < total else ''
+
+        html += f'''<div class="bg-gray-800 rounded-lg p-5">
+            <div class="flex justify-between items-start mb-4">
+                <div><h3 class="font-semibold text-lg">{sub}</h3><span class="text-xs text-gray-400">{total} épisodes</span></div>
+                <div class="flex items-center gap-2">{btn}{clean_btn}</div>
+            </div>
+            <div class="relative">{timeline}</div>{quota_msg}
+        </div>'''
+
+    if not html:
+        html = '<div class="bg-gray-800 rounded-lg p-8 text-center text-gray-500">Aucune édition.</div>'
 
     for ws in ws_clients[:]:
         try:
-            await ws.send_text(json.dumps({"type": "status_update", "html": html_rows}))
+            await ws.send_text(json.dumps({"type": "status_update", "html": html}))
         except Exception:
             ws_clients.remove(ws)
 

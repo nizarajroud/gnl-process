@@ -8,135 +8,137 @@
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen p-6">
-    <div class="max-w-6xl mx-auto">
-        <h1 class="text-3xl font-bold mb-6">🎙️ GNL Process</h1>
-
-        <!-- Status Table -->
-        <div class="bg-gray-800 rounded-lg p-4 mb-6">
-            <div class="flex justify-between items-center mb-3">
-                <h2 class="text-xl font-semibold">Pipeline Status</h2>
-                <button onclick="document.getElementById('prepareForm').classList.toggle('hidden')"
-                    class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">+ New PDF</button>
+    <div class="max-w-4xl mx-auto">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold">🎙️ GNL Process</h1>
+            <div class="flex items-center gap-3">
+                <span class="text-xs text-gray-400">TEST</span>
+                <button id="test-toggle" hx-post="/toggle-test-mode" hx-swap="none"
+                    onclick="this.classList.toggle('bg-green-600');this.classList.toggle('bg-gray-600')"
+                    class="relative w-10 h-5 rounded-full transition-colors {{ 'bg-green-600' if test_mode else 'bg-gray-600' }}">
+                    <span class="absolute top-0.5 {{ 'left-5' if test_mode else 'left-0.5' }} w-4 h-4 bg-white rounded-full transition-all"></span>
+                </button>
             </div>
-
-            <!-- Prepare Form (hidden by default) -->
-            <div id="prepareForm" class="hidden mb-4 p-4 bg-gray-700 rounded">
-                <form hx-post="/prepare" hx-swap="none" hx-encoding="multipart/form-data" class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="text-xs text-gray-400">PDF File</label>
-                        <input type="file" name="pdf" accept=".pdf" class="w-full bg-gray-600 rounded px-2 py-1 text-sm">
-                    </div>
-                    <div>
-                        <label class="text-xs text-gray-400">Pages per split</label>
-                        <input type="number" name="pages" value="3" class="w-full bg-gray-600 rounded px-2 py-1 text-sm">
-                    </div>
-                    <div>
-                        <label class="text-xs text-gray-400">Name</label>
-                        <input type="text" name="name" placeholder="whatsnew-mars-2026" class="w-full bg-gray-600 rounded px-2 py-1 text-sm">
-                    </div>
-                    <div>
-                        <label class="text-xs text-gray-400">Theme</label>
-                        <input type="text" name="theme" value="aws" class="w-full bg-gray-600 rounded px-2 py-1 text-sm">
-                    </div>
-                    <div>
-                        <label class="text-xs text-gray-400">Subtheme</label>
-                        <input type="text" name="subtheme" placeholder="whatsnew-mars" class="w-full bg-gray-600 rounded px-2 py-1 text-sm">
-                    </div>
-                    <div class="flex items-end">
-                        <button type="submit" class="px-4 py-1 bg-green-600 hover:bg-green-500 rounded text-sm">Prepare</button>
-                    </div>
-                </form>
-            </div>
-
-            <table class="w-full text-sm">
-                <thead>
-                    <tr class="text-gray-400 border-b border-gray-700">
-                        <th class="text-left py-2">ID</th>
-                        <th class="text-left py-2">Subtheme</th>
-                        <th class="text-left py-2">Progress</th>
-                        <th class="text-left py-2">Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="status-table">
-                    {% for p in parents %}
-                    <tr class="border-b border-gray-700">
-                        <td class="py-2">{{ p.id }}</td>
-                        <td class="py-2">{{ p.subtheme }}</td>
-                        <td class="py-3 w-1/3">
-                            <div class="flex items-center gap-1 text-xs">
-                                {% set gen_pct = (p.generated / p.total * 100) if p.total > 0 else 0 %}
-                                {% set dl_pct = (p.downloaded / p.total * 100) if p.total > 0 else 0 %}
-                                {% set conv_pct = (p.converted / p.total * 100) if p.total > 0 else 0 %}
-                                
-                                <span class="{% if gen_pct == 100 %}text-green-400{% elif gen_pct > 0 %}text-yellow-400{% else %}text-gray-500{% endif %}">●</span>
-                                <div class="flex-1">
-                                    <div class="flex justify-between text-gray-400 mb-1">
-                                        <span>Launched {{ p.generated }}/{{ p.total }}</span>
-                                        <span>Downloaded {{ p.downloaded }}/{{ p.total }}</span>
-                                        <span>Converted {{ p.converted }}/{{ p.total }}</span>
-                                    </div>
-                                    <div class="w-full bg-gray-700 rounded-full h-2 flex overflow-hidden">
-                                        <div class="bg-yellow-500 h-2" style="width: {{ ((gen_pct - dl_pct) if gen_pct > dl_pct else 0) }}%"></div>
-                                        <div class="bg-blue-500 h-2" style="width: {{ ((dl_pct - conv_pct) if dl_pct > conv_pct else 0) }}%"></div>
-                                        <div class="bg-green-500 h-2" style="width: {{ conv_pct }}%"></div>
-                                    </div>
-                                    <div class="flex gap-3 mt-1 text-gray-500">
-                                        <span class="flex items-center gap-1"><span class="w-2 h-2 bg-yellow-500 rounded-full inline-block"></span>Launched</span>
-                                        <span class="flex items-center gap-1"><span class="w-2 h-2 bg-blue-500 rounded-full inline-block"></span>Downloaded</span>
-                                        <span class="flex items-center gap-1"><span class="w-2 h-2 bg-green-500 rounded-full inline-block"></span>Converted</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </td>
-                        <td class="py-2 space-x-1">
-                            <button hx-post="/action/generate/{{ p.id }}" hx-swap="none"
-                                class="px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs">Gen</button>
-                            <button hx-post="/action/download/{{ p.id }}" hx-swap="none"
-                                class="px-2 py-1 bg-purple-600 hover:bg-purple-500 rounded text-xs">DL</button>
-                            <button hx-post="/action/convert/{{ p.id }}" hx-swap="none"
-                                class="px-2 py-1 bg-orange-600 hover:bg-orange-500 rounded text-xs">Conv</button>
-                            <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none"
-                                class="px-2 py-1 bg-green-600 hover:bg-green-500 rounded text-xs">Deliver</button>
-                            <button hx-post="/action/clean/{{ p.id }}" hx-swap="none"
-                                class="px-2 py-1 bg-red-600 hover:bg-red-500 rounded text-xs">Clean</button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                    {% if not parents %}
-                    <tr><td colspan="4" class="py-4 text-center text-gray-500">No parents in database</td></tr>
-                    {% endif %}
-                </tbody>
-            </table>
         </div>
 
-        <!-- Scheduler -->
-        <div class="bg-gray-800 rounded-lg p-4 mb-6">
-            <div class="flex justify-between items-center">
+        <!-- New Edition -->
+        <div class="mb-6">
+            <button onclick="document.getElementById('newEdition').classList.toggle('hidden')"
+                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium">+ Nouvelle Édition</button>
+        </div>
+
+        <div id="newEdition" class="hidden mb-6 bg-gray-800 rounded-lg p-5">
+            <h3 class="font-semibold mb-3">Créer une édition</h3>
+            <form hx-post="/prepare" hx-swap="none" hx-encoding="multipart/form-data" class="grid grid-cols-2 gap-3">
                 <div>
-                    <h2 class="text-xl font-semibold mb-3">⏰ Daily Schedule</h2>
-                    <form hx-post="/schedule" hx-swap="none" class="flex items-center gap-2">
-                        <label class="text-sm text-gray-400">Run deliver --all at:</label>
-                        <input type="time" name="time" value="{{ schedule_time }}" class="bg-gray-700 rounded px-2 py-1 text-sm">
-                        <button type="submit" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">Save</button>
-                        <span class="text-sm text-gray-400 ml-2">Next: <span class="text-green-400">{{ next_run }}</span></span>
-                    </form>
+                    <label class="text-xs text-gray-400">PDF</label>
+                    <input type="file" name="pdf" accept=".pdf" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
                 </div>
-                <div class="flex items-center gap-2">
-                    <span class="text-sm text-gray-400">TEST MODE</span>
-                    <button id="test-toggle" hx-post="/toggle-test-mode" hx-swap="none"
-                        onclick="this.classList.toggle('bg-green-600');this.classList.toggle('bg-gray-600')"
-                        class="relative w-12 h-6 rounded-full transition-colors {{ 'bg-green-600' if test_mode else 'bg-gray-600' }}">
-                        <span class="absolute top-0.5 {{ 'left-6' if test_mode else 'left-0.5' }} w-5 h-5 bg-white rounded-full transition-all"></span>
-                    </button>
+                <div>
+                    <label class="text-xs text-gray-400">Pages par épisode</label>
+                    <input type="number" name="pages" value="3" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
                 </div>
+                <div>
+                    <label class="text-xs text-gray-400">Nom</label>
+                    <input type="text" name="name" placeholder="whatsnew-mars-2026" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-400">Thème</label>
+                    <input type="text" name="theme" value="aws" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-400">Sous-thème</label>
+                    <input type="text" name="subtheme" placeholder="whatsnew-mars" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-medium">Créer</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Editions -->
+        <div id="editions" class="space-y-4">
+            {% for p in parents %}
+            <div class="bg-gray-800 rounded-lg p-5">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 class="font-semibold text-lg">{{ p.subtheme }}</h3>
+                        <span class="text-xs text-gray-400">{{ p.total }} épisodes</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        {% if p.converted == p.total and p.total > 0 %}
+                            <span class="px-3 py-1 bg-green-900 text-green-300 rounded-full text-xs font-medium">✅ Terminé</span>
+                        {% elif p.generated == 0 %}
+                            <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
+                                class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium">▶ Lancer</button>
+                        {% elif p.downloaded < p.total %}
+                            <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
+                                class="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-sm font-medium">▶ Reprendre</button>
+                        {% elif p.converted < p.total %}
+                            <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
+                                class="px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-sm font-medium">▶ Finaliser</button>
+                        {% endif %}
+                        <button hx-post="/action/clean/{{ p.id }}" hx-swap="none" onclick="this.disabled=true"
+                            class="px-2 py-1 text-red-400 hover:text-red-300 text-xs">🗑</button>
+                    </div>
+                </div>
+
+                <!-- Timeline -->
+                <div class="relative">
+                    {% set steps = [
+                        ("Préparé", p.total, p.total),
+                        ("Généré", p.generated, p.total),
+                        ("Téléchargé", p.downloaded, p.total),
+                        ("Converti", p.converted, p.total)
+                    ] %}
+                    <div class="flex items-center justify-between">
+                        {% for label, done, total in steps %}
+                        <div class="flex flex-col items-center flex-1">
+                            <div class="w-4 h-4 rounded-full border-2 
+                                {% if done == total %}bg-green-500 border-green-500
+                                {% elif done > 0 %}bg-yellow-500 border-yellow-500 animate-pulse
+                                {% else %}bg-gray-700 border-gray-600{% endif %}"></div>
+                            <span class="text-xs mt-1 {% if done == total %}text-green-400{% elif done > 0 %}text-yellow-400{% else %}text-gray-500{% endif %}">
+                                {{ label }}
+                            </span>
+                            <span class="text-xs text-gray-500">{{ done }}/{{ total }}</span>
+                        </div>
+                        {% if not loop.last %}
+                        <div class="flex-1 h-0.5 -mt-6 
+                            {% if done == total %}bg-green-500{% elif done > 0 %}bg-yellow-500{% else %}bg-gray-700{% endif %}"></div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {% if p.generated > 0 and p.generated < p.total %}
+                <p class="text-xs text-gray-400 mt-3">⏳ Quota — reprend automatiquement demain</p>
+                {% endif %}
             </div>
+            {% endfor %}
+
+            {% if not parents %}
+            <div class="bg-gray-800 rounded-lg p-8 text-center text-gray-500">
+                Aucune édition. Cliquez "+ Nouvelle Édition" pour commencer.
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Schedule -->
+        <div class="mt-6 bg-gray-800 rounded-lg p-4">
+            <form hx-post="/schedule" hx-swap="none" class="flex items-center gap-3">
+                <span class="text-sm text-gray-400">⏰ Exécution quotidienne à</span>
+                <input type="time" name="time" value="{{ schedule_time }}" class="bg-gray-700 rounded px-2 py-1 text-sm">
+                <button type="submit" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs">Sauver</button>
+                <span class="text-xs text-gray-500 ml-2">Prochain: {{ next_run }}</span>
+            </form>
         </div>
 
         <!-- Logs -->
-        <div class="bg-gray-800 rounded-lg p-4">
-            <h2 class="text-xl font-semibold mb-3">Live Logs</h2>
-            <div id="logs" class="font-mono text-xs h-64 overflow-y-auto bg-black rounded p-3 space-y-1">
-                <div class="text-gray-500">Waiting for actions...</div>
+        <div class="mt-6 bg-gray-800 rounded-lg p-4">
+            <h3 class="font-semibold mb-2 text-sm">Logs</h3>
+            <div id="logs" class="font-mono text-xs h-40 overflow-y-auto bg-black rounded p-3 space-y-1">
+                <div class="text-gray-500">En attente...</div>
             </div>
         </div>
     </div>
@@ -144,21 +146,6 @@
     <script>
         const ws = new WebSocket(`ws://${window.location.host}/ws/logs`);
         const logsDiv = document.getElementById('logs');
-
-        // Disable row buttons on click
-        document.addEventListener('click', (e) => {
-            const btn = e.target.closest('button[hx-post]');
-            if (!btn) return;
-            const row = btn.closest('tr');
-            if (row) {
-                row.querySelectorAll('button').forEach(b => {
-                    b.disabled = true;
-                    b.classList.add('opacity-50', 'cursor-not-allowed');
-                });
-                btn.dataset.originalText = btn.textContent;
-                btn.textContent = '...';
-            }
-        });
 
         ws.onmessage = (e) => {
             const data = JSON.parse(e.data);
@@ -168,10 +155,11 @@
                 if (data.msg.startsWith('✓')) line.className = 'text-green-400';
                 else if (data.msg.startsWith('⚠')) line.className = 'text-red-400';
                 else if (data.msg.startsWith('▶')) line.className = 'text-blue-400';
+                else if (data.msg.startsWith('🧪') || data.msg.startsWith('🚀')) line.className = 'text-purple-400';
                 logsDiv.appendChild(line);
                 logsDiv.scrollTop = logsDiv.scrollHeight;
             } else if (data.type === 'status_update') {
-                document.getElementById('status-table').innerHTML = data.html;
+                document.getElementById('editions').innerHTML = data.html;
             }
         };
     </script>

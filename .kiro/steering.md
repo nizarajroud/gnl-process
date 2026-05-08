@@ -21,6 +21,11 @@ Automated workflow for processing content sources into NotebookLM podcasts with 
 - Auth managed by `nlm login` CLI (cached tokens, no browser needed at runtime)
 - PDF splitting → DB insertion → title generation → podcast generation → download → conversion → combination
 
+## Terminology
+- **Édition**: A batch of episodes from one PDF (e.g., "whatsnew-mars-2026") = one parent_configuration
+- **Épisode**: A single audio file generated from one PDF chunk
+- **Série**: The overarching theme (e.g., "AWS What's New")
+
 ## Key Conventions
 - All scripts use `python-fire` for CLI interface
 - Environment config via `.env` file (managed by Bitwarden, never committed — `.env.example` provided)
