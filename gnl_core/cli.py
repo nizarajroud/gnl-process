@@ -138,5 +138,7 @@ def status(parent_id):
 def serve(host, port):
     """Start the web dashboard."""
     import uvicorn
-    click.echo(f"Starting GNL Web UI at http://{host}:{port}")
+    import subprocess
+    wsl_ip = subprocess.run(['hostname', '-I'], capture_output=True, text=True).stdout.strip().split()[0]
+    click.echo(f"Starting GNL Web UI at http://{wsl_ip}:{port}")
     uvicorn.run("gnl_core.web.app:app", host=host, port=port, reload=True)

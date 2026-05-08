@@ -95,3 +95,11 @@ gnl clean --target=1 --confirm
 2. **Wait for confirmation**: Only execute the plan after the user explicitly confirms.
 3. **No auto-commit/push**: After implementing, do NOT commit or push. Wait for the user to test and explicitly ask for commit/push.
 4. **Never commit/push without clear user confirmation.**
+
+## Testing Requirements
+Every story must include:
+- **Unit tests**: Test each gnl_core module function in isolation (mocked dependencies)
+- **Integration tests**: Test end-to-end flows with real DB (test fixture) and mocked NotebookLM API
+- Framework: pytest
+- Location: `tests/` directory (unit/ and integration/ subdirectories)
+- Run: `pytest` before any merge to main
