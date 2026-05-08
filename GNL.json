@@ -235,7 +235,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_generation.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parent_id }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/generate_and_deliver.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parent_id }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -265,7 +265,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/process_all_records_for_download.py --parent_id=\"{{ $(\"Download Form\").item.json[\"Parent ID\"] || $(\"Extract Parent ID\").item.json.parent_id }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/download_via_mcp.py --parent_id=\"{{ $(\"Download Form\").item.json[\"Parent ID\"] || $(\"Extract Parent ID\").item.json.parent_id }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -536,7 +536,7 @@
                     "option": "01 - Janvier"
                   },
                   {
-                    "option": "02 - Février"
+                    "option": "02 - F\u00e9vrier"
                   },
                   {
                     "option": "03 - Mars"
@@ -554,7 +554,7 @@
                     "option": "07 - Juillet"
                   },
                   {
-                    "option": "08 - Août"
+                    "option": "08 - Ao\u00fbt"
                   },
                   {
                     "option": "09 - Septembre"
@@ -566,7 +566,7 @@
                     "option": "11 - Novembre"
                   },
                   {
-                    "option": "12 - Décembre"
+                    "option": "12 - D\u00e9cembre"
                   }
                 ]
               },
@@ -730,6 +730,78 @@
       "id": "download-form-trigger",
       "name": "Download Form",
       "webhookId": "488a2dbe-180e-4659-aa91-a32a3cff32c9"
+    },
+    {
+      "parameters": {
+        "formTitle": "Clean Notebooks",
+        "formDescription": "Enter parent_id to clean specific notebooks, or \"all\" to delete all",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Target",
+              "fieldType": "text",
+              "requiredField": true,
+              "placeholder": "all or parent_id number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        11792,
+        4200
+      ],
+      "id": "78094529-4e60-467c-b01d-446a18524b1c",
+      "name": "Clean Form",
+      "webhookId": "78fce5f3-f4f5-4489-b690-25046bd0c01a"
+    },
+    {
+      "parameters": {
+        "command": "=python /home/nizar/workspace/gnl-process/clean_notebooks_mcp.py --target=\"{{ $(\"Clean Form\").item.json.Target }}\" --confirm"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        12040,
+        4200
+      ],
+      "id": "2912aac4-8013-4860-ba52-b7a74851eec8",
+      "name": "Clean Notebooks"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        11792,
+        4600
+      ],
+      "id": "0c605447-86d3-4594-b024-5326a36f0852",
+      "name": "Daily GNL Schedule"
+    },
+    {
+      "parameters": {
+        "command": "python /home/nizar/workspace/gnl-process/generate_and_deliver.py --all"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        12040,
+        4600
+      ],
+      "id": "d0ebb6b5-e982-4a20-9c27-e6c99866ce48",
+      "name": "Generate & Deliver All"
     }
   ],
   "connections": {
@@ -976,6 +1048,28 @@
           }
         ]
       ]
+    },
+    "Clean Form": {
+      "main": [
+        [
+          {
+            "node": "Clean Notebooks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily GNL Schedule": {
+      "main": [
+        [
+          {
+            "node": "Generate & Deliver All",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -985,7 +1079,7 @@
   "staticData": null,
   "meta": null,
   "pinData": {},
-  "versionId": "930da7f9-b04d-411b-87c5-80d491ce3df4",
+  "versionId": "1345c648-c7d7-4020-ba86-299eaca81222",
   "activeVersionId": null,
   "versionCounter": 23,
   "triggerCount": 0,
