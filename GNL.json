@@ -235,7 +235,7 @@
     },
     {
       "parameters": {
-        "command": "=python /home/nizar/workspace/gnl-process/generate_via_mcp.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parent_id }}\""
+        "command": "=python /home/nizar/workspace/gnl-process/generate_and_deliver.py --parent_id=\"{{ $(\"Extract Parent ID\").item.json.parent_id }}\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -536,7 +536,7 @@
                     "option": "01 - Janvier"
                   },
                   {
-                    "option": "02 - Février"
+                    "option": "02 - F\u00e9vrier"
                   },
                   {
                     "option": "03 - Mars"
@@ -554,7 +554,7 @@
                     "option": "07 - Juillet"
                   },
                   {
-                    "option": "08 - Août"
+                    "option": "08 - Ao\u00fbt"
                   },
                   {
                     "option": "09 - Septembre"
@@ -566,7 +566,7 @@
                     "option": "11 - Novembre"
                   },
                   {
-                    "option": "12 - Décembre"
+                    "option": "12 - D\u00e9cembre"
                   }
                 ]
               },
@@ -769,6 +769,39 @@
       ],
       "id": "2912aac4-8013-4860-ba52-b7a74851eec8",
       "name": "Clean Notebooks"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        11792,
+        4600
+      ],
+      "id": "0c605447-86d3-4594-b024-5326a36f0852",
+      "name": "Daily GNL Schedule"
+    },
+    {
+      "parameters": {
+        "command": "python /home/nizar/workspace/gnl-process/generate_and_deliver.py --all"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        12040,
+        4600
+      ],
+      "id": "d0ebb6b5-e982-4a20-9c27-e6c99866ce48",
+      "name": "Generate & Deliver All"
     }
   ],
   "connections": {
@@ -1021,6 +1054,17 @@
         [
           {
             "node": "Clean Notebooks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily GNL Schedule": {
+      "main": [
+        [
+          {
+            "node": "Generate & Deliver All",
             "type": "main",
             "index": 0
           }

@@ -5,7 +5,7 @@ Automated workflow for processing content sources into NotebookLM podcasts with 
 
 ## Tech Stack
 - **Language**: Python 3.13
-- **Browser Automation**: Nova Act (Amazon) — free version with API key
+- **NotebookLM Integration**: `notebooklm_tools` Python library (direct API, no browser)
 - **Database**: SQLite (gnl.db)
 - **Audio Processing**: ffmpeg, pydub
 - **Orchestration**: n8n workflows (localhost:5678 on WSL)
@@ -17,9 +17,9 @@ Automated workflow for processing content sources into NotebookLM podcasts with 
 ## Architecture
 - Two-table SQLite schema: `parent_configuration` (parent metadata) + `podcast_download` (individual file states)
 - Scripts are invoked by n8n workflow nodes via Execute Command
-- Nova Act drives Playwright Chromium for NotebookLM interactions (generation, download, cleanup)
-- Chrome profile at `/home/nizar/Clone-Chrome-profile/User Data` with persistent Google session
-- PDF splitting → DB insertion → title generation → podcast generation → download → validation → conversion → combination
+- NotebookLM interactions via `notebooklm_tools` library (create notebook, upload PDF, generate audio, download)
+- Auth managed by `nlm login` CLI (cached tokens, no browser needed at runtime)
+- PDF splitting → DB insertion → title generation → podcast generation → download → conversion → combination
 
 ## Key Conventions
 - All scripts use `python-fire` for CLI interface
@@ -30,43 +30,52 @@ Automated workflow for processing content sources into NotebookLM podcasts with 
 - States are integers: 0 = pending, 1 = done
 - `gnl.db` is gitignored (local only, never tracked)
 - `.env` is gitignored (secrets managed via Bitwarden)
-- Branch strategy: `main` + feature branches (no develop)
+- Branch strategy: `main` (legacy) + `main-modernized` (MCP-based) + feature branches
 - DB queries must sort by numeric extraction: `ORDER BY CAST(REPLACE(...) AS INTEGER) ASC`
-- Scripts auto-clean `SingletonLock` before launching Nova Act to prevent "profile in use" errors
 - Audio generation prompts are externalized in `prompts/` directory (per-subfolder or default.txt)
 - All n8n command parameters are double-quoted to handle apostrophes (e.g. "What's New")
-- `generation_state` is updated immediately after audio generation starts (not at end of process)
+- `generation_state` is updated only after `studio_status` confirms `in_progress` or `completed`
 - `CollectAndSave.py` deduplicates: same parent_file + podcast_subtheme replaces existing records
-- `process_all_records_for_generation.py` continues to next record on failure instead of stopping
+- Scripts continue to next record on failure instead of stopping
 
 ## Workflow Pipeline
 1. `split_pdf.py` → splits source PDF into chunks
 2. `CollectAndSave.py` → inserts/replaces records into DB (deduplicates by parent_file + subtheme)
 3. `get_title_v2.py` → generates podcast names
-4. `nllm-aws-asl-add-generate-gnl_v2.py` → uploads to NotebookLM + triggers audio generation
-5. `nllm-aws-asl-download-rename-gnl_v2.py` → downloads generated audio
-6. `validate_states.py` → checks all generation_state and download_state = 1
-7. **Wait for Approval** → manual approval in n8n before convert
-8. `batch_convert_to_mp3_v2.py` → converts m4a to mp3
-9. `combine_mp3_v2.py` → concatenates mp3 files into final podcast
+4. `generate_via_mcp.py` → creates notebook + uploads PDF + triggers audio generation (confirms via poll)
+5. `download_via_mcp.py` → polls for completed audio + downloads (with configurable timeout)
+6. `batch_convert_to_mp3_v2.py` → converts m4a to mp3
+7. `combine_mp3_v2.py` → concatenates mp3 files into final podcast
+
+## Orchestrator
+- `generate_and_deliver.py` — unified script that chains: generate → download → convert → combine
+- Modes: `--parent_id=N` (single parent) or `--all` (all active parents)
+- Idempotent: reads DB state, only processes pending work
+- Quota-aware: stops generation gracefully when daily limit reached, downloads what's ready
+- Convert/combine only runs when ALL records of a parent are downloaded
+- Safe to re-run daily via cron or n8n schedule
 
 ## n8n Entry Points
 - **MainForm**: Main workflow (Type, Theme, Generation Mode) → split → generate → download → convert → combine
 - **What's New Form**: Independent trigger for What's New reports (month + subtheme)
+- **Download Form**: Manual download trigger with parent_id
+- **Clean Form**: Delete notebooks (target: "all" or parent_id number)
+- **Daily GNL Schedule**: Automatic daily trigger → `generate_and_deliver.py --all`
 
-## Shell Aliases (in .zshrc)
-- `gnl-stop` — kills all GNL processes (Chrome clone, scripts, Nova Act) + removes SingletonLock
-- `gnl-clean` — deletes all records from all DB tables
+## Utility Scripts
+- `clean_notebooks_mcp.py` — delete notebooks by parent_id or all
+- `gnl_reset.sh` — kill processes + clean DB
+- `validate_states.py` — check state consistency
+- `delete_all_records.py` — wipe all DB tables
 
 ## Important Notes
-- Nova Act uses a cloned Chrome profile with persistent Google session
-- NotebookLM consumer version has no API — browser automation is required
-- NotebookLM cannot access localhost URLs — file upload must use the hidden file input method via agentType
-- Daily quota system limits generation to 20/day per configuration
-- Google blocks Playwright MCP from authenticating (anti-bot detection) — must use Nova Act with Chrome profile
-- Nova Act free version has daily limits; AWS Service version requires Workflow construct ($4.75/agent hour)
-- WSL memory constraints (~16GB RAM) can cause Chrome crashes — kill unused processes before generation
-- n8n workflow JSON (`GNL.json`) must be reimported after changes; Python script changes take effect immediately
+- NotebookLM quota: 20 audio overviews/day (Google AI Pro plan)
+- Multi-day strategy: orchestrator handles partial generation across days automatically
+- Auth via `nlm login` — tokens cached locally, no browser at runtime
+- Download uses async streaming (`download_async`) for audio files
+- Generation confirms status via polling before marking DB (prevents false positives)
+- Failed generations trigger notebook cleanup (no orphan notebooks)
+- `MCP_DOWNLOAD_TIMEOUT` env var controls download polling timeout (default 2700s = 45min)
 
 ## Workflow with User
 1. **Plan first**: When asked to implement something, think step by step and propose a plan. Do NOT execute anything yet.
