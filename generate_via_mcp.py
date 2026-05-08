@@ -107,7 +107,8 @@ def main(source_type: str = None, generation_mode: str = None, theme: str = None
             add_source(client, notebook_id, source_type="file", file_path=full_path, wait=True)
 
             # 3. Generate audio
-            create_artifact(client, notebook_id, artifact_type="audio", focus_prompt=audio_prompt)
+            language = os.getenv('NOTEBOOKLM_LANGUAGE', 'en')
+            create_artifact(client, notebook_id, artifact_type="audio", focus_prompt=audio_prompt, language=language)
 
             # 4. Confirm generation started
             if confirm_generation(client, get_studio_status, notebook_id):
