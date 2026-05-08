@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate podcasts via MCP NotebookLM library (no browser, no Nova Act).
 
-Creates notebook, uploads PDF, triggers audio generation.
+Creates notebook, uploads PDF, triggers audio generation, confirms status.
 
 Usage:
     python generate_via_mcp.py --parent_id=1
@@ -16,6 +16,25 @@ from dotenv import load_dotenv
 from resolve_parent import resolve_parent
 
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
+
+GENERATION_CONFIRM_TIMEOUT = 120  # seconds to wait for in_progress confirmation
+GENERATION_POLL_INTERVAL = 10  # seconds between status checks
+
+
+def confirm_generation(client, get_studio_status, notebook_id):
+    """Poll studio_status until audio is in_progress or completed. Returns True/False."""
+    start = time.time()
+    while (time.time() - start) < GENERATION_CONFIRM_TIMEOUT:
+        try:
+            status = get_studio_status(client, notebook_id)
+            artifacts = status.get('artifacts', [])
+            audio = next((a for a in artifacts if a.get('type') == 'audio'), None)
+            if audio and audio.get('status') in ('in_progress', 'completed'):
+                return True
+        except Exception:
+            pass
+        time.sleep(GENERATION_POLL_INTERVAL)
+    return False
 
 
 def main(source_type: str = None, generation_mode: str = None, theme: str = None, subfolder: str = None, parent_id: int = None):
@@ -49,9 +68,9 @@ def main(source_type: str = None, generation_mode: str = None, theme: str = None
 
     # Initialize NotebookLM client
     from notebooklm_tools.mcp.tools._utils import get_client
-    from notebooklm_tools.services.notebooks import create_notebook
+    from notebooklm_tools.services.notebooks import create_notebook, delete_notebook
     from notebooklm_tools.services.sources import add_source
-    from notebooklm_tools.services.studio import create_artifact
+    from notebooklm_tools.services.studio import create_artifact, get_studio_status
 
     client = get_client()
 
@@ -78,6 +97,7 @@ def main(source_type: str = None, generation_mode: str = None, theme: str = None
             failed.append((record_id, source_id, "File not found"))
             continue
 
+        notebook_id = None
         try:
             # 1. Create notebook
             nb = create_notebook(client, title=podcast_name)
@@ -87,20 +107,32 @@ def main(source_type: str = None, generation_mode: str = None, theme: str = None
             add_source(client, notebook_id, source_type="file", file_path=full_path, wait=True)
 
             # 3. Generate audio
-            create_artifact(client, notebook_id, artifact_type="audio", focus_prompt=audio_prompt)
+            language = os.getenv('NOTEBOOKLM_LANGUAGE', 'en')
+            create_artifact(client, notebook_id, artifact_type="audio", focus_prompt=audio_prompt, language=language)
 
-            # 4. Update DB
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            cursor.execute("UPDATE podcast_download SET generation_state = 1, date = ? WHERE id = ?", (time.strftime("%Y-%m-%d"), record_id))
-            conn.commit()
-            conn.close()
-
-            print("✓")
-            succeeded.append((record_id, source_id))
+            # 4. Confirm generation started
+            if confirm_generation(client, get_studio_status, notebook_id):
+                conn = sqlite3.connect(db_path)
+                cursor = conn.cursor()
+                cursor.execute("UPDATE podcast_download SET generation_state = 1, date = ? WHERE id = ?", (time.strftime("%Y-%m-%d"), record_id))
+                conn.commit()
+                conn.close()
+                print("✓")
+                succeeded.append((record_id, source_id))
+            else:
+                # Cleanup orphan notebook
+                print("⚠ Generation not confirmed, cleaning up")
+                delete_notebook(client, notebook_id)
+                failed.append((record_id, source_id, "Generation not confirmed"))
 
         except Exception as e:
             print(f"⚠ {str(e)[:60]}")
+            # Cleanup if notebook was created
+            if notebook_id:
+                try:
+                    delete_notebook(client, notebook_id)
+                except Exception:
+                    pass
             failed.append((record_id, source_id, str(e)[:80]))
 
     # Summary

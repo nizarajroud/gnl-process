@@ -1,39 +1,51 @@
-# Product Context
+# GNL Process - Product Context
 
-## Purpose
-Automate the end-to-end process of creating educational podcasts from PDF documents using Google NotebookLM's AI audio generation, with full lifecycle management (split, generate, download, convert, combine).
+## What is GNL?
+GNL (Google NotebookLM) Process is a personal automation system that converts PDF documents into podcast-style audio content using Google NotebookLM's Audio Overview feature.
 
-## Target Users
-- Single user (personal learning tool)
-- Content: AWS certifications, technical documentation, "What's New" digests
+## Use Cases
+- Convert AWS What's New monthly reports into Arabic podcast episodes
+- Split large PDFs into manageable chunks for individual podcast generation
+- Produce multi-part podcast series from technical documentation
 
-## Core Use Cases
-1. **Bulk PDF Processing**: Split large PDFs (exam prep, documentation) into chunks, generate individual podcasts, then combine into a single audio file
-2. **Web Content Podcasts**: Convert web articles and YouTube videos into audio podcasts via NotebookLM
-3. **What's New Digests**: Crawl AWS What's New pages, aggregate monthly content, generate podcast episodes
-4. **Exam Preparation**: Generate Anki flashcards and audio content from certification materials
-
-## Content Sources
-- Local PDF files (exam dumps, documentation) — primary source
-- Web URLs (AWS blogs, What's New)
-- YouTube videos
-- Google Drive documents
-
-## Output
-- MP3 podcast files organized by theme/subtheme
-- Stored in Google Drive (`GNL-BACKLOG` folder)
-- Organized as: `{theme}/{subtheme}/{podcast-name}.mp3`
+## User Workflow
+1. User splits a PDF into parts and inserts records into DB
+2. System generates podcast names (titles)
+3. System creates NotebookLM notebooks, uploads PDFs, generates audio
+4. System downloads completed audio files
+5. System converts and combines into final podcast episode
 
 ## Constraints
-- NotebookLM has no public API (consumer version) — requires browser automation
-- NotebookLM Enterprise API exists but requires Google Cloud project + licensing (not applicable)
-- NotebookLM cannot access localhost/local network URLs — must upload files directly
-- Daily generation quota: ~20 podcasts per day (Google's implicit limit)
-- Audio generation takes ~5-10 minutes per podcast
-- Chrome profile must maintain Google session (SingletonLock auto-cleaned)
-- Only one Nova Act instance can use the Chrome profile at a time
-- Google blocks automated browsers from authenticating (Playwright MCP cannot be used)
-- WSL memory (~16GB) shared with VS Code, n8n, MCP servers — Chrome can crash if memory is low
 
-## Subscription
-- Google One AI Premium (5TB, CA$13.49/month) — consumer NotebookLM, not Enterprise
+### NotebookLM Quota (Google AI Pro)
+- **20 audio overviews per day** (hard limit)
+- A parent with >20 records requires multiple days to complete
+- The orchestrator handles this automatically — re-run daily until complete
+
+### Multi-Day Strategy
+- Day 1: Generate up to 20 audios, download what's ready
+- Day 2+: Generate remaining, download all pending
+- Convert/combine only when ALL parts of a parent are downloaded
+- No partial podcasts — either complete or wait
+
+### Audio Characteristics
+- Format: M4A (from NotebookLM), converted to MP3
+- Duration: ~12 minutes per part (controlled by prompt)
+- Language: Arabic (controlled by source PDF language)
+- Generation time: 5-10 minutes per audio
+
+### Naming Convention
+- Notebook title = `podcast_name` in DB (used as lookup key)
+- Pattern: `p{N}-{subtheme}` (e.g., `p1-whatsnew-mars`)
+- Must be unique across all notebooks for reliable matching
+
+### Reliability
+- Generation is confirmed via status polling before marking DB
+- Failed generations trigger automatic notebook cleanup
+- Download uses polling with configurable timeout (45min default)
+- Scripts are idempotent — safe to re-run without side effects
+
+## Non-Goals
+- Real-time podcast generation (batch processing only)
+- Multi-user support (single Google account)
+- Custom audio voices or music (NotebookLM default hosts)

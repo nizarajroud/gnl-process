@@ -1,30 +1,51 @@
-# Technology & Architecture
+# GNL Process - Technology & Architecture
 
 ## System Architecture
 
 ```
-┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
-│   n8n        │────▶│ Python Scripts│────▶│  NotebookLM     │
-│  Workflow    │     │  (CLI/fire)  │     │  (via Nova Act) │
-│ localhost:5678│     └──────┬───────┘     └─────────────────┘
-└─────────────┘            │
-                    ┌──────▼───────┐
-                    │   SQLite DB   │
-                    │   (gnl.db)    │
-                    └──────────────┘
+n8n (localhost:5678)
+  ├── MainForm → split → CollectAndSave → get_title → generate_and_deliver.py
+  ├── Download Form → download_via_mcp.py
+  ├── Clean Form → clean_notebooks_mcp.py
+  ├── Daily Schedule → generate_and_deliver.py --all
+  └── What's New Form → whats_new_report.py
+
+generate_and_deliver.py (orchestrator)
+  ├── generate_via_mcp.py (create notebook + upload + generate audio)
+  ├── download_via_mcp.py (poll + download completed audio)
+  ├── batch_convert_to_mp3_v2.py (m4a → mp3)
+  └── combine_mp3_v2.py (concatenate all mp3s)
 ```
 
-## n8n Workflow Flow (GNL.json)
+## NotebookLM Integration (MCP Library)
 
-```
-MainForm → mount g-drive → Switch (by Type)
-  └── LocalStorage → LocalStorage1 form → find_local_main_source → Code → split_pdf
-      → CollectAndSave → Generate bulk titles → Generate Bulk Podcasts
-      → Download Bulk Podcasts → Validate States → Wait for Approval
-      → Convert Bulk Podcasts → Combine Bulk Podcasts
+### Library: `notebooklm_tools`
+- Installed at: `/home/nizar/.local/lib/python3.13/site-packages/notebooklm_tools/`
+- CLI: `notebooklm-mcp` (MCP server) and `nlm` (auth CLI)
+- Auth: `nlm login` → cached tokens at `~/.notebooklm-mcp/`
 
-What's New Form (independent trigger) → Generate What's New Report
+### Key Services Used
+```python
+from notebooklm_tools.mcp.tools._utils import get_client
+from notebooklm_tools.services.notebooks import create_notebook, list_notebooks, delete_notebook
+from notebooklm_tools.services.sources import add_source
+from notebooklm_tools.services.studio import create_artifact, get_studio_status
+from notebooklm_tools.services.downloads import download_async
 ```
+
+### API Patterns
+- `create_notebook(client, title=...)` → returns `{notebook_id: ...}`
+- `add_source(client, notebook_id, source_type="file", file_path=..., wait=True)` → uploads local PDF
+- `create_artifact(client, notebook_id, artifact_type="audio", focus_prompt=...)` → starts generation
+- `get_studio_status(client, notebook_id)` → returns artifacts with status and URLs
+- `download_async(client, notebook_id, "audio", output_path)` → downloads audio file (requires asyncio.run)
+- `delete_notebook(client, notebook_id)` → permanent deletion
+
+### Important Notes
+- Audio download requires `download_async()` (not `download_sync()`)
+- Audio URLs require Google auth (cannot download with plain requests)
+- `get_studio_status` returns artifact status: `in_progress` or `completed`
+- Generation confirmation: poll `get_studio_status` until `in_progress` before marking DB
 
 ## Database Schema
 
@@ -32,88 +53,48 @@ What's New Form (independent trigger) → Generate What's New Report
 | Column | Type | Description |
 |--------|------|-------------|
 | id | INTEGER PK | Auto-increment |
-| parent_file | TEXT | Original file name |
-| source_path | TEXT | Directory path |
-| source_type | TEXT | GoogleDrive/WebAndYoutube/LocalStorage |
-| podcast_theme | TEXT | Top-level category (AWS, AIP) |
-| podcast_subtheme | TEXT | Sub-category (exam, nllm-disc, aws-data) |
-| split_configuration | TEXT | e.g. "14ck-3p" (14 chunks, 3 pages each) |
-| generation_mode | TEXT | single/bulk |
-| combination_state | INTEGER | 0=pending, 1=done |
-| daily_quota_remaining | INTEGER | Remaining daily quota |
-| quota_date | TEXT | Date of last quota reset |
+| source_type | TEXT | LocalStorage, WebAndYoutube |
+| generation_mode | TEXT | bulk, single |
+| podcast_theme | TEXT | aws, azure, etc. |
+| podcast_subtheme | TEXT | whatsnew-mars, etc. |
+| parent_file | TEXT | Source filename |
+| source_path | TEXT | Full path to source directory |
 
 ### podcast_download
 | Column | Type | Description |
 |--------|------|-------------|
 | id | INTEGER PK | Auto-increment |
-| parent_configuration_id | INTEGER FK | Links to parent |
-| source_id | TEXT | Filename (p1.pdf, q3.pdf) |
-| podcast_name | TEXT | Generated podcast name |
+| parent_configuration_id | INTEGER FK | References parent_configuration |
+| source_id | TEXT | p1.pdf, p2.pdf, etc. |
+| podcast_name | TEXT | Notebook title in NotebookLM |
 | generation_state | INTEGER | 0=pending, 1=done |
 | download_state | INTEGER | 0=pending, 1=done |
 | conversion_state | INTEGER | 0=pending, 1=done |
-| date | TEXT | Processing date |
+| date | TEXT | Date of generation |
 
-### crawl_source / crawl_item
-Used for web crawling (What's New pages). Tracks URLs, post dates, and processing state.
+## Environment Variables
+| Variable | Description | Default |
+|----------|-------------|---------|
+| AUDIO_PARTS_FOLDER | Output directory for downloaded audio | required |
+| GNL_BACKLOG | Google Drive backlog folder | required |
+| MCP_DOWNLOAD_TIMEOUT | Download polling timeout (seconds) | 2700 |
+| TRACING | Enable tracing logs | 0 |
 
-## File Organization
-
+## File Flow
 ```
-GNL-PROCESS/
-├── Main-docs/          # Source PDFs
-├── PDF-Parts/          # Split PDF chunks
-│   └── {subtheme}/
-│       └── {name}/     # p1.pdf, p2.pdf, ...
-└── Audio-Parts/        # Downloaded audio before combination
-
-GNL-BACKLOG/ (Google Drive)
-├── {theme}/
-│   └── {subtheme}/
-│       ├── podcast1.mp3
-│       └── combined-output.mp3
-
-prompts/                # Audio generation prompts
-├── default.txt         # Fallback prompt
-└── {subfolder}.txt     # Per-subtheme prompt (e.g. aws-whats-new.txt)
+Source PDF → split_pdf.py → p1.pdf, p2.pdf, ...
+  → CollectAndSave.py → DB records
+  → get_title_v2.py → podcast_name in DB
+  → generate_via_mcp.py → NotebookLM notebooks with audio
+  → download_via_mcp.py → Audio-Parts/{subtheme}/{parent_file}/{name}.m4a
+  → batch_convert_to_mp3_v2.py → .mp3 files
+  → combine_mp3_v2.py → final combined podcast
 ```
 
-## Key Dependencies
-- `nova_act` — Browser automation for NotebookLM (v3.x+)
-- `fire` — CLI argument parsing
-- `PyPDF2` + `fitz` (PyMuPDF) — PDF splitting
-- `ffmpeg` — Audio conversion (m4a→mp3) and concatenation
-- `sqlite3` — Database (stdlib)
-- `python-dotenv` — Environment configuration
-- `requests` + `beautifulsoup4` — Web crawling
-
-## Environment Variables (see .env.example)
-| Variable | Purpose |
-|----------|---------|
-| NOVA_ACT_API_KEY | Nova Act free version authentication |
-| USER_DATA_DIR | Chrome profile path |
-| HEADLESS | Browser visibility (0=visible, 1=headless) |
-| GNL_BACKLOG | Final audio output path (Google Drive) |
-| GNL_PROCESSING_PATH | Source documents path |
-| PDF_PARTS_FOLDER | Split PDF output path |
-| AUDIO_PARTS_FOLDER | Downloaded audio path |
-| DEFAULT_SPEED | Audio playback speed multiplier |
-| AWS_REGION | For Bedrock/Claude calls |
-| MOEDL_INFERENCE_ID | Claude model ID for text generation |
-| NOTION_API_KEY | Notion integration |
-| NOTION_PAGE_ID | Notion target page |
-
-## Known Limitations
-- Nova Act free version has daily rate limits
-- Only one Nova Act instance can use the Chrome profile at a time (SingletonLock)
-- NotebookLM cannot access localhost URLs (cloud service)
-- Google blocks Playwright/automated browsers from OAuth login
-- File upload via hidden input (agentType) works but depends on NotebookLM UI stability
-- generation_state may not update if script crashes after generation but before DB write (mitigated by updating immediately after audio generation starts)
-- WSL memory constraints can cause Chrome EPIPE crashes — monitor with `free -h`
-
-## Active Branches
-- `main` — stable, production-ready
-- `feat/independent-phases` — WIP: independent Subscribe/Process&Deliver/All Phases with dynamic parent dropdown
-- `feat/bedrock-agent-core` — WIP: Bedrock AgentCore integration
+## Learnings & Constraints
+- Google auth cannot be automated with Playwright/Puppeteer (anti-bot detection)
+- `nlm login` handles auth via headless Chrome with saved profile
+- NotebookLM audio generation takes 5-10 minutes per file
+- Daily quota: 20 audio overviews (Google AI Pro plan)
+- Audio files are .m4a (MP4 container) from NotebookLM
+- Notebook titles must be unique for lookup (podcast_name used as key)
