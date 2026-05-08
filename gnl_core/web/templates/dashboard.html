@@ -59,7 +59,7 @@
                         <th class="text-left py-2">Actions</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="status-table">
                     {% for p in parents %}
                     <tr class="border-b border-gray-700">
                         <td class="py-2">{{ p.id }}</td>
@@ -126,13 +126,18 @@
         const ws = new WebSocket(`ws://${window.location.host}/ws/logs`);
         const logsDiv = document.getElementById('logs');
         ws.onmessage = (e) => {
-            const line = document.createElement('div');
-            line.textContent = `[${new Date().toLocaleTimeString()}] ${e.data}`;
-            if (e.data.startsWith('✓')) line.className = 'text-green-400';
-            else if (e.data.startsWith('⚠')) line.className = 'text-red-400';
-            else if (e.data.startsWith('▶')) line.className = 'text-blue-400';
-            logsDiv.appendChild(line);
-            logsDiv.scrollTop = logsDiv.scrollHeight;
+            const data = JSON.parse(e.data);
+            if (data.type === 'log') {
+                const line = document.createElement('div');
+                line.textContent = `[${new Date().toLocaleTimeString()}] ${data.msg}`;
+                if (data.msg.startsWith('✓')) line.className = 'text-green-400';
+                else if (data.msg.startsWith('⚠')) line.className = 'text-red-400';
+                else if (data.msg.startsWith('▶')) line.className = 'text-blue-400';
+                logsDiv.appendChild(line);
+                logsDiv.scrollTop = logsDiv.scrollHeight;
+            } else if (data.type === 'status_update') {
+                document.getElementById('status-table').innerHTML = data.html;
+            }
         };
     </script>
 </body>

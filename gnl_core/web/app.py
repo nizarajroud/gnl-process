@@ -55,7 +55,43 @@ app = FastAPI(title="GNL Process", lifespan=lifespan)
 async def broadcast_log(msg: str):
     for ws in ws_clients[:]:
         try:
-            await ws.send_text(msg)
+            await ws.send_text(json.dumps({"type": "log", "msg": msg}))
+        except Exception:
+            ws_clients.remove(ws)
+
+
+async def broadcast_status():
+    """Push updated status table HTML to all clients."""
+    from gnl_core.db import get_db, parent_status
+    with get_db() as conn:
+        rows = conn.execute("SELECT id, podcast_subtheme, parent_file FROM parent_configuration").fetchall()
+    
+    html_rows = ""
+    for row in rows:
+        s = parent_status(row['id'])
+        gen_class = "text-green-400" if s['generated'] == s['total'] else "text-yellow-400"
+        dl_class = "text-green-400" if s['downloaded'] == s['total'] else "text-yellow-400"
+        conv_class = "text-green-400" if s['converted'] == s['total'] else "text-yellow-400"
+        html_rows += f"""<tr class="border-b border-gray-700">
+            <td class="py-2">{row['id']}</td>
+            <td class="py-2">{row['podcast_subtheme']}</td>
+            <td class="py-2"><span class="{gen_class}">{s['generated']}/{s['total']}</span></td>
+            <td class="py-2"><span class="{dl_class}">{s['downloaded']}/{s['total']}</span></td>
+            <td class="py-2"><span class="{conv_class}">{s['converted']}/{s['total']}</span></td>
+            <td class="py-2 space-x-1">
+                <button hx-post="/action/generate/{row['id']}" hx-swap="none" class="px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs">Gen</button>
+                <button hx-post="/action/download/{row['id']}" hx-swap="none" class="px-2 py-1 bg-purple-600 hover:bg-purple-500 rounded text-xs">DL</button>
+                <button hx-post="/action/convert/{row['id']}" hx-swap="none" class="px-2 py-1 bg-orange-600 hover:bg-orange-500 rounded text-xs">Conv</button>
+                <button hx-post="/action/deliver/{row['id']}" hx-swap="none" class="px-2 py-1 bg-green-600 hover:bg-green-500 rounded text-xs">Deliver</button>
+                <button hx-post="/action/clean/{row['id']}" hx-swap="none" class="px-2 py-1 bg-red-600 hover:bg-red-500 rounded text-xs">Clean</button>
+            </td></tr>"""
+    
+    if not html_rows:
+        html_rows = '<tr><td colspan="6" class="py-4 text-center text-gray-500">No parents in database</td></tr>'
+
+    for ws in ws_clients[:]:
+        try:
+            await ws.send_text(json.dumps({"type": "status_update", "html": html_rows}))
         except Exception:
             ws_clients.remove(ws)
 
@@ -129,6 +165,8 @@ async def _run_action(action: str, parent_id: int):
             await broadcast_log(f"✓ Cleaned {d} notebooks")
     except Exception as e:
         await broadcast_log(f"⚠ Error: {str(e)[:100]}")
+    finally:
+        await broadcast_status()
 
 
 @app.post("/prepare")
@@ -161,6 +199,7 @@ async def prepare_pdf(request: Request):
         count = generate_titles(parent_id)
         os.unlink(tmp)
         await broadcast_log(f"✓ Prepared: {len(result['files'])} chunks, parent_id={parent_id}, {count} titles")
+        await broadcast_status()
         return {"status": "ok", "parent_id": parent_id}
     except Exception as e:
         await broadcast_log(f"⚠ Prepare failed: {str(e)[:100]}")
