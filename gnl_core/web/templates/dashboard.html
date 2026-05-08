@@ -13,7 +13,41 @@
 
         <!-- Status Table -->
         <div class="bg-gray-800 rounded-lg p-4 mb-6">
-            <h2 class="text-xl font-semibold mb-3">Pipeline Status</h2>
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-xl font-semibold">Pipeline Status</h2>
+                <button onclick="document.getElementById('prepareForm').classList.toggle('hidden')"
+                    class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">+ New PDF</button>
+            </div>
+
+            <!-- Prepare Form (hidden by default) -->
+            <div id="prepareForm" class="hidden mb-4 p-4 bg-gray-700 rounded">
+                <form hx-post="/prepare" hx-swap="none" hx-encoding="multipart/form-data" class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs text-gray-400">PDF File</label>
+                        <input type="file" name="pdf" accept=".pdf" class="w-full bg-gray-600 rounded px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400">Pages per split</label>
+                        <input type="number" name="pages" value="3" class="w-full bg-gray-600 rounded px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400">Name</label>
+                        <input type="text" name="name" placeholder="whatsnew-mars-2026" class="w-full bg-gray-600 rounded px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400">Theme</label>
+                        <input type="text" name="theme" value="aws" class="w-full bg-gray-600 rounded px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400">Subtheme</label>
+                        <input type="text" name="subtheme" placeholder="whatsnew-mars" class="w-full bg-gray-600 rounded px-2 py-1 text-sm">
+                    </div>
+                    <div class="flex items-end">
+                        <button type="submit" class="px-4 py-1 bg-green-600 hover:bg-green-500 rounded text-sm">Prepare</button>
+                    </div>
+                </form>
+            </div>
+
             <table class="w-full text-sm">
                 <thead>
                     <tr class="text-gray-400 border-b border-gray-700">

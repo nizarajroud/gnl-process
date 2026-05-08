@@ -14,6 +14,30 @@ def cli():
 
 
 @cli.command()
+@click.option('--pdf', required=True, help='Path to PDF file')
+@click.option('--pages', required=True, type=int, help='Pages per split')
+@click.option('--name', required=True, help='Parent name (folder name)')
+@click.option('--theme', required=True, help='Podcast theme (e.g. aws)')
+@click.option('--subtheme', required=True, help='Podcast subtheme (e.g. whatsnew-mars)')
+def prepare(pdf, pages, name, theme, subtheme):
+    """Split PDF + insert DB + generate titles. Returns parent_id."""
+    from gnl_core.split import split
+    from gnl_core.collect import collect
+    from gnl_core.titles import generate_titles
+
+    click.echo(f"Splitting {pdf} ({pages} pages/chunk)...")
+    result = split(pdf, pages, name, podcast_theme=theme, podcast_subtheme=subtheme)
+    click.echo(f"  → {len(result['files'])} chunks")
+
+    parent_id = collect(result)
+    click.echo(f"  → parent_id={parent_id}")
+
+    count = generate_titles(parent_id)
+    click.echo(f"  → {count} titles generated")
+    click.echo(f"✓ Ready. Run: gnl deliver --parent_id={parent_id}")
+
+
+@cli.command()
 @click.option('--parent_id', type=int, required=True)
 def generate(parent_id):
     """Generate podcasts for a parent."""

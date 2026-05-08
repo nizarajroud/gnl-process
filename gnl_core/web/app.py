@@ -131,6 +131,42 @@ async def _run_action(action: str, parent_id: int):
         await broadcast_log(f"⚠ Error: {str(e)[:100]}")
 
 
+@app.post("/prepare")
+async def prepare_pdf(request: Request):
+    """Upload PDF, split, collect, generate titles."""
+    from fastapi import UploadFile, Form
+    import tempfile
+
+    form = await request.form()
+    pdf_file = form.get("pdf")
+    pages = int(form.get("pages", 3))
+    name = form.get("name", "")
+    theme = form.get("theme", "")
+    subtheme = form.get("subtheme", "")
+
+    # Save uploaded file to temp
+    tmp = os.path.join(tempfile.gettempdir(), pdf_file.filename)
+    with open(tmp, "wb") as f:
+        f.write(await pdf_file.read())
+
+    await broadcast_log(f"▶ Preparing {pdf_file.filename} ({pages}p/chunk)")
+
+    try:
+        from gnl_core.split import split
+        from gnl_core.collect import collect
+        from gnl_core.titles import generate_titles
+
+        result = split(tmp, pages, name, podcast_theme=theme, podcast_subtheme=subtheme)
+        parent_id = collect(result)
+        count = generate_titles(parent_id)
+        os.unlink(tmp)
+        await broadcast_log(f"✓ Prepared: {len(result['files'])} chunks, parent_id={parent_id}, {count} titles")
+        return {"status": "ok", "parent_id": parent_id}
+    except Exception as e:
+        await broadcast_log(f"⚠ Prepare failed: {str(e)[:100]}")
+        return {"status": "error", "error": str(e)}
+
+
 @app.post("/schedule")
 async def update_schedule(request: Request):
     """Update daily schedule time."""
