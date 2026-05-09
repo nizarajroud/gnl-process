@@ -10,23 +10,39 @@ import os
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gnl.db')
 
+CURRENT_VERSION = 2
+
 
 def setup_database(db_path=None):
     db_path = db_path or DB_PATH
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # Series catalog (themes and subthemes for form dropdowns)
+    # Schema version tracking
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS series_catalog (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            theme TEXT NOT NULL,
-            subtheme TEXT NOT NULL,
-            UNIQUE(theme, subtheme)
+        CREATE TABLE IF NOT EXISTS schema_version (
+            version INTEGER NOT NULL,
+            applied_at TEXT DEFAULT (datetime('now'))
         )
     ''')
 
-    # Parent configuration
+    # Check current version
+    cursor.execute("SELECT MAX(version) FROM schema_version")
+    row = cursor.fetchone()
+    current = row[0] if row[0] else 0
+
+    if current < 1:
+        _apply_v1(cursor)
+    if current < 2:
+        _apply_v2(cursor)
+
+    conn.commit()
+    conn.close()
+    print(f"✓ Database ready (v{CURRENT_VERSION}): {db_path}")
+
+
+def _apply_v1(cursor):
+    """v1: Initial schema."""
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS parent_configuration (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,7 +57,6 @@ def setup_database(db_path=None):
         )
     ''')
 
-    # Podcast download (individual episodes)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS podcast_download (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +71,6 @@ def setup_database(db_path=None):
         )
     ''')
 
-    # Crawl source
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS crawl_source (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,7 +81,6 @@ def setup_database(db_path=None):
         )
     ''')
 
-    # Crawl item
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS crawl_item (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,7 +96,20 @@ def setup_database(db_path=None):
         )
     ''')
 
-    # Seed series_catalog with known themes/subthemes
+    cursor.execute("INSERT INTO schema_version (version) VALUES (1)")
+
+
+def _apply_v2(cursor):
+    """v2: Series catalog."""
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS series_catalog (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            theme TEXT NOT NULL,
+            subtheme TEXT NOT NULL,
+            UNIQUE(theme, subtheme)
+        )
+    ''')
+
     seeds = [
         ("aws", "aws-whats-new"),
         ("aws", "aws-solutions-lib"),
@@ -93,9 +119,7 @@ def setup_database(db_path=None):
         "INSERT OR IGNORE INTO series_catalog (theme, subtheme) VALUES (?, ?)", seeds
     )
 
-    conn.commit()
-    conn.close()
-    print(f"✓ Database ready: {db_path}")
+    cursor.execute("INSERT INTO schema_version (version) VALUES (2)")
 
 
 if __name__ == "__main__":
