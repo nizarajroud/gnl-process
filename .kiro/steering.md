@@ -26,6 +26,11 @@ Automated workflow for processing content sources into NotebookLM podcasts with 
 - **Épisode**: A single audio file generated from one PDF chunk
 - **Série**: The overarching theme (e.g., "AWS What's New")
 
+## Version Roadmap
+- **v1.0** — Legacy (Nova Act + n8n + Chrome)
+- **v2.0** — MVP: Web UI + MCP library + CLI (current)
+- **v3.0** — Full Parameterized: Admin profile with all configuration via web UI (no .env editing)
+
 ## Key Conventions
 - All scripts use `python-fire` for CLI interface
 - Environment config via `.env` file (managed by Bitwarden, never committed — `.env.example` provided)
