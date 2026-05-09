@@ -12,7 +12,9 @@
         <div class="flex justify-between items-center mb-8">
             <h1 class="text-3xl font-bold">🎙️ GNL Process</h1>
             <div class="flex items-center gap-4">
-                <button hx-post="/action/reset/0" hx-swap="none" hx-confirm="Tout supprimer ?"
+                <span id="quota" class="text-sm {% if quota_remaining > 5 %}text-green-400{% elif quota_remaining > 0 %}text-yellow-400{% else %}text-red-400{% endif %}">🎯 {{ quota_remaining }}/20</span>
+                <button hx-post="/refresh" hx-swap="none" class="px-2 py-1 text-gray-400 hover:text-white text-sm">↻</button>
+                <button hx-post="/action/reset/0" hx-swap="none" data-reset hx-confirm="Tout réinitialiser ?"
                     class="px-3 py-1 bg-red-800 hover:bg-red-700 rounded text-xs">🔄 Reset</button>
                 <span class="text-xs text-gray-400">TEST</span>
                 <button id="test-toggle" hx-post="/toggle-test-mode" hx-swap="none"
@@ -34,23 +36,25 @@
             <form hx-post="/prepare" hx-swap="none" hx-encoding="multipart/form-data" class="grid grid-cols-2 gap-3">
                 <div>
                     <label class="text-xs text-gray-400">PDF</label>
-                    <input type="file" name="pdf" accept=".pdf" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
+                    <input type="file" name="pdf" accept=".pdf" class="w-full bg-gray-700 rounded px-2 py-1 text-sm"
+                        onchange="const n=this.files[0]?.name.replace('.pdf','');if(n)this.closest('form').querySelector('[name=name]').value=n">
                 </div>
                 <div>
                     <label class="text-xs text-gray-400">Pages par épisode</label>
-                    <input type="number" name="pages" value="3" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
+                    <input type="number" name="pages" value="1" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
                 </div>
                 <div>
                     <label class="text-xs text-gray-400">Nom</label>
-                    <input type="text" name="name" placeholder="whatsnew-mars-2026" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
+                    <input type="text" name="name" placeholder="" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
                 </div>
                 <div>
                     <label class="text-xs text-gray-400">Thème</label>
-                    <input type="text" name="theme" value="aws" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
+                    <select name="theme" id="themeSelect" class="w-full bg-gray-700 rounded px-2 py-1 text-sm"
+                        onchange="updateSubthemes()"></select>
                 </div>
                 <div>
                     <label class="text-xs text-gray-400">Sous-thème</label>
-                    <input type="text" name="subtheme" placeholder="whatsnew-mars" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
+                    <select name="subtheme" id="subthemeSelect" class="w-full bg-gray-700 rounded px-2 py-1 text-sm"></select>
                 </div>
                 <div class="flex items-end">
                     <button type="submit" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-medium">Créer</button>
@@ -64,12 +68,15 @@
             <div class="bg-gray-800 rounded-lg p-5">
                 <div class="flex justify-between items-start mb-4">
                     <div>
-                        <h3 class="font-semibold text-lg">{{ p.subtheme }}</h3>
+                        <h3 class="font-semibold text-lg">{{ p.parent_file }}</h3>
                         <span class="text-xs text-gray-400">{{ p.total }} épisodes</span>
                     </div>
                     <div class="flex items-center gap-2">
-                        {% if p.converted == p.total and p.total > 0 %}
+                        {% if p.combined == 1 %}
                             <span class="px-3 py-1 bg-green-900 text-green-300 rounded-full text-xs font-medium">✅ Terminé</span>
+                        {% elif p.converted == p.total and p.total > 0 %}
+                            <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
+                                class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-medium">▶ Combiner</button>
                         {% elif p.generated == 0 %}
                             <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
                                 class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium">▶ Lancer</button>
@@ -80,7 +87,7 @@
                             <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
                                 class="px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-sm font-medium">▶ Finaliser</button>
                         {% endif %}
-                        <button hx-post="/action/clean/{{ p.id }}" hx-swap="none" onclick="this.disabled=true"
+                        <button hx-post="/action/clean/{{ p.id }}" hx-swap="none" hx-confirm="Supprimer cette édition ?" onclick="this.disabled=true"
                             class="px-2 py-1 text-red-400 hover:text-red-300 text-xs">🗑</button>
                     </div>
                 </div>
@@ -91,11 +98,12 @@
                         ("Préparé", p.total, p.total),
                         ("Généré", p.generated, p.total),
                         ("Téléchargé", p.downloaded, p.total),
-                        ("Converti", p.converted, p.total)
+                        ("Converti", p.converted, p.total),
+                        ("Combiné", p.combined, 1)
                     ] %}
                     <div class="flex items-center justify-between">
                         {% for label, done, total in steps %}
-                        <div class="flex flex-col items-center flex-1">
+                        <div class="flex flex-col items-center z-10" style="width:20px">
                             <div class="w-4 h-4 rounded-full border-2 
                                 {% if done == total %}bg-green-500 border-green-500
                                 {% elif done > 0 %}bg-yellow-500 border-yellow-500 animate-pulse
@@ -106,8 +114,17 @@
                             <span class="text-xs text-gray-500">{{ done }}/{{ total }}</span>
                         </div>
                         {% if not loop.last %}
-                        <div class="flex-1 h-0.5 -mt-6 
-                            {% if done == total %}bg-green-500{% elif done > 0 %}bg-yellow-500{% else %}bg-gray-700{% endif %}"></div>
+                        {% set next_done = steps[loop.index][1] %}
+                        {% set next_total = steps[loop.index][2] %}
+                        {% set pct = (next_done / next_total * 100) if next_total > 0 else 0 %}
+                        {% set current_complete = (done == total) %}
+                        <div class="flex-1 h-1.5 -mt-6 bg-gray-700 rounded-full overflow-hidden mx-1">
+                            <div class="h-full rounded-full transition-all duration-500
+                                {% if current_complete and pct == 100 %}bg-green-500
+                                {% elif current_complete %}bg-green-500
+                                {% elif pct > 0 %}bg-yellow-500{% endif %}"
+                                style="width: {% if current_complete %}100{% else %}{{ pct }}{% endif %}%"></div>
+                        </div>
                         {% endif %}
                         {% endfor %}
                     </div>
@@ -146,22 +163,94 @@
     </div>
 
     <script>
+        let catalog = {};
+        fetch('/api/catalog').then(r=>r.json()).then(data=>{
+            catalog = data;
+            const sel = document.getElementById('themeSelect');
+            Object.keys(data).forEach(t=>{sel.add(new Option(t,t))});
+            updateSubthemes();
+        });
+        function updateSubthemes(){
+            const theme = document.getElementById('themeSelect').value;
+            const sel = document.getElementById('subthemeSelect');
+            sel.innerHTML = '';
+            (catalog[theme]||[]).forEach(s=>{sel.add(new Option(s,s))});
+        }
+
+        // Handle reset side effects after successful request
+        document.addEventListener('htmx:afterRequest', (e) => {
+            if (e.detail.pathInfo.requestPath === '/action/reset/0' && e.detail.successful) {
+                document.getElementById('logs').innerHTML = '<div class="text-gray-500">En attente...</div>';
+                document.getElementById('newEdition').classList.remove('hidden');
+            }
+        });
+
+        // Quota check before deliver
+        document.addEventListener('htmx:configRequest', async (e) => {
+            const path = e.detail.path;
+            if (!path.includes('/action/deliver/')) return;
+            const parentId = path.split('/').pop();
+            const resp = await fetch(`/api/quota-check/${parentId}`);
+            const data = await resp.json();
+            if (data.to_generate === 0 || data.sufficient) return;
+            e.preventDefault();
+            const ok = confirm(`⚠️ Quota insuffisant\n\nIl reste ${data.remaining} crédits aujourd'hui.\nL'édition a ${data.total} épisodes (${data.to_generate} à générer).\n\nGénérer les ${data.remaining} premiers maintenant ? (${data.pct}%)\n\nLe fichier sera suffixé: -part${data.pct}`);
+            if (ok) {
+                fetch(path, {method:'POST'});
+                running = true;
+                document.querySelectorAll('#editions button[hx-post*="/action/"]').forEach(b => {
+                    b.disabled = true; b.classList.add('opacity-50','cursor-not-allowed');
+                });
+            }
+        });
+
         const ws = new WebSocket(`ws://${window.location.host}/ws/logs`);
         const logsDiv = document.getElementById('logs');
+        let running = false;
+
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[hx-post*="/action/"]');
+            if (!btn || btn.hasAttribute('data-reset') || btn.hasAttribute('hx-confirm')) return;
+            if (running) { e.preventDefault(); e.stopPropagation(); return; }
+            running = true;
+            document.querySelectorAll('#editions button[hx-post*="/action/"]:not([hx-confirm])').forEach(b => {
+                b.disabled = true;
+                b.classList.add('opacity-50', 'cursor-not-allowed');
+            });
+            btn.textContent = '...';
+        });
 
         ws.onmessage = (e) => {
             const data = JSON.parse(e.data);
             if (data.type === 'log') {
                 const line = document.createElement('div');
                 line.textContent = `[${new Date().toLocaleTimeString()}] ${data.msg}`;
-                if (data.msg.startsWith('✓')) line.className = 'text-green-400';
+                if (data.msg.startsWith('✓') || data.msg.startsWith('🔄')) line.className = 'text-green-400';
                 else if (data.msg.startsWith('⚠')) line.className = 'text-red-400';
                 else if (data.msg.startsWith('▶')) line.className = 'text-blue-400';
                 else if (data.msg.startsWith('🧪') || data.msg.startsWith('🚀')) line.className = 'text-purple-400';
+                else if (data.msg.startsWith('⏳')) line.className = 'text-yellow-400 animate-pulse';
                 logsDiv.appendChild(line);
                 logsDiv.scrollTop = logsDiv.scrollHeight;
+                // Unlock on completion
+                if (data.msg === '__done__') {
+                    running = false;
+                    return; // don't display this internal message
+                }
             } else if (data.type === 'status_update') {
                 document.getElementById('editions').innerHTML = data.html;
+                htmx.process(document.getElementById('editions'));
+                if (data.quota !== undefined) {
+                    const q = document.getElementById('quota');
+                    q.textContent = `🎯 ${data.quota}/20`;
+                    q.className = data.quota > 5 ? 'text-sm text-green-400' : (data.quota > 0 ? 'text-sm text-yellow-400' : 'text-sm text-red-400');
+                }
+                if (running) {
+                    document.querySelectorAll('#editions button[hx-post*="/action/"]').forEach(b => {
+                        b.disabled = true;
+                        b.classList.add('opacity-50', 'cursor-not-allowed');
+                    });
+                }
             }
         };
     </script>

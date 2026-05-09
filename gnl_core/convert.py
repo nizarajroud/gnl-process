@@ -13,6 +13,7 @@ def convert(parent_id, db_path=None):
     if not records:
         return [], []
 
+    test_mode = os.getenv('TEST_MODE', '0') == '1'
     _, _, _, subfolder = resolve_parent(parent_id, db_path)
     audio_parts_folder = os.getenv('AUDIO_PARTS_FOLDER', '')
     succeeded, failed = [], []
@@ -31,13 +32,16 @@ def convert(parent_id, db_path=None):
             failed.append({**rec, 'reason': 'File not found'})
             continue
 
-        result = subprocess.run(['ffmpeg', '-y', '-i', str(input_file), str(output_file)],
-                               capture_output=True, text=True)
-        if result.returncode != 0:
-            failed.append({**rec, 'reason': 'FFmpeg error'})
-            continue
+        if test_mode:
+            input_file.rename(output_file)
+        else:
+            result = subprocess.run(['ffmpeg', '-y', '-i', str(input_file), str(output_file)],
+                                   capture_output=True, text=True)
+            if result.returncode != 0:
+                failed.append({**rec, 'reason': 'FFmpeg error'})
+                continue
+            input_file.unlink()
 
-        input_file.unlink()
         update_state(rec['id'], db_path, conversion_state=1)
         succeeded.append(rec)
 

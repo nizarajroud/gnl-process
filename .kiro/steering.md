@@ -100,6 +100,8 @@ gnl clean --target=1 --confirm
 2. **Wait for confirmation**: Only execute the plan after the user explicitly confirms.
 3. **No auto-commit/push**: After implementing, do NOT commit or push. Wait for the user to test and explicitly ask for commit/push.
 4. **Never commit/push without clear user confirmation.**
+5. **GitHub issue tracking**: When implementing a story from the GitHub backlog, update the issue status (close it or check off acceptance criteria) once done.
+6. **No duplicate stories**: Before creating a new GitHub issue, check existing issues for duplicates. If the idea already exists, inform the user instead of creating a duplicate.
 
 ## Testing Requirements
 Every story must include:

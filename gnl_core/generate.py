@@ -28,8 +28,10 @@ def _confirm_generation(client, notebook_id):
     return False
 
 
-def generate(parent_id, db_path=None, prompt_dir=None, language=None):
-    """Generate podcasts for pending records. Returns (succeeded, failed) lists."""
+def generate(parent_id, db_path=None, prompt_dir=None, language=None, max_count=None, on_progress=None):
+    """Generate podcasts for pending records. Returns (succeeded, failed) lists.
+    on_progress: optional callback called after each successful generation.
+    """
     language = language or os.getenv('NOTEBOOKLM_LANGUAGE', 'en')
     prompt_dir = prompt_dir or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'prompts')
 
@@ -37,8 +39,11 @@ def generate(parent_id, db_path=None, prompt_dir=None, language=None):
     if not records:
         return [], []
 
+    if max_count is not None:
+        records = records[:max_count]
+
     if _is_test_mode():
-        return _generate_test(records, db_path)
+        return _generate_test(records, db_path, on_progress)
 
     from notebooklm_tools.mcp.tools._utils import get_client
     from notebooklm_tools.services.notebooks import create_notebook, delete_notebook
@@ -74,6 +79,8 @@ def generate(parent_id, db_path=None, prompt_dir=None, language=None):
             if _confirm_generation(client, notebook_id):
                 update_state(rec['id'], db_path, generation_state=1, date=time.strftime("%Y-%m-%d"))
                 succeeded.append(rec)
+                if on_progress:
+                    on_progress(rec)
             else:
                 delete_notebook(client, notebook_id)
                 failed.append({**rec, 'reason': 'Generation not confirmed'})
@@ -88,10 +95,14 @@ def generate(parent_id, db_path=None, prompt_dir=None, language=None):
     return succeeded, failed
 
 
-def _generate_test(records, db_path):
+def _generate_test(records, db_path, on_progress=None):
     """Test mode: simulate generation without API calls."""
+    delay = int(os.getenv('TEST_GENERATION_DELAY', '1'))
     succeeded = []
     for rec in records:
+        time.sleep(delay)
         update_state(rec['id'], db_path, generation_state=1, date=time.strftime("%Y-%m-%d"))
         succeeded.append(rec)
+        if on_progress:
+            on_progress(rec)
     return succeeded, []

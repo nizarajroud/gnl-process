@@ -3,6 +3,9 @@
 import os
 import sqlite3
 from contextlib import contextmanager
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'gnl.db')
 
@@ -64,7 +67,7 @@ def update_state(record_id, db_path=None, **updates):
 
 
 def parent_status(parent_id, db_path=None):
-    """Return counts: total, generated, downloaded, converted."""
+    """Return counts: total, generated, downloaded, converted, combined."""
     with get_db(db_path) as conn:
         row = conn.execute("""
             SELECT COUNT(*) as total,
@@ -73,7 +76,12 @@ def parent_status(parent_id, db_path=None):
                    SUM(CASE WHEN conversion_state = 1 THEN 1 ELSE 0 END) as converted
             FROM podcast_download WHERE parent_configuration_id = ?
         """, (parent_id,)).fetchone()
-    return dict(row)
+        combined_row = conn.execute(
+            "SELECT combination_state FROM parent_configuration WHERE id = ?", (parent_id,)
+        ).fetchone()
+    result = dict(row)
+    result['combined'] = (combined_row['combination_state'] if combined_row else 0)
+    return result
 
 
 def get_active_parents(db_path=None):
