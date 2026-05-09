@@ -21,6 +21,11 @@ Automated workflow for processing content sources into NotebookLM podcasts with 
 - Auth managed by `nlm login` CLI (cached tokens, no browser needed at runtime)
 - PDF splitting → DB insertion → title generation → podcast generation → download → conversion → combination
 
+## Terminology
+- **Édition**: A batch of episodes from one PDF (e.g., "whatsnew-mars-2026") = one parent_configuration
+- **Épisode**: A single audio file generated from one PDF chunk
+- **Série**: The overarching theme (e.g., "AWS What's New")
+
 ## Key Conventions
 - All scripts use `python-fire` for CLI interface
 - Environment config via `.env` file (managed by Bitwarden, never committed — `.env.example` provided)
@@ -64,9 +69,22 @@ Automated workflow for processing content sources into NotebookLM podcasts with 
 
 ## Utility Scripts
 - `clean_notebooks_mcp.py` — delete notebooks by parent_id or all
-- `gnl_reset.sh` — kill processes + clean DB
+- `gnl_reset.sh` — kill processes + clean DB + delete all notebooks
 - `validate_states.py` — check state consistency
 - `delete_all_records.py` — wipe all DB tables
+
+## CLI (gnl command)
+Installed via `pip install -e .` — unified interface:
+```bash
+gnl status                    # show all parents with state
+gnl generate --parent_id=1    # generate podcasts
+gnl download --parent_id=1    # download audio
+gnl convert --parent_id=1     # m4a → mp3
+gnl combine --parent_id=1 --output=file.mp3
+gnl deliver --parent_id=1     # full pipeline
+gnl deliver --all             # all active parents
+gnl clean --target=1 --confirm
+```
 
 ## Important Notes
 - NotebookLM quota: 20 audio overviews/day (Google AI Pro plan)
@@ -82,3 +100,20 @@ Automated workflow for processing content sources into NotebookLM podcasts with 
 2. **Wait for confirmation**: Only execute the plan after the user explicitly confirms.
 3. **No auto-commit/push**: After implementing, do NOT commit or push. Wait for the user to test and explicitly ask for commit/push.
 4. **Never commit/push without clear user confirmation.**
+5. **GitHub issue tracking**: When implementing a story from the GitHub backlog, update the issue status (close it or check off acceptance criteria) once done.
+6. **No duplicate stories**: Before creating a new GitHub issue, check existing issues for duplicates. If the idea already exists, inform the user instead of creating a duplicate.
+
+## Testing Requirements
+Every story must include:
+- **Unit tests**: Test each gnl_core module function in isolation (mocked dependencies)
+- **Integration tests**: Test end-to-end flows with real DB (test fixture) and mocked NotebookLM API
+- Framework: pytest
+- Location: `tests/` directory (unit/ and integration/ subdirectories)
+- Run: `pytest` before any merge to main
+
+## Test Mode (Quota Protection)
+- `TEST_MODE=1` in .env → no NotebookLM API calls, no quota consumed
+- Generate: marks records as generated immediately (no notebook creation)
+- Download: waits `TEST_GENERATION_DELAY` seconds then creates dummy .m4a files
+- Use TEST_MODE for all UI/flow development. Only disable for real production runs.
+- **Rule**: Never test with real API during development. Always use TEST_MODE=1.

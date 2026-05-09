@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GNL Process</title>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-6">
+    <div class="max-w-4xl mx-auto">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold">🎙️ GNL Process</h1>
+            <div class="flex items-center gap-4">
+                <span id="quota" class="text-sm {% if quota_remaining > 5 %}text-green-400{% elif quota_remaining > 0 %}text-yellow-400{% else %}text-red-400{% endif %}">🎯 {{ quota_remaining }}/20</span>
+                <button hx-post="/refresh" hx-swap="none" class="px-2 py-1 text-gray-400 hover:text-white text-sm">↻</button>
+                <button hx-post="/action/reset/0" hx-swap="none" data-reset hx-confirm="Tout réinitialiser ?"
+                    class="px-3 py-1 bg-red-800 hover:bg-red-700 rounded text-xs">🔄 Reset</button>
+                <span class="text-xs text-gray-400">TEST</span>
+                <button id="test-toggle" hx-post="/toggle-test-mode" hx-swap="none"
+                    onclick="this.classList.toggle('bg-green-600');this.classList.toggle('bg-gray-600')"
+                    class="relative w-10 h-5 rounded-full transition-colors {{ 'bg-green-600' if test_mode else 'bg-gray-600' }}">
+                    <span class="absolute top-0.5 {{ 'left-5' if test_mode else 'left-0.5' }} w-4 h-4 bg-white rounded-full transition-all"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- New Edition -->
+        <div class="mb-6">
+            <button onclick="document.getElementById('newEdition').classList.toggle('hidden')"
+                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium">+ Nouvelle Édition</button>
+        </div>
+
+        <div id="newEdition" class="hidden mb-6 bg-gray-800 rounded-lg p-5">
+            <h3 class="font-semibold mb-3">Créer une édition</h3>
+            <form hx-post="/prepare" hx-swap="none" hx-encoding="multipart/form-data" class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs text-gray-400">PDF</label>
+                    <input type="file" name="pdf" accept=".pdf" class="w-full bg-gray-700 rounded px-2 py-1 text-sm"
+                        onchange="const n=this.files[0]?.name.replace('.pdf','');if(n)this.closest('form').querySelector('[name=name]').value=n">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-400">Pages par épisode</label>
+                    <input type="number" name="pages" value="1" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-400">Nom</label>
+                    <input type="text" name="name" placeholder="" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-400">Thème</label>
+                    <select name="theme" id="themeSelect" class="w-full bg-gray-700 rounded px-2 py-1 text-sm"
+                        onchange="updateSubthemes()"></select>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-400">Sous-thème</label>
+                    <select name="subtheme" id="subthemeSelect" class="w-full bg-gray-700 rounded px-2 py-1 text-sm"></select>
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-medium">Créer</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Editions -->
+        <div id="editions" class="space-y-4">
+            {% for p in parents %}
+            <div class="bg-gray-800 rounded-lg p-5">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 class="font-semibold text-lg">{{ p.parent_file }}</h3>
+                        <span class="text-xs text-gray-400">{{ p.total }} épisodes</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        {% if p.combined == 1 %}
+                            <span class="px-3 py-1 bg-green-900 text-green-300 rounded-full text-xs font-medium">✅ Terminé</span>
+                        {% elif p.converted == p.total and p.total > 0 %}
+                            <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
+                                class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-medium">▶ Combiner</button>
+                        {% elif p.generated == 0 %}
+                            <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
+                                class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium">▶ Lancer</button>
+                        {% elif p.downloaded < p.total %}
+                            <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
+                                class="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-sm font-medium">▶ Reprendre</button>
+                        {% elif p.converted < p.total %}
+                            <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
+                                class="px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-sm font-medium">▶ Finaliser</button>
+                        {% endif %}
+                        <button hx-post="/action/clean/{{ p.id }}" hx-swap="none" hx-confirm="Supprimer cette édition ?" onclick="this.disabled=true"
+                            class="px-2 py-1 text-red-400 hover:text-red-300 text-xs">🗑</button>
+                    </div>
+                </div>
+
+                <!-- Timeline -->
+                <div class="relative">
+                    {% set steps = [
+                        ("Préparé", p.total, p.total),
+                        ("Généré", p.generated, p.total),
+                        ("Téléchargé", p.downloaded, p.total),
+                        ("Converti", p.converted, p.total),
+                        ("Combiné", p.combined, 1)
+                    ] %}
+                    <div class="flex items-center justify-between">
+                        {% for label, done, total in steps %}
+                        <div class="flex flex-col items-center z-10" style="width:20px">
+                            <div class="w-4 h-4 rounded-full border-2 
+                                {% if done == total %}bg-green-500 border-green-500
+                                {% elif done > 0 %}bg-yellow-500 border-yellow-500 animate-pulse
+                                {% else %}bg-gray-700 border-gray-600{% endif %}"></div>
+                            <span class="text-xs mt-1 {% if done == total %}text-green-400{% elif done > 0 %}text-yellow-400{% else %}text-gray-500{% endif %}">
+                                {{ label }}
+                            </span>
+                            <span class="text-xs text-gray-500">{{ done }}/{{ total }}</span>
+                        </div>
+                        {% if not loop.last %}
+                        {% set next_done = steps[loop.index][1] %}
+                        {% set next_total = steps[loop.index][2] %}
+                        {% set pct = (next_done / next_total * 100) if next_total > 0 else 0 %}
+                        {% set current_complete = (done == total) %}
+                        <div class="flex-1 h-1.5 -mt-6 bg-gray-700 rounded-full overflow-hidden mx-1">
+                            <div class="h-full rounded-full transition-all duration-500
+                                {% if current_complete and pct == 100 %}bg-green-500
+                                {% elif current_complete %}bg-green-500
+                                {% elif pct > 0 %}bg-yellow-500{% endif %}"
+                                style="width: {% if current_complete %}100{% else %}{{ pct }}{% endif %}%"></div>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {% if p.generated > 0 and p.generated < p.total %}
+                <p class="text-xs text-gray-400 mt-3">⏳ Quota — reprend automatiquement demain</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+
+            {% if not parents %}
+            <div class="bg-gray-800 rounded-lg p-8 text-center text-gray-500">
+                Aucune édition. Cliquez "+ Nouvelle Édition" pour commencer.
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Schedule -->
+        <div class="mt-6 bg-gray-800 rounded-lg p-4">
+            <form hx-post="/schedule" hx-swap="none" class="flex items-center gap-3">
+                <span class="text-sm text-gray-400">⏰ Exécution quotidienne à</span>
+                <input type="time" name="time" value="{{ schedule_time }}" class="bg-gray-700 rounded px-2 py-1 text-sm">
+                <button type="submit" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs">Sauver</button>
+                <span class="text-xs text-gray-500 ml-2">Prochain: {{ next_run }}</span>
+            </form>
+        </div>
+
+        <!-- Logs -->
+        <div class="mt-6 bg-gray-800 rounded-lg p-4">
+            <h3 class="font-semibold mb-2 text-sm">Logs</h3>
+            <div id="logs" class="font-mono text-xs h-40 overflow-y-auto bg-black rounded p-3 space-y-1">
+                <div class="text-gray-500">En attente...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let catalog = {};
+        fetch('/api/catalog').then(r=>r.json()).then(data=>{
+            catalog = data;
+            const sel = document.getElementById('themeSelect');
+            Object.keys(data).forEach(t=>{sel.add(new Option(t,t))});
+            updateSubthemes();
+        });
+        function updateSubthemes(){
+            const theme = document.getElementById('themeSelect').value;
+            const sel = document.getElementById('subthemeSelect');
+            sel.innerHTML = '';
+            (catalog[theme]||[]).forEach(s=>{sel.add(new Option(s,s))});
+        }
+
+        // Handle reset side effects after successful request
+        document.addEventListener('htmx:afterRequest', (e) => {
+            if (e.detail.pathInfo.requestPath === '/action/reset/0' && e.detail.successful) {
+                document.getElementById('logs').innerHTML = '<div class="text-gray-500">En attente...</div>';
+                document.getElementById('newEdition').classList.remove('hidden');
+            }
+        });
+
+        // Quota check before deliver
+        document.addEventListener('htmx:configRequest', async (e) => {
+            const path = e.detail.path;
+            if (!path.includes('/action/deliver/')) return;
+            const parentId = path.split('/').pop();
+            const resp = await fetch(`/api/quota-check/${parentId}`);
+            const data = await resp.json();
+            if (data.to_generate === 0 || data.sufficient) return;
+            e.preventDefault();
+            const ok = confirm(`⚠️ Quota insuffisant\n\nIl reste ${data.remaining} crédits aujourd'hui.\nL'édition a ${data.total} épisodes (${data.to_generate} à générer).\n\nGénérer les ${data.remaining} premiers maintenant ? (${data.pct}%)\n\nLe fichier sera suffixé: -part${data.pct}`);
+            if (ok) {
+                fetch(path, {method:'POST'});
+                running = true;
+                document.querySelectorAll('#editions button[hx-post*="/action/"]').forEach(b => {
+                    b.disabled = true; b.classList.add('opacity-50','cursor-not-allowed');
+                });
+            }
+        });
+
+        const ws = new WebSocket(`ws://${window.location.host}/ws/logs`);
+        const logsDiv = document.getElementById('logs');
+        let running = false;
+
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[hx-post*="/action/"]');
+            if (!btn || btn.hasAttribute('data-reset') || btn.hasAttribute('hx-confirm')) return;
+            if (running) { e.preventDefault(); e.stopPropagation(); return; }
+            running = true;
+            document.querySelectorAll('#editions button[hx-post*="/action/"]:not([hx-confirm])').forEach(b => {
+                b.disabled = true;
+                b.classList.add('opacity-50', 'cursor-not-allowed');
+            });
+            btn.textContent = '...';
+        });
+
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            if (data.type === 'log') {
+                const line = document.createElement('div');
+                line.textContent = `[${new Date().toLocaleTimeString()}] ${data.msg}`;
+                if (data.msg.startsWith('✓') || data.msg.startsWith('🔄')) line.className = 'text-green-400';
+                else if (data.msg.startsWith('⚠')) line.className = 'text-red-400';
+                else if (data.msg.startsWith('▶')) line.className = 'text-blue-400';
+                else if (data.msg.startsWith('🧪') || data.msg.startsWith('🚀')) line.className = 'text-purple-400';
+                else if (data.msg.startsWith('⏳')) line.className = 'text-yellow-400 animate-pulse';
+                logsDiv.appendChild(line);
+                logsDiv.scrollTop = logsDiv.scrollHeight;
+                // Unlock on completion
+                if (data.msg === '__done__') {
+                    running = false;
+                    return; // don't display this internal message
+                }
+            } else if (data.type === 'status_update') {
+                document.getElementById('editions').innerHTML = data.html;
+                htmx.process(document.getElementById('editions'));
+                if (data.quota !== undefined) {
+                    const q = document.getElementById('quota');
+                    q.textContent = `🎯 ${data.quota}/20`;
+                    q.className = data.quota > 5 ? 'text-sm text-green-400' : (data.quota > 0 ? 'text-sm text-yellow-400' : 'text-sm text-red-400');
+                }
+                if (running) {
+                    document.querySelectorAll('#editions button[hx-post*="/action/"]').forEach(b => {
+                        b.disabled = true;
+                        b.classList.add('opacity-50', 'cursor-not-allowed');
+                    });
+                }
+            }
+        };
+    </script>
+</body>
+</html>
