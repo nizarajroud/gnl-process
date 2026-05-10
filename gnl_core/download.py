@@ -6,6 +6,7 @@ import asyncio
 from .db import get_records, update_state, resolve_parent
 
 POLL_INTERVAL = 60
+MAX_STALE_POLLS = 3  # Stop if no progress after 3 consecutive polls
 
 
 def _is_test_mode():
@@ -13,8 +14,8 @@ def _is_test_mode():
 
 
 def download(parent_id, db_path=None, timeout=None):
-    """Download completed audio for a parent. Polls until all done or timeout. Returns (succeeded, failed)."""
-    timeout = timeout or int(os.getenv('MCP_DOWNLOAD_TIMEOUT', '2700'))
+    """Download completed audio for a parent. Polls until all done or stale. Returns (succeeded, failed)."""
+    timeout = timeout or int(os.getenv('MCP_DOWNLOAD_TIMEOUT', '10800'))  # 3h default
 
     records = get_records(parent_id, db_path, generation_state=1, download_state=0)
     if not records:
@@ -46,8 +47,10 @@ def download(parent_id, db_path=None, timeout=None):
             pending.append({**rec, 'notebook_id': notebooks[rec['podcast_name']]['id']})
 
     start_time = time.time()
+    stale_count = 0
 
     while pending and (time.time() - start_time) < timeout:
+        downloaded_this_round = 0
         still_pending = []
 
         for rec in pending:
@@ -70,16 +73,31 @@ def download(parent_id, db_path=None, timeout=None):
                 asyncio.run(download_async(client, rec['notebook_id'], "audio", dest_file, artifact_id=audio.get('artifact_id')))
                 update_state(rec['id'], db_path, download_state=1)
                 succeeded.append(rec)
+                downloaded_this_round += 1
             except Exception as e:
                 failed.append({**rec, 'reason': str(e)[:80]})
 
         pending = still_pending
-        if pending:
-            time.sleep(POLL_INTERVAL)
+
+        if not pending:
+            break
+
+        # Stale detection
+        if downloaded_this_round == 0:
+            stale_count += 1
+            if stale_count >= MAX_STALE_POLLS:
+                for rec in pending:
+                    failed.append({**rec, 'reason': 'Stale - no progress'})
+                break
+        else:
+            stale_count = 0
+
+        time.sleep(POLL_INTERVAL)
 
     # Timeout remaining
     for rec in pending:
-        failed.append({**rec, 'reason': 'Timeout'})
+        if not any(f.get('id') == rec['id'] for f in failed):
+            failed.append({**rec, 'reason': 'Timeout'})
 
     return succeeded, failed
 
