@@ -28,8 +28,16 @@ Automated workflow for processing content sources into NotebookLM podcasts with 
 
 ## Version Roadmap
 - **v1.0** — Legacy (Nova Act + n8n + Chrome)
-- **v2.0** — MVP: Web UI + MCP library + CLI (current)
+- **v2.0** — MVP: Web UI + MCP library + CLI (current prod)
 - **v3.0** — Full Parameterized: Admin profile with all configuration via web UI (no .env editing)
+
+## Environments (Git Worktrees)
+- **prod**: `/workspace/gnl-prod` — tag v2.0.0, port 8000 (`gnl serve --port 8000`)
+- **dev**: `/workspace/gnl-dev` — branch feat/v3-admin, port 8001 (`gnl serve --port 8001`)
+- **main repo**: `/workspace/gnl-process` — main branch (source of truth)
+- Registry: `deployments.json` maps version → environment → path/port
+- Each worktree has its own `gnl.db` (gitignored, independent)
+- To apply a fix to both: commit on main, cherry-pick to dev (or vice versa)
 
 ## Key Conventions
 - All scripts use `python-fire` for CLI interface
