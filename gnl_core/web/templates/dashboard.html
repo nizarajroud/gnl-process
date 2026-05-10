@@ -13,6 +13,7 @@
             <h1 class="text-3xl font-bold">🎙️ GNL Process</h1>
             <div class="flex items-center gap-4">
                 <span id="quota" class="text-sm {% if quota_remaining > 5 %}text-green-400{% elif quota_remaining > 0 %}text-yellow-400{% else %}text-red-400{% endif %}">🎯 {{ quota_remaining }}/20</span>
+                <button hx-post="/stop" hx-swap="none" data-reset class="px-3 py-1 bg-yellow-800 hover:bg-yellow-700 rounded text-xs" id="stopBtn">⏹ Stop</button>
                 <button hx-post="/refresh" hx-swap="none" class="px-2 py-1 text-gray-400 hover:text-white text-sm">↻</button>
                 <button hx-post="/action/reset/0" hx-swap="none" data-reset hx-confirm="Tout réinitialiser ?"
                     class="px-3 py-1 bg-red-800 hover:bg-red-700 rounded text-xs">🔄 Reset</button>
@@ -213,6 +214,7 @@
             if (!btn || btn.hasAttribute('data-reset') || btn.hasAttribute('hx-confirm')) return;
             if (running) { e.preventDefault(); e.stopPropagation(); return; }
             running = true;
+            document.getElementById('stopBtn').classList.remove('hidden');
             document.querySelectorAll('#editions button[hx-post*="/action/"]:not([hx-confirm])').forEach(b => {
                 b.disabled = true;
                 b.classList.add('opacity-50', 'cursor-not-allowed');
@@ -235,7 +237,8 @@
                 // Unlock on completion
                 if (data.msg === '__done__') {
                     running = false;
-                    return; // don't display this internal message
+                    document.getElementById('stopBtn').classList.add('hidden');
+                    return;
                 }
             } else if (data.type === 'status_update') {
                 document.getElementById('editions').innerHTML = data.html;

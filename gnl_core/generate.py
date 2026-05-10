@@ -28,9 +28,10 @@ def _confirm_generation(client, notebook_id):
     return False
 
 
-def generate(parent_id, db_path=None, prompt_dir=None, language=None, max_count=None, on_progress=None):
+def generate(parent_id, db_path=None, prompt_dir=None, language=None, max_count=None, on_progress=None, should_stop=None):
     """Generate podcasts for pending records. Returns (succeeded, failed) lists.
     on_progress: optional callback called after each successful generation.
+    should_stop: optional callable returning True to abort.
     """
     language = language or os.getenv('NOTEBOOKLM_LANGUAGE', 'en')
     prompt_dir = prompt_dir or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'prompts')
@@ -43,7 +44,7 @@ def generate(parent_id, db_path=None, prompt_dir=None, language=None, max_count=
         records = records[:max_count]
 
     if _is_test_mode():
-        return _generate_test(records, db_path, on_progress)
+        return _generate_test(records, db_path, on_progress, should_stop)
 
     from notebooklm_tools.mcp.tools._utils import get_client
     from notebooklm_tools.services.notebooks import create_notebook, delete_notebook
@@ -64,6 +65,8 @@ def generate(parent_id, db_path=None, prompt_dir=None, language=None, max_count=
     succeeded, failed = [], []
 
     for rec in records:
+        if should_stop and should_stop():
+            break
         full_path = f"{rec['source_path']}/{rec['source_id']}"
         if not os.path.exists(full_path):
             failed.append({**rec, 'reason': 'File not found'})
@@ -90,16 +93,22 @@ def generate(parent_id, db_path=None, prompt_dir=None, language=None, max_count=
                     delete_notebook(client, notebook_id)
                 except Exception:
                     pass
+            # Stop on quota error (code 8)
+            if 'code 8' in str(e) or 'RESOURCE_EXHAUSTED' in str(e):
+                failed.append({**rec, 'reason': 'Quota exhausted'})
+                break
             failed.append({**rec, 'reason': str(e)[:80]})
 
     return succeeded, failed
 
 
-def _generate_test(records, db_path, on_progress=None):
+def _generate_test(records, db_path, on_progress=None, should_stop=None):
     """Test mode: simulate generation without API calls."""
     delay = int(os.getenv('TEST_GENERATION_DELAY', '1'))
     succeeded = []
     for rec in records:
+        if should_stop and should_stop():
+            break
         time.sleep(delay)
         update_state(rec['id'], db_path, generation_state=1, date=time.strftime("%Y-%m-%d"))
         succeeded.append(rec)

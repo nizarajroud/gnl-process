@@ -18,6 +18,7 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 ws_clients: list[WebSocket] = []
 scheduler = AsyncIOScheduler()
+_stop_signal = False
 def _deliver_all_sync(loop=None):
     """Run deliver for all active parents (called by scheduler/startup)."""
     from gnl_core.db import get_active_parents, parent_status
@@ -64,14 +65,10 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(_deliver_all_sync, CronTrigger(hour=int(hour), minute=int(minute)), id='daily_deliver', replace_existing=True, args=[asyncio.get_event_loop()])
     scheduler.start()
 
-    # Run on startup if there's pending work
-    from gnl_core.db import get_active_parents
-    if get_active_parents():
-        import threading
-        _startup_loop = asyncio.get_event_loop()
-        def _startup_deliver():
-            _deliver_all_sync(_startup_loop)
-        threading.Thread(target=_startup_deliver, daemon=True).start()
+    # Auto-deliver at startup disabled — use scheduled time or manual button instead
+    # from gnl_core.db import get_active_parents
+    # if get_active_parents() and _get_quota() > 0:
+    #     ...
 
     yield
     scheduler.shutdown()
@@ -211,6 +208,15 @@ async def get_catalog():
     for r in rows:
         catalog.setdefault(r['theme'], []).append(r['subtheme'])
     return catalog
+@app.post("/stop")
+async def stop_processing():
+    """Signal all running operations to stop."""
+    global _stop_signal
+    _stop_signal = True
+    await broadcast_log("⏹ Stop signal sent")
+    return {"status": "stopping"}
+
+
 @app.post("/refresh")
 async def refresh():
     """Force UI refresh."""
@@ -249,12 +255,16 @@ async def run_action(action: str, parent_id: int, request: Request = None):
 async def _run_action(action: str, parent_id: int):
     await broadcast_log(f"▶ {action} (parent_id={parent_id})")
     try:
+        global _stop_signal
+        _stop_signal = False
         loop = asyncio.get_event_loop()
+        def _stopped():
+            return _stop_signal
         if action == "generate":
             from gnl_core.generate import generate
             def on_progress(rec):
                 asyncio.run_coroutine_threadsafe(broadcast_status(), loop)
-            s, f = await loop.run_in_executor(None, lambda: generate(parent_id, on_progress=on_progress))
+            s, f = await loop.run_in_executor(None, lambda: generate(parent_id, on_progress=on_progress, should_stop=_stopped))
             await broadcast_log(f"✓ Generated {len(s)}, failed {len(f)}")
         elif action == "download":
             from gnl_core.download import download
@@ -284,7 +294,7 @@ async def _run_action(action: str, parent_id: int):
                 def on_episode_generated(rec):
                     asyncio.run_coroutine_threadsafe(broadcast_status(), loop)
 
-                await loop.run_in_executor(None, lambda: generate(parent_id, max_count=max_count, on_progress=on_episode_generated))
+                await loop.run_in_executor(None, lambda: generate(parent_id, max_count=max_count, on_progress=on_episode_generated, should_stop=_stopped))
                 await broadcast_status()
 
             s = parent_status(parent_id)
@@ -319,8 +329,9 @@ async def _run_action(action: str, parent_id: int):
             await broadcast_log(f"✓ Deliver done: {s['converted']}/{s['total']} converted, combined={'✓' if s['combined'] else '✗'}")
         elif action == "clean":
             from gnl_core.clean import clean
-            d, f = clean(str(parent_id))
+            d, f = await loop.run_in_executor(None, lambda: clean(str(parent_id)))
             await broadcast_log(f"✓ Cleaned {d} notebooks")
+            await broadcast_status()
         elif action == "reset":
             from gnl_core.clean import clean
             from gnl_core.db import get_db

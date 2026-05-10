@@ -7,7 +7,7 @@ from .db import get_db
 
 
 def clean(target="all", db_path=None):
-    """Delete notebooks and reset DB states. target='all' or a parent_id number. Returns (deleted, failed) counts."""
+    """Delete notebooks and remove edition from DB. target='all' or a parent_id number. Returns (deleted, failed) counts."""
     client = get_client()
     nb_result = list_notebooks(client)
     notebooks = nb_result['notebooks']
@@ -19,14 +19,16 @@ def clean(target="all", db_path=None):
         names = {r['podcast_name'] for r in rows}
         notebooks = [nb for nb in notebooks if nb['title'] in names]
 
-        # Reset DB states
+        # Remove from DB entirely
         with get_db(db_path) as conn:
-            conn.execute("UPDATE podcast_download SET generation_state=0, download_state=0, conversion_state=0 WHERE parent_configuration_id=?", (parent_id,))
+            conn.execute("DELETE FROM podcast_download WHERE parent_configuration_id=?", (parent_id,))
+            conn.execute("DELETE FROM parent_configuration WHERE id=?", (parent_id,))
             conn.commit()
     else:
-        # Reset all
+        # Remove all from DB
         with get_db(db_path) as conn:
-            conn.execute("UPDATE podcast_download SET generation_state=0, download_state=0, conversion_state=0")
+            conn.execute("DELETE FROM podcast_download")
+            conn.execute("DELETE FROM parent_configuration")
             conn.commit()
 
     deleted, failed_count = 0, 0
