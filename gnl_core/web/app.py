@@ -196,11 +196,27 @@ async def dashboard(request: Request):
 
     quota_remaining = _get_quota()
 
+    # Config for admin tab
+    config = {
+        'AUDIO_PARTS_FOLDER': os.getenv('AUDIO_PARTS_FOLDER', ''),
+        'GNL_BACKLOG': os.getenv('GNL_BACKLOG', ''),
+        'PDF_PARTS_FOLDER': os.getenv('PDF_PARTS_FOLDER', ''),
+        'NOTEBOOKLM_LANGUAGE': os.getenv('NOTEBOOKLM_LANGUAGE', 'en'),
+        'DEFAULT_SPEED': os.getenv('DEFAULT_SPEED', '1'),
+        'MCP_DOWNLOAD_TIMEOUT': os.getenv('MCP_DOWNLOAD_TIMEOUT', '10800'),
+        'MAX_GENERATION_RETRIES': os.getenv('MAX_GENERATION_RETRIES', '3'),
+        'GNL_SCHEDULE_TIME': os.getenv('GNL_SCHEDULE_TIME', '08:00'),
+    }
+
+    # Changelog
+    import markdown
+    changelog_path = Path(__file__).parent.parent.parent / 'CHANGELOG.md'
+    changelog_html = markdown.markdown(changelog_path.read_text()) if changelog_path.exists() else "<p>No changelog found.</p>"
+
     return templates.TemplateResponse("dashboard.html", {
         "request": request, "parents": parents,
         "schedule_time": schedule_time, "next_run": next_run, "test_mode": test_mode,
-        "quota_remaining": quota_remaining,
-
+        "quota_remaining": quota_remaining, "config": config, "changelog_html": changelog_html
     })
 @app.get("/api/catalog")
 async def get_catalog():
@@ -225,6 +241,44 @@ async def stop_processing():
 async def refresh():
     """Force UI refresh."""
     await broadcast_status()
+    return {"status": "ok"}
+
+
+@app.post("/admin/save")
+async def admin_save(request: Request):
+    """Save configuration to .env file."""
+    form = await request.form()
+    env_path = Path(__file__).parent.parent.parent / '.env'
+    
+    # Read current .env
+    lines = env_path.read_text().splitlines() if env_path.exists() else []
+    
+    # Update values
+    config_keys = ['AUDIO_PARTS_FOLDER', 'GNL_BACKLOG', 'PDF_PARTS_FOLDER', 
+                   'NOTEBOOKLM_LANGUAGE', 'DEFAULT_SPEED', 'MCP_DOWNLOAD_TIMEOUT',
+                   'MAX_GENERATION_RETRIES', 'GNL_SCHEDULE_TIME']
+    
+    for key in config_keys:
+        value = form.get(key, '')
+        os.environ[key] = value
+        # Update or add line in .env
+        found = False
+        for i, line in enumerate(lines):
+            if line.startswith(f'{key}='):
+                lines[i] = f'{key}={value}'
+                found = True
+                break
+        if not found:
+            lines.append(f'{key}={value}')
+    
+    env_path.write_text('\n'.join(lines) + '\n')
+    
+    # Reschedule if time changed
+    new_time = form.get('GNL_SCHEDULE_TIME', '08:00')
+    hour, minute = new_time.split(':')
+    scheduler.reschedule_job('daily_deliver', trigger=CronTrigger(hour=int(hour), minute=int(minute)))
+    
+    await broadcast_log("✓ Configuration sauvegardée")
     return {"status": "ok"}
 
 
