@@ -11,8 +11,7 @@
     <div class="max-w-4xl mx-auto">
         <div class="flex justify-between items-center mb-8">
             <div class="flex items-center gap-3">
-                <h1 class="text-3xl font-bold">🎙️ {% if env_name == 'dev' %}DEV{% else %}GNL Process{% endif %}</h1>
-                <span class="px-2 py-0.5 rounded text-xs font-mono {% if env_name == 'prod' %}bg-green-900 text-green-300{% else %}bg-orange-900 text-orange-300{% endif %}">{{ version }} · {{ env_name }}</span>
+                <h1 class="text-3xl font-bold">🎙️ GNL Process</h1>
             </div>
             <div class="flex items-center gap-4">
                 <span id="quota" class="text-sm {% if quota_remaining > 5 %}text-green-400{% elif quota_remaining > 0 %}text-yellow-400{% else %}text-red-400{% endif %}">🎯 {{ quota_remaining }}/20</span>
@@ -76,7 +75,7 @@
                         <span class="text-xs text-gray-400">{{ p.total }} épisodes</span>
                     </div>
                     <div class="flex items-center gap-2">
-                        {% if p.combined == 1 %}
+                        {% if p.combined == 1 and p.converted == p.total and p.downloaded == p.total %}
                             <span class="px-3 py-1 bg-green-900 text-green-300 rounded-full text-xs font-medium">✅ Terminé</span>
                         {% elif p.converted == p.total and p.total > 0 %}
                             <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
@@ -136,6 +135,9 @@
 
                 {% if p.generated > 0 and p.generated < p.total %}
                 <p class="text-xs text-gray-400 mt-3">⏳ Quota — reprend automatiquement demain</p>
+                {% endif %}
+                {% if p.failed > 0 %}
+                <p class="text-xs text-red-400 mt-3">⚠ {{ p.failed }} épisode(s) en échec définitif</p>
                 {% endif %}
             </div>
             {% endfor %}

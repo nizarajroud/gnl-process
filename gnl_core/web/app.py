@@ -36,6 +36,8 @@ def _deliver_all_sync(loop=None):
         asyncio.run_coroutine_threadsafe(broadcast_log(msg), loop)
         asyncio.run_coroutine_threadsafe(broadcast_status(), loop)
 
+    notify("🕐 Scheduled auto-deliver started")
+
     for pid in get_active_parents():
         s = parent_status(pid)
         if s['generated'] < s['total']:
@@ -75,21 +77,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="GNL Process", lifespan=lifespan)
 
-# Version info
-import json as _json
-_deploy_file = Path(__file__).parent.parent.parent / 'deployments.json'
-_version = "dev"
-_env_name = "dev"
-if _deploy_file.exists():
-    _deploys = _json.loads(_deploy_file.read_text())
-    _cwd = str(Path.cwd())
-    for env, info in _deploys.get('environments', {}).items():
-        if info.get('path') and _cwd.startswith(info['path']):
-            _version = info.get('version', 'unknown')
-            _env_name = env
-            break
+
 def _get_quota():
-    """Calculate remaining quota from DB. Works in both test and real mode."""
     from gnl_core.db import get_db
     from datetime import datetime, timezone as tz, timedelta
     max_quota = int(os.environ.get('TEST_QUOTA', '20')) if os.environ.get('TEST_MODE', '0') == '1' else 20
@@ -125,7 +114,7 @@ async def broadcast_status():
         conv = s['converted']
 
         # Button
-        if s['combined'] == 1:
+        if s['combined'] == 1 and conv == total and dl == total:
             btn = '<span class="px-3 py-1 bg-green-900 text-green-300 rounded-full text-xs font-medium">✅ Terminé</span>'
         elif conv == total and total > 0:
             btn = f'<button hx-post="/action/deliver/{pid}" hx-swap="none" onclick="this.disabled=true;this.textContent=\'...\'" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-medium">▶ Combiner</button>'
@@ -211,7 +200,7 @@ async def dashboard(request: Request):
         "request": request, "parents": parents,
         "schedule_time": schedule_time, "next_run": next_run, "test_mode": test_mode,
         "quota_remaining": quota_remaining,
-        "version": _version, "env_name": _env_name
+
     })
 @app.get("/api/catalog")
 async def get_catalog():

@@ -65,14 +65,27 @@ def download(parent_id, db_path=None, timeout=None):
                 # Check if generation failed
                 failed_audio = next((a for a in status.get('artifacts', []) if a.get('type') == 'audio' and a.get('status') == 'failed'), None)
                 if failed_audio:
-                    # Reset generation_state so it retries next cycle
-                    update_state(rec['id'], db_path, generation_state=0)
-                    # Delete the failed notebook
-                    try:
-                        from notebooklm_tools.services.notebooks import delete_notebook
-                        delete_notebook(client, rec['notebook_id'])
-                    except Exception:
-                        pass
+                    max_retries = int(os.getenv('MAX_GENERATION_RETRIES', '3'))
+                    # Get current retry_count
+                    from .db import get_db
+                    with get_db(db_path) as conn:
+                        row = conn.execute("SELECT retry_count FROM podcast_download WHERE id=?", (rec['id'],)).fetchone()
+                        retry_count = (row['retry_count'] or 0) if row else 0
+
+                    if retry_count < max_retries:
+                        # Reset for retry
+                        update_state(rec['id'], db_path, generation_state=0)
+                        with get_db(db_path) as conn:
+                            conn.execute("UPDATE podcast_download SET retry_count=? WHERE id=?", (retry_count + 1, rec['id']))
+                            conn.commit()
+                        try:
+                            from notebooklm_tools.services.notebooks import delete_notebook as del_nb
+                            del_nb(client, rec['notebook_id'])
+                        except Exception:
+                            pass
+                    else:
+                        # Max retries exhausted
+                        failed.append({**rec, 'reason': f'Generation failed after {max_retries} retries'})
                 else:
                     still_pending.append(rec)
                 continue
