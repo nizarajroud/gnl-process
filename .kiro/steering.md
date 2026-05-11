@@ -30,6 +30,21 @@ Automated workflow for processing content sources into NotebookLM podcasts with 
 - **v1.0** — Legacy (Nova Act + n8n + Chrome)
 - **v2.0** — MVP: Web UI + MCP library + CLI (current prod)
 - **v3.0** — Full Parameterized: Admin profile with all configuration via web UI (no .env editing)
+- **v4.0** — Go to Cloud: Deploy on AWS, CI/CD via GitHub Actions, 24/7 availability
+
+## Environments (Git Worktrees)
+- **prod**: `/workspace/gnl-prod` — tag v2.0.0, port 8000
+- **dev**: `/workspace/gnl-dev` — branch feat/v3-admin, port 8001
+- **main repo**: `/workspace/gnl-process` — main branch (source of truth)
+- Registry: `deployments.json` maps version → environment → path/port
+- Each worktree has its own `gnl.db` (gitignored, independent)
+
+## Cherry-pick to Production Procedure
+1. Commit the specific fix on dev branch (only the relevant file(s))
+2. Note the commit SHA
+3. In `gnl-process` (main): `git cherry-pick <SHA>` → `git push`
+4. Override tag: `git tag -d v2.0.0 && git push origin :refs/tags/v2.0.0 && git tag -a v2.0.0 -m "..." && git push origin v2.0.0`
+5. Update prod worktree: `cd gnl-prod && git fetch origin && git checkout v2.0.0`
 
 ## Environments (Git Worktrees)
 - **prod**: `/workspace/gnl-prod` — tag v2.0.0, port 8000 (`gnl serve --port 8000`)

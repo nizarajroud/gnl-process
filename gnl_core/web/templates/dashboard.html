@@ -10,7 +10,10 @@
 <body class="bg-gray-900 text-gray-100 min-h-screen p-6">
     <div class="max-w-4xl mx-auto">
         <div class="flex justify-between items-center mb-8">
-            <h1 class="text-3xl font-bold">🎙️ GNL Process</h1>
+            <div class="flex items-center gap-3">
+                <h1 class="text-3xl font-bold">🎙️ {% if env_name == 'dev' %}DEV{% else %}GNL Process{% endif %}</h1>
+                <span class="px-2 py-0.5 rounded text-xs font-mono {% if env_name == 'prod' %}bg-green-900 text-green-300{% else %}bg-orange-900 text-orange-300{% endif %}">{{ version }} · {{ env_name }}</span>
+            </div>
             <div class="flex items-center gap-4">
                 <span id="quota" class="text-sm {% if quota_remaining > 5 %}text-green-400{% elif quota_remaining > 0 %}text-yellow-400{% else %}text-red-400{% endif %}">🎯 {{ quota_remaining }}/20</span>
                 <button hx-post="/stop" hx-swap="none" data-reset class="px-3 py-1 bg-yellow-800 hover:bg-yellow-700 rounded text-xs" id="stopBtn">⏹ Stop</button>
@@ -88,7 +91,7 @@
                             <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
                                 class="px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-sm font-medium">▶ Finaliser</button>
                         {% endif %}
-                        <button hx-post="/action/clean/{{ p.id }}" hx-swap="none" hx-confirm="Supprimer cette édition ?" onclick="this.disabled=true"
+                        <button hx-post="/action/clean/{{ p.id }}" hx-swap="none" onclick="this.disabled=true"
                             class="px-2 py-1 text-red-400 hover:text-red-300 text-xs">🗑</button>
                     </div>
                 </div>
