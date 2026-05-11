@@ -62,7 +62,19 @@ def download(parent_id, db_path=None, timeout=None):
                 continue
 
             if not audio:
-                still_pending.append(rec)
+                # Check if generation failed
+                failed_audio = next((a for a in status.get('artifacts', []) if a.get('type') == 'audio' and a.get('status') == 'failed'), None)
+                if failed_audio:
+                    # Reset generation_state so it retries next cycle
+                    update_state(rec['id'], db_path, generation_state=0)
+                    # Delete the failed notebook
+                    try:
+                        from notebooklm_tools.services.notebooks import delete_notebook
+                        delete_notebook(client, rec['notebook_id'])
+                    except Exception:
+                        pass
+                else:
+                    still_pending.append(rec)
                 continue
 
             dest_dir = os.path.join(audio_parts_folder, subfolder, rec['parent_file'])
