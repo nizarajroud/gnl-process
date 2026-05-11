@@ -74,6 +74,20 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown()
 
 app = FastAPI(title="GNL Process", lifespan=lifespan)
+
+# Version info
+import json as _json
+_deploy_file = Path(__file__).parent.parent.parent / 'deployments.json'
+_version = "dev"
+_env_name = "dev"
+if _deploy_file.exists():
+    _deploys = _json.loads(_deploy_file.read_text())
+    _cwd = str(Path.cwd())
+    for env, info in _deploys.get('environments', {}).items():
+        if info.get('path') and _cwd.startswith(info['path']):
+            _version = info.get('version', 'unknown')
+            _env_name = env
+            break
 def _get_quota():
     """Calculate remaining quota from DB. Works in both test and real mode."""
     from gnl_core.db import get_db
@@ -122,7 +136,7 @@ async def broadcast_status():
         else:
             btn = f'<button hx-post="/action/deliver/{pid}" hx-swap="none" onclick="this.disabled=true;this.textContent=\'...\'" class="px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-sm font-medium">▶ Finaliser</button>'
 
-        clean_btn = f'<button hx-post="/action/clean/{pid}" hx-swap="none" hx-confirm="Supprimer cette édition ?" onclick="this.disabled=true" class="px-2 py-1 text-red-400 hover:text-red-300 text-xs">🗑</button>'
+        clean_btn = f'<button hx-post="/action/clean/{pid}" hx-swap="none" onclick="this.disabled=true" class="px-2 py-1 text-red-400 hover:text-red-300 text-xs">🗑</button>'
 
         # Timeline steps
         steps = [("Préparé", total, total), ("Généré", gen, total), ("Téléchargé", dl, total), ("Converti", conv, total), ("Combiné", s['combined'], 1)]
@@ -196,7 +210,8 @@ async def dashboard(request: Request):
     return templates.TemplateResponse("dashboard.html", {
         "request": request, "parents": parents,
         "schedule_time": schedule_time, "next_run": next_run, "test_mode": test_mode,
-        "quota_remaining": quota_remaining
+        "quota_remaining": quota_remaining,
+        "version": _version, "env_name": _env_name
     })
 @app.get("/api/catalog")
 async def get_catalog():
