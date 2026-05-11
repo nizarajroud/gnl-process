@@ -185,9 +185,14 @@ async def dashboard(request: Request):
         rows = conn.execute("SELECT id, podcast_subtheme, parent_file FROM parent_configuration").fetchall()
 
     parents = []
+    history = []
     for row in rows:
         s = parent_status(row['id'])
-        parents.append({'id': row['id'], 'subtheme': row['podcast_subtheme'], 'parent_file': row['parent_file'], **s})
+        item = {'id': row['id'], 'subtheme': row['podcast_subtheme'], 'parent_file': row['parent_file'], **s}
+        if s['combined'] == 1 and s['converted'] == s['total'] and s['downloaded'] == s['total']:
+            history.append(item)
+        else:
+            parents.append(item)
 
     schedule_time = os.getenv('GNL_SCHEDULE_TIME', '08:00')
     jobs = scheduler.get_jobs()
@@ -197,16 +202,8 @@ async def dashboard(request: Request):
     quota_remaining = _get_quota()
 
     # Config for admin tab
-    config = {
-        'AUDIO_PARTS_FOLDER': os.getenv('AUDIO_PARTS_FOLDER', ''),
-        'GNL_BACKLOG': os.getenv('GNL_BACKLOG', ''),
-        'PDF_PARTS_FOLDER': os.getenv('PDF_PARTS_FOLDER', ''),
-        'NOTEBOOKLM_LANGUAGE': os.getenv('NOTEBOOKLM_LANGUAGE', 'en'),
-        'DEFAULT_SPEED': os.getenv('DEFAULT_SPEED', '1'),
-        'MCP_DOWNLOAD_TIMEOUT': os.getenv('MCP_DOWNLOAD_TIMEOUT', '10800'),
-        'MAX_GENERATION_RETRIES': os.getenv('MAX_GENERATION_RETRIES', '3'),
-        'GNL_SCHEDULE_TIME': os.getenv('GNL_SCHEDULE_TIME', '08:00'),
-    }
+    from gnl_core.config import get_config
+    config = get_config()
 
     # Changelog
     import markdown
@@ -214,7 +211,7 @@ async def dashboard(request: Request):
     changelog_html = markdown.markdown(changelog_path.read_text()) if changelog_path.exists() else "<p>No changelog found.</p>"
 
     return templates.TemplateResponse("dashboard.html", {
-        "request": request, "parents": parents,
+        "request": request, "parents": parents, "history": history,
         "schedule_time": schedule_time, "next_run": next_run, "test_mode": test_mode,
         "quota_remaining": quota_remaining, "config": config, "changelog_html": changelog_html
     })
@@ -246,39 +243,44 @@ async def refresh():
 
 @app.post("/admin/save")
 async def admin_save(request: Request):
-    """Save configuration to .env file."""
+    """Save configuration to gnl-config.json."""
+    from gnl_core.config import save_config
     form = await request.form()
-    env_path = Path(__file__).parent.parent.parent / '.env'
     
-    # Read current .env
-    lines = env_path.read_text().splitlines() if env_path.exists() else []
-    
-    # Update values
     config_keys = ['AUDIO_PARTS_FOLDER', 'GNL_BACKLOG', 'PDF_PARTS_FOLDER', 
                    'NOTEBOOKLM_LANGUAGE', 'DEFAULT_SPEED', 'MCP_DOWNLOAD_TIMEOUT',
-                   'MAX_GENERATION_RETRIES', 'GNL_SCHEDULE_TIME']
+                   'MAX_GENERATION_RETRIES', 'GNL_SCHEDULE_TIME', 'TEST_MODE', 'TEST_GENERATION_DELAY']
     
-    for key in config_keys:
-        value = form.get(key, '')
-        os.environ[key] = value
-        # Update or add line in .env
-        found = False
-        for i, line in enumerate(lines):
-            if line.startswith(f'{key}='):
-                lines[i] = f'{key}={value}'
-                found = True
-                break
-        if not found:
-            lines.append(f'{key}={value}')
-    
-    env_path.write_text('\n'.join(lines) + '\n')
+    data = {key: form.get(key, '') for key in config_keys}
+    save_config(data)
     
     # Reschedule if time changed
-    new_time = form.get('GNL_SCHEDULE_TIME', '08:00')
+    new_time = data.get('GNL_SCHEDULE_TIME', '08:00')
     hour, minute = new_time.split(':')
     scheduler.reschedule_job('daily_deliver', trigger=CronTrigger(hour=int(hour), minute=int(minute)))
     
     await broadcast_log("✓ Configuration sauvegardée")
+    return {"status": "ok"}
+
+
+@app.get("/admin/export")
+async def admin_export():
+    """Download config as JSON file."""
+    from gnl_core.config import export_config
+    from fastapi.responses import Response
+    return Response(content=export_config(), media_type="application/json",
+                    headers={"Content-Disposition": "attachment; filename=gnl-config.json"})
+
+
+@app.post("/admin/import")
+async def admin_import(request: Request):
+    """Import config from uploaded JSON file."""
+    from gnl_core.config import import_config
+    form = await request.form()
+    file = form.get("config_file")
+    content = (await file.read()).decode()
+    import_config(content)
+    await broadcast_log("✓ Configuration importée")
     return {"status": "ok"}
 
 

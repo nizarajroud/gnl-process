@@ -12,29 +12,34 @@
         <!-- Header -->
         <div class="flex justify-between items-center mb-4">
             <h1 class="text-3xl font-bold">🎙️ GNL Process</h1>
-            <div class="flex items-center gap-4">
-                <span id="quota" class="text-sm {% if quota_remaining > 5 %}text-green-400{% elif quota_remaining > 0 %}text-yellow-400{% else %}text-red-400{% endif %}">🎯 {{ quota_remaining }}/20</span>
-                <button hx-post="/stop" hx-swap="none" data-reset class="px-3 py-1 bg-yellow-800 hover:bg-yellow-700 rounded text-xs" id="stopBtn">⏹ Stop</button>
-                <button hx-post="/action/reset/0" hx-swap="none" data-reset hx-confirm="Tout réinitialiser ?"
-                    class="px-3 py-1 bg-red-800 hover:bg-red-700 rounded text-xs">🔄 Reset</button>
-                <span class="text-xs text-gray-400">TEST</span>
-                <button id="test-toggle" hx-post="/toggle-test-mode" hx-swap="none"
-                    onclick="this.classList.toggle('bg-green-600');this.classList.toggle('bg-gray-600')"
-                    class="relative w-10 h-5 rounded-full transition-colors {{ 'bg-green-600' if test_mode else 'bg-gray-600' }}">
-                    <span class="absolute top-0.5 {{ 'left-5' if test_mode else 'left-0.5' }} w-4 h-4 bg-white rounded-full transition-all"></span>
-                </button>
-            </div>
         </div>
 
         <!-- Tabs -->
         <div class="flex border-b border-gray-700 mb-6">
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-blue-500 text-blue-400" onclick="switchTab('production')">📻 Production</button>
+            <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('history')">📜 Historique</button>
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('config')">⚙️ Configuration</button>
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('changelog')">📋 Changelog</button>
         </div>
 
         <!-- Tab: Production -->
         <div id="tab-production" class="tab-content">
+            <!-- Production toolbar -->
+            <div class="flex justify-between items-center mb-4">
+                <div></div>
+                <div class="flex items-center gap-4">
+                    <span id="quota" class="text-sm {% if quota_remaining > 5 %}text-green-400{% elif quota_remaining > 0 %}text-yellow-400{% else %}text-red-400{% endif %}">🎯 {{ quota_remaining }}/20</span>
+                    <button hx-post="/stop" hx-swap="none" data-reset class="px-3 py-1 bg-yellow-800 hover:bg-yellow-700 rounded text-xs" id="stopBtn">⏹ Stop</button>
+                    <button hx-post="/action/reset/0" hx-swap="none" data-reset hx-confirm="Tout réinitialiser ?"
+                        class="px-3 py-1 bg-red-800 hover:bg-red-700 rounded text-xs">🔄 Reset</button>
+                    <span class="text-xs text-gray-400">TEST</span>
+                    <button id="test-toggle" hx-post="/toggle-test-mode" hx-swap="none"
+                        onclick="this.classList.toggle('bg-green-600');this.classList.toggle('bg-gray-600')"
+                        class="relative w-10 h-5 rounded-full transition-colors {{ 'bg-green-600' if test_mode else 'bg-gray-600' }}">
+                        <span class="absolute top-0.5 {{ 'left-5' if test_mode else 'left-0.5' }} w-4 h-4 bg-white rounded-full transition-all"></span>
+                    </button>
+                </div>
+            </div>
             <!-- New Edition -->
             <div class="mb-6">
                 <button onclick="document.getElementById('newEdition').classList.toggle('hidden')"
@@ -162,6 +167,26 @@
             </div>
         </div>
 
+        <!-- Tab: History -->
+        <div id="tab-history" class="tab-content hidden">
+            <div class="space-y-3">
+                {% for p in history %}
+                <div class="bg-gray-800 rounded-lg p-4 flex justify-between items-center">
+                    <div>
+                        <h3 class="font-semibold">{{ p.parent_file }}</h3>
+                        <span class="text-xs text-gray-400">{{ p.total }} épisodes · {{ p.subtheme }}</span>
+                    </div>
+                    <span class="px-3 py-1 bg-green-900 text-green-300 rounded-full text-xs">✅ Terminé</span>
+                </div>
+                {% endfor %}
+                {% if not history %}
+                <div class="bg-gray-800 rounded-lg p-8 text-center text-gray-500">
+                    Aucune édition terminée.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
         <!-- Tab: Configuration -->
         <div id="tab-config" class="tab-content hidden">
             <form hx-post="/admin/save" hx-swap="none" class="space-y-6">
@@ -187,12 +212,28 @@
                     <h3 class="font-semibold mb-4">🎵 Audio</h3>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="text-xs text-gray-400">Langue (BCP-47)</label>
-                            <input type="text" name="NOTEBOOKLM_LANGUAGE" value="{{ config.NOTEBOOKLM_LANGUAGE }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                            <label class="text-xs text-gray-400">Langue</label>
+                            <select name="NOTEBOOKLM_LANGUAGE" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                                <option value="ar" {% if config.NOTEBOOKLM_LANGUAGE == 'ar' %}selected{% endif %}>Arabic</option>
+                                <option value="fr" {% if config.NOTEBOOKLM_LANGUAGE == 'fr' %}selected{% endif %}>French</option>
+                                <option value="en" {% if config.NOTEBOOKLM_LANGUAGE == 'en' %}selected{% endif %}>English</option>
+                                <option value="es" {% if config.NOTEBOOKLM_LANGUAGE == 'es' %}selected{% endif %}>Spanish</option>
+                                <option value="de" {% if config.NOTEBOOKLM_LANGUAGE == 'de' %}selected{% endif %}>German</option>
+                                <option value="it" {% if config.NOTEBOOKLM_LANGUAGE == 'it' %}selected{% endif %}>Italian</option>
+                                <option value="pt" {% if config.NOTEBOOKLM_LANGUAGE == 'pt' %}selected{% endif %}>Portuguese</option>
+                                <option value="ja" {% if config.NOTEBOOKLM_LANGUAGE == 'ja' %}selected{% endif %}>Japanese</option>
+                                <option value="ko" {% if config.NOTEBOOKLM_LANGUAGE == 'ko' %}selected{% endif %}>Korean</option>
+                                <option value="zh" {% if config.NOTEBOOKLM_LANGUAGE == 'zh' %}selected{% endif %}>Chinese</option>
+                                <option value="hi" {% if config.NOTEBOOKLM_LANGUAGE == 'hi' %}selected{% endif %}>Hindi</option>
+                                <option value="tr" {% if config.NOTEBOOKLM_LANGUAGE == 'tr' %}selected{% endif %}>Turkish</option>
+                                <option value="ru" {% if config.NOTEBOOKLM_LANGUAGE == 'ru' %}selected{% endif %}>Russian</option>
+                            </select>
                         </div>
                         <div>
-                            <label class="text-xs text-gray-400">Vitesse (1.0 = normal)</label>
-                            <input type="number" step="0.01" name="DEFAULT_SPEED" value="{{ config.DEFAULT_SPEED }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                            <label class="text-xs text-gray-400">Vitesse: <span id="speedValue">{{ config.DEFAULT_SPEED }}</span>x</label>
+                            <input type="range" min="0.5" max="3" step="0.01" name="DEFAULT_SPEED" value="{{ config.DEFAULT_SPEED }}" 
+                                class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                oninput="document.getElementById('speedValue').textContent=this.value">
                         </div>
                     </div>
                 </div>
@@ -220,7 +261,16 @@
                 </div>
 
                 <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium">💾 Sauvegarder</button>
+                <a href="/admin/export" class="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-sm font-medium inline-block">📥 Exporter</a>
             </form>
+
+            <div class="mt-4 bg-gray-800 rounded-lg p-5">
+                <h3 class="font-semibold mb-3">📂 Importer une configuration</h3>
+                <form hx-post="/admin/import" hx-swap="none" hx-encoding="multipart/form-data" class="flex items-center gap-3">
+                    <input type="file" name="config_file" accept=".json" class="bg-gray-700 rounded px-2 py-1 text-sm">
+                    <button type="submit" class="px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-sm font-medium">Importer</button>
+                </form>
+            </div>
         </div>
 
         <!-- Tab: Changelog -->

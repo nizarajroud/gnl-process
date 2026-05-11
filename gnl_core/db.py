@@ -3,9 +3,9 @@
 import os
 import sqlite3
 from contextlib import contextmanager
-from dotenv import load_dotenv
+from .config import load_config
 
-load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
+load_config()
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'gnl.db')
 
