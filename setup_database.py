@@ -10,7 +10,7 @@ import os
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gnl.db')
 
-CURRENT_VERSION = 2
+CURRENT_VERSION = 3
 
 
 def setup_database(db_path=None):
@@ -35,6 +35,8 @@ def setup_database(db_path=None):
         _apply_v1(cursor)
     if current < 2:
         _apply_v2(cursor)
+    if current < 3:
+        _apply_v3(cursor)
 
     conn.commit()
     conn.close()
@@ -122,5 +124,13 @@ def _apply_v2(cursor):
     cursor.execute("INSERT INTO schema_version (version) VALUES (2)")
 
 
+def _apply_v3(cursor):
+    """v3: Add retry_count for generation failure tracking."""
+    cursor.execute("ALTER TABLE podcast_download ADD COLUMN retry_count INTEGER DEFAULT 0")
+    cursor.execute("INSERT INTO schema_version (version) VALUES (3)")
+
+
 if __name__ == "__main__":
     setup_database()
+
+

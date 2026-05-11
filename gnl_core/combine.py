@@ -42,6 +42,13 @@ def combine(parent_id, output_file, db_path=None, suffix=None):
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / output_file
 
+    # Remove any partial files with same base name
+    base_name = output_file.replace('.mp3', '')
+    for existing in output_dir.glob(f"{base_name}-part*.mp3"):
+        existing.unlink()
+    if output_path.exists():
+        output_path.unlink()
+
     if test_mode:
         with open(output_path, 'wb') as f:
             f.write(b'\x00' * 2048)
@@ -65,8 +72,6 @@ def combine(parent_id, output_file, db_path=None, suffix=None):
                        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         list_file.unlink()
 
-        if output_path.exists():
-            output_path.unlink()
         shutil.copyfile(str(local_tmp), str(output_path))
         local_tmp.unlink()
 

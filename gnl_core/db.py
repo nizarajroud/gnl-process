@@ -67,15 +67,16 @@ def update_state(record_id, db_path=None, **updates):
 
 
 def parent_status(parent_id, db_path=None):
-    """Return counts: total, generated, downloaded, converted, combined."""
+    """Return counts: total, generated, downloaded, converted, combined, failed."""
     with get_db(db_path) as conn:
         row = conn.execute("""
             SELECT COUNT(*) as total,
                    SUM(CASE WHEN generation_state = 1 THEN 1 ELSE 0 END) as generated,
                    SUM(CASE WHEN download_state = 1 THEN 1 ELSE 0 END) as downloaded,
-                   SUM(CASE WHEN conversion_state = 1 THEN 1 ELSE 0 END) as converted
+                   SUM(CASE WHEN conversion_state = 1 THEN 1 ELSE 0 END) as converted,
+                   SUM(CASE WHEN retry_count >= ? THEN 1 ELSE 0 END) as failed
             FROM podcast_download WHERE parent_configuration_id = ?
-        """, (parent_id,)).fetchone()
+        """, (int(os.getenv('MAX_GENERATION_RETRIES', '3')), parent_id)).fetchone()
         combined_row = conn.execute(
             "SELECT combination_state FROM parent_configuration WHERE id = ?", (parent_id,)
         ).fetchone()
