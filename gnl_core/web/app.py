@@ -245,6 +245,28 @@ async def get_catalog():
     for r in rows:
         catalog.setdefault(r['theme'], []).append(r['subtheme'])
     return catalog
+
+
+@app.get("/api/prompts")
+async def get_prompts():
+    """Return all prompts."""
+    from gnl_core.db import get_db
+    with get_db() as conn:
+        rows = conn.execute("SELECT id, theme, subtheme, prompt FROM series_catalog ORDER BY theme, id").fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/prompts/{catalog_id}")
+async def save_prompt(catalog_id: int, request: Request):
+    """Save prompt for a catalog entry."""
+    from gnl_core.db import get_db
+    form = await request.form()
+    prompt = form.get("prompt", "")
+    with get_db() as conn:
+        conn.execute("UPDATE series_catalog SET prompt=? WHERE id=?", (prompt, catalog_id))
+        conn.commit()
+    await broadcast_log("✓ Prompt sauvegardé")
+    return {"status": "ok"}
 @app.post("/stop")
 async def stop_processing():
     """Signal all running operations to stop."""
