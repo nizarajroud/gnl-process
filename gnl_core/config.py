@@ -36,11 +36,23 @@ def save_config(data: dict):
 
 
 def export_config() -> str:
-    """Return config as JSON string for download."""
-    return json.dumps(get_config(), indent=2)
+    """Return config + prompts as JSON string for download."""
+    from .db import get_db
+    data = dict(get_config())
+    with get_db() as conn:
+        rows = conn.execute("SELECT theme, subtheme, prompt FROM series_catalog").fetchall()
+    data['_prompts'] = [{"theme": r['theme'], "subtheme": r['subtheme'], "prompt": r['prompt'] or ''} for r in rows]
+    return json.dumps(data, indent=2)
 
 
 def import_config(json_str: str):
-    """Import config from JSON string."""
+    """Import config + prompts from JSON string."""
+    from .db import get_db
     data = json.loads(json_str)
+    prompts = data.pop('_prompts', None)
     save_config(data)
+    if prompts:
+        with get_db() as conn:
+            for p in prompts:
+                conn.execute("UPDATE series_catalog SET prompt=? WHERE theme=? AND subtheme=?", (p['prompt'], p['theme'], p['subtheme']))
+            conn.commit()
