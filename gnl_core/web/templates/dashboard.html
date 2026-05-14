@@ -268,6 +268,12 @@
                 <button type="button" onclick="window.location.href='/admin/export'" class="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-sm font-medium">📥 Exporter</button>
             </form>
 
+            <!-- Prompts -->
+            <div class="mt-6 bg-gray-800 rounded-lg p-5">
+                <h3 class="font-semibold mb-4">🎤 Prompts par sous-thème</h3>
+                <div id="prompts-section" class="space-y-3">Chargement...</div>
+            </div>
+
             <div class="mt-4 bg-gray-800 rounded-lg p-5">
                 <h3 class="font-semibold mb-3">📂 Importer une configuration</h3>
                 <form hx-post="/admin/import" hx-swap="none" hx-encoding="multipart/form-data" class="flex items-center gap-3">
@@ -287,6 +293,27 @@
 
     <script>
         let catalog = {};
+        // Load prompts
+        fetch('/api/prompts').then(r=>r.json()).then(prompts=>{
+            const div = document.getElementById('prompts-section');
+            div.innerHTML = prompts.map(p => `
+                <div class="border border-gray-700 rounded p-3">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-sm font-medium">${p.subtheme}</span>
+                        <button onclick="savePrompt(${p.id}, this)" class="px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs">Sauver</button>
+                    </div>
+                    <textarea id="prompt-${p.id}" class="w-full bg-gray-700 rounded px-2 py-1 text-xs h-20 resize-y">${p.prompt||''}</textarea>
+                </div>
+            `).join('');
+        });
+        function savePrompt(id, btn) {
+            const text = document.getElementById('prompt-'+id).value;
+            const form = new FormData();
+            form.append('prompt', text);
+            fetch('/api/prompts/'+id, {method:'POST', body:form});
+            btn.textContent='✓'; setTimeout(()=>btn.textContent='Sauver',1500);
+        }
+
         function handlePdfSelect(input) {
             const f = input.files[0];
             if (!f) return;
