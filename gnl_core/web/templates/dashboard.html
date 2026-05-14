@@ -281,8 +281,10 @@
 
             <!-- Prompts -->
             <div class="mt-6 bg-gray-800 rounded-lg p-5">
-                <h3 class="font-semibold mb-4">🎤 Prompts par sous-thème</h3>
-                <div id="prompts-section" class="space-y-3">Chargement...</div>
+                <button onclick="document.getElementById('prompts-section').classList.toggle('hidden')" class="flex items-center gap-2 font-semibold w-full text-left">
+                    <span id="prompts-arrow" class="text-xs">▶</span> 🎤 Prompts par sous-thème
+                </button>
+                <div id="prompts-section" class="hidden mt-4 space-y-3">Chargement...</div>
             </div>
 
             <div class="mt-4 bg-gray-800 rounded-lg p-5">
