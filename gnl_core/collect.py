@@ -27,9 +27,9 @@ def collect(split_result, db_path=None):
             shutil.rmtree(audio_dir)
 
     with get_db(db_path) as conn:
-        # Check existing
+        # Check existing (not deleted)
         row = conn.execute(
-            "SELECT id FROM parent_configuration WHERE parent_file = ? AND podcast_subtheme = ?",
+            "SELECT id FROM parent_configuration WHERE parent_file = ? AND podcast_subtheme = ? AND combination_state != -1",
             (parent_file, podcast_subtheme)
         ).fetchone()
 

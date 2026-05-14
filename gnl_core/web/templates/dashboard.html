@@ -7,169 +7,299 @@
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen p-6">
-    <div class="max-w-4xl mx-auto">
-        <div class="flex justify-between items-center mb-8">
-            <div class="flex items-center gap-3">
-                <h1 class="text-3xl font-bold">🎙️ GNL Process</h1>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <div class="max-w-4xl mx-auto p-6">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-3xl font-bold">🎙️ GNL Process</h1>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex border-b border-gray-700 mb-6">
+            <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-blue-500 text-blue-400" onclick="switchTab('production')">📻 Production</button>
+            <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('history')">📜 Historique</button>
+            <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('config')">⚙️ Configuration</button>
+            <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('changelog')">📋 Changelog</button>
+        </div>
+
+        <!-- Tab: Production -->
+        <div id="tab-production" class="tab-content">
+            <!-- Production toolbar -->
+            <div class="flex justify-between items-center mb-4">
+                <div></div>
+                <div class="flex items-center gap-4">
+                    <span id="quota" class="text-sm {% if quota_remaining > 5 %}text-green-400{% elif quota_remaining > 0 %}text-yellow-400{% else %}text-red-400{% endif %}">🎯 {{ quota_remaining }}/20</span>
+                    <button hx-post="/stop" hx-swap="none" data-reset class="px-3 py-1 bg-yellow-800 hover:bg-yellow-700 rounded text-xs" id="stopBtn">⏹ Stop</button>
+                    <button hx-post="/action/reset/0" hx-swap="none" data-reset hx-confirm="Tout réinitialiser ?"
+                        class="px-3 py-1 bg-red-800 hover:bg-red-700 rounded text-xs">🔄 Reset</button>
+                    <span class="text-xs text-gray-400">TEST</span>
+                    <button id="test-toggle" hx-post="/toggle-test-mode" hx-swap="none"
+                        onclick="this.classList.toggle('bg-green-600');this.classList.toggle('bg-gray-600')"
+                        class="relative w-10 h-5 rounded-full transition-colors {{ 'bg-green-600' if test_mode else 'bg-gray-600' }}">
+                        <span class="absolute top-0.5 {{ 'left-5' if test_mode else 'left-0.5' }} w-4 h-4 bg-white rounded-full transition-all"></span>
+                    </button>
+                </div>
             </div>
-            <div class="flex items-center gap-4">
-                <span id="quota" class="text-sm {% if quota_remaining > 5 %}text-green-400{% elif quota_remaining > 0 %}text-yellow-400{% else %}text-red-400{% endif %}">🎯 {{ quota_remaining }}/20</span>
-                <button hx-post="/stop" hx-swap="none" data-reset class="px-3 py-1 bg-yellow-800 hover:bg-yellow-700 rounded text-xs" id="stopBtn">⏹ Stop</button>
-                <button hx-post="/refresh" hx-swap="none" class="px-2 py-1 text-gray-400 hover:text-white text-sm">↻</button>
-                <button hx-post="/action/reset/0" hx-swap="none" data-reset hx-confirm="Tout réinitialiser ?"
-                    class="px-3 py-1 bg-red-800 hover:bg-red-700 rounded text-xs">🔄 Reset</button>
-                <span class="text-xs text-gray-400">TEST</span>
-                <button id="test-toggle" hx-post="/toggle-test-mode" hx-swap="none"
-                    onclick="this.classList.toggle('bg-green-600');this.classList.toggle('bg-gray-600')"
-                    class="relative w-10 h-5 rounded-full transition-colors {{ 'bg-green-600' if test_mode else 'bg-gray-600' }}">
-                    <span class="absolute top-0.5 {{ 'left-5' if test_mode else 'left-0.5' }} w-4 h-4 bg-white rounded-full transition-all"></span>
-                </button>
+            <!-- New Edition -->
+            <div class="mb-6">
+                <button onclick="document.getElementById('newEdition').classList.toggle('hidden')"
+                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium">+ Nouvelle Édition</button>
             </div>
-        </div>
 
-        <!-- New Edition -->
-        <div class="mb-6">
-            <button onclick="document.getElementById('newEdition').classList.toggle('hidden')"
-                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium">+ Nouvelle Édition</button>
-        </div>
-
-        <div id="newEdition" class="hidden mb-6 bg-gray-800 rounded-lg p-5">
-            <h3 class="font-semibold mb-3">Créer une édition</h3>
-            <form hx-post="/prepare" hx-swap="none" hx-encoding="multipart/form-data" class="grid grid-cols-2 gap-3">
-                <div>
-                    <label class="text-xs text-gray-400">PDF</label>
-                    <input type="file" name="pdf" accept=".pdf" class="w-full bg-gray-700 rounded px-2 py-1 text-sm"
-                        onchange="const n=this.files[0]?.name.replace('.pdf','');if(n)this.closest('form').querySelector('[name=name]').value=n">
-                </div>
-                <div>
-                    <label class="text-xs text-gray-400">Pages par épisode</label>
-                    <input type="number" name="pages" value="1" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
-                </div>
-                <div>
-                    <label class="text-xs text-gray-400">Nom</label>
-                    <input type="text" name="name" placeholder="" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
-                </div>
-                <div>
-                    <label class="text-xs text-gray-400">Thème</label>
-                    <select name="theme" id="themeSelect" class="w-full bg-gray-700 rounded px-2 py-1 text-sm"
-                        onchange="updateSubthemes()"></select>
-                </div>
-                <div>
-                    <label class="text-xs text-gray-400">Sous-thème</label>
-                    <select name="subtheme" id="subthemeSelect" class="w-full bg-gray-700 rounded px-2 py-1 text-sm"></select>
-                </div>
-                <div class="flex items-end">
-                    <button type="submit" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-medium">Créer</button>
-                </div>
-            </form>
-        </div>
-
-        <!-- Editions -->
-        <div id="editions" class="space-y-4">
-            {% for p in parents %}
-            <div class="bg-gray-800 rounded-lg p-5">
-                <div class="flex justify-between items-start mb-4">
+            <div id="newEdition" class="hidden mb-6 bg-gray-800 rounded-lg p-5">
+                <h3 class="font-semibold mb-3">Créer une édition</h3>
+                <form hx-post="/prepare" hx-swap="none" hx-encoding="multipart/form-data" class="grid grid-cols-2 gap-3">
                     <div>
-                        <h3 class="font-semibold text-lg">{{ p.parent_file }}</h3>
-                        <span class="text-xs text-gray-400">{{ p.total }} épisodes</span>
+                        <label class="text-xs text-gray-400">PDF</label>
+                        <input type="file" name="pdf" accept=".pdf" class="w-full bg-gray-700 rounded px-2 py-1 text-sm"
+                            onchange="handlePdfSelect(this)">
                     </div>
-                    <div class="flex items-center gap-2">
-                        {% if p.combined == 1 and p.converted == p.total and p.downloaded == p.total %}
-                            <span class="px-3 py-1 bg-green-900 text-green-300 rounded-full text-xs font-medium">✅ Terminé</span>
-                        {% elif p.converted == p.total and p.total > 0 %}
-                            <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
-                                class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-medium">▶ Combiner</button>
-                        {% elif p.generated == 0 %}
-                            <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
-                                class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium">▶ Lancer</button>
-                        {% elif p.downloaded < p.total %}
-                            <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
-                                class="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-sm font-medium">▶ Reprendre</button>
-                        {% elif p.converted < p.total %}
-                            <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
-                                class="px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-sm font-medium">▶ Finaliser</button>
-                        {% endif %}
-                        <button hx-post="/action/clean/{{ p.id }}" hx-swap="none" onclick="this.disabled=true"
-                            class="px-2 py-1 text-red-400 hover:text-red-300 text-xs">🗑</button>
+                    <div>
+                        <label class="text-xs text-gray-400">Pages par épisode</label>
+                        <input type="number" name="pages" value="1" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
                     </div>
-                </div>
+                    <div>
+                        <label class="text-xs text-gray-400">Nom <span id="pageCount" class="text-yellow-400"></span></label>
+                        <input type="text" name="name" placeholder="" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400">Thème</label>
+                        <select name="theme" id="themeSelect" class="w-full bg-gray-700 rounded px-2 py-1 text-sm"
+                            onchange="updateSubthemes()"></select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400">Sous-thème</label>
+                        <select name="subtheme" id="subthemeSelect" class="w-full bg-gray-700 rounded px-2 py-1 text-sm"></select>
+                    </div>
+                    <div class="flex items-end">
+                        <button type="submit" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-medium">Créer</button>
+                    </div>
+                </form>
+            </div>
 
-                <!-- Timeline -->
-                <div class="relative">
-                    {% set steps = [
-                        ("Préparé", p.total, p.total),
-                        ("Généré", p.generated, p.total),
-                        ("Téléchargé", p.downloaded, p.total),
-                        ("Converti", p.converted, p.total),
-                        ("Combiné", p.combined, 1)
-                    ] %}
-                    <div class="flex items-center justify-between">
-                        {% for label, done, total in steps %}
-                        <div class="flex flex-col items-center z-10" style="width:20px">
-                            <div class="w-4 h-4 rounded-full border-2 
-                                {% if done == total %}bg-green-500 border-green-500
-                                {% elif done > 0 %}bg-yellow-500 border-yellow-500 animate-pulse
-                                {% else %}bg-gray-700 border-gray-600{% endif %}"></div>
-                            <span class="text-xs mt-1 {% if done == total %}text-green-400{% elif done > 0 %}text-yellow-400{% else %}text-gray-500{% endif %}">
-                                {{ label }}
-                            </span>
-                            <span class="text-xs text-gray-500">{{ done }}/{{ total }}</span>
+            <!-- Editions -->
+            <div id="editions" class="space-y-4">
+                {% for p in parents %}
+                <div class="bg-gray-800 rounded-lg p-5">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h3 class="font-semibold text-lg">{{ p.parent_file }}</h3>
+                            <span class="text-xs text-gray-400">{{ p.total }} épisodes</span>
                         </div>
-                        {% if not loop.last %}
-                        {% set next_done = steps[loop.index][1] %}
-                        {% set next_total = steps[loop.index][2] %}
-                        {% set pct = (next_done / next_total * 100) if next_total > 0 else 0 %}
-                        {% set current_complete = (done == total) %}
-                        <div class="flex-1 h-1.5 -mt-6 bg-gray-700 rounded-full overflow-hidden mx-1">
-                            <div class="h-full rounded-full transition-all duration-500
-                                {% if current_complete and pct == 100 %}bg-green-500
-                                {% elif current_complete %}bg-green-500
-                                {% elif pct > 0 %}bg-yellow-500{% endif %}"
-                                style="width: {% if current_complete %}100{% else %}{{ pct }}{% endif %}%"></div>
+                        <div class="flex items-center gap-2">
+                            {% if p.combined == 1 and p.converted == p.total and p.downloaded == p.total %}
+                                <span class="px-3 py-1 bg-green-900 text-green-300 rounded-full text-xs font-medium">✅ Terminé</span>
+                            {% elif p.converted == p.total and p.total > 0 %}
+                                <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
+                                    class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-medium">▶ Combiner</button>
+                            {% elif p.generated == 0 %}
+                                <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
+                                    class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium">▶ Lancer</button>
+                            {% elif p.downloaded < p.total %}
+                                <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
+                                    class="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-sm font-medium">▶ Reprendre</button>
+                            {% elif p.converted < p.total %}
+                                <button hx-post="/action/deliver/{{ p.id }}" hx-swap="none" onclick="this.disabled=true;this.textContent='...'"
+                                    class="px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-sm font-medium">▶ Finaliser</button>
+                            {% endif %}
+                            <button hx-post="/action/clean/{{ p.id }}" hx-swap="none" onclick="this.disabled=true"
+                                class="px-2 py-1 text-red-400 hover:text-red-300 text-xs">🗑</button>
                         </div>
-                        {% endif %}
-                        {% endfor %}
                     </div>
+                    <!-- Timeline -->
+                    <div class="relative">
+                        {% set steps = [
+                            ("Préparé", p.total, p.total),
+                            ("Généré", p.generated, p.total),
+                            ("Téléchargé", p.downloaded, p.total),
+                            ("Converti", p.converted, p.total),
+                            ("Combiné", p.combined, 1)
+                        ] %}
+                        <div class="flex items-center justify-between">
+                            {% for label, done, total in steps %}
+                            <div class="flex flex-col items-center z-10" style="width:20px">
+                                <div class="w-4 h-4 rounded-full border-2 
+                                    {% if done == total %}bg-green-500 border-green-500
+                                    {% elif done > 0 %}bg-yellow-500 border-yellow-500 animate-pulse
+                                    {% else %}bg-gray-700 border-gray-600{% endif %}"></div>
+                                <span class="text-xs mt-1 {% if done == total %}text-green-400{% elif done > 0 %}text-yellow-400{% else %}text-gray-500{% endif %}">
+                                    {{ label }}
+                                </span>
+                                <span class="text-xs text-gray-500">{% if label == "Combiné" %}{{ ((p.converted / p.total) * 100)|int if p.total > 0 else 0 }}%{% else %}{{ done }}/{{ total }}{% endif %}</span>
+                            </div>
+                            {% if not loop.last %}
+                            {% set next_done = steps[loop.index][1] %}
+                            {% set next_total = steps[loop.index][2] %}
+                            {% set pct = (next_done / next_total * 100) if next_total > 0 else 0 %}
+                            {% set current_complete = (done == total) %}
+                            <div class="flex-1 h-1.5 -mt-6 bg-gray-700 rounded-full overflow-hidden mx-1">
+                                <div class="h-full rounded-full transition-all duration-500
+                                    {% if current_complete and pct == 100 %}bg-green-500
+                                    {% elif current_complete %}bg-green-500
+                                    {% elif pct > 0 %}bg-yellow-500{% endif %}"
+                                    style="width: {% if current_complete %}100{% else %}{{ pct }}{% endif %}%"></div>
+                            </div>
+                            {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% if p.generated > 0 and p.generated < p.total %}
+                    <p class="text-xs text-gray-400 mt-3">⏳ Quota — reprend automatiquement demain</p>
+                    {% endif %}
+                    {% if p.failed > 0 %}
+                    <p class="text-xs text-red-400 mt-3">⚠ {{ p.failed }} épisode(s) en échec définitif</p>
+                    {% endif %}
                 </div>
-
-                {% if p.generated > 0 and p.generated < p.total %}
-                <p class="text-xs text-gray-400 mt-3">⏳ Quota — reprend automatiquement demain</p>
-                {% endif %}
-                {% if p.failed > 0 %}
-                <p class="text-xs text-red-400 mt-3">⚠ {{ p.failed }} épisode(s) en échec définitif</p>
+                {% endfor %}
+                {% if not parents %}
+                <div class="bg-gray-800 rounded-lg p-8 text-center text-gray-500">
+                    Aucune édition. Cliquez "+ Nouvelle Édition" pour commencer.
+                </div>
                 {% endif %}
             </div>
-            {% endfor %}
 
-            {% if not parents %}
-            <div class="bg-gray-800 rounded-lg p-8 text-center text-gray-500">
-                Aucune édition. Cliquez "+ Nouvelle Édition" pour commencer.
+            <!-- Logs -->
+            <div class="mt-6 bg-gray-800 rounded-lg p-4">
+                <h3 class="font-semibold mb-2 text-sm">Logs</h3>
+                <div id="logs" class="font-mono text-xs h-40 overflow-y-auto bg-black rounded p-3 space-y-1">
+                    <div class="text-gray-500">En attente...</div>
+                </div>
             </div>
-            {% endif %}
         </div>
 
-        <!-- Schedule -->
-        <div class="mt-6 bg-gray-800 rounded-lg p-4">
-            <form hx-post="/schedule" hx-swap="none" class="flex items-center gap-3">
-                <span class="text-sm text-gray-400">⏰ Exécution quotidienne à</span>
-                <input type="time" name="time" value="{{ schedule_time }}" class="bg-gray-700 rounded px-2 py-1 text-sm">
-                <button type="submit" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs">Sauver</button>
-                <span class="text-xs text-gray-500 ml-2">Prochain: {{ next_run }}</span>
+        <!-- Tab: History -->
+        <div id="tab-history" class="tab-content hidden">
+            <div id="history-content" class="space-y-3">
+                {% for p in history %}
+                <div class="bg-gray-800 rounded-lg p-4 flex justify-between items-center">
+                    <div>
+                        <h3 class="font-semibold">{{ p.parent_file }}</h3>
+                        <span class="text-xs text-gray-400">{{ p.total }} épisodes · {{ p.subtheme }}</span>
+                    </div>
+                    {% if p.status_tag == 'deleted' %}
+                    <span class="px-3 py-1 bg-red-900 text-red-300 rounded-full text-xs">🗑 Supprimé</span>
+                    {% else %}
+                    <span class="px-3 py-1 bg-green-900 text-green-300 rounded-full text-xs">✅ Terminé</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                {% if not history %}
+                <div class="bg-gray-800 rounded-lg p-8 text-center text-gray-500">
+                    Aucune édition terminée.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Tab: Configuration -->
+        <div id="tab-config" class="tab-content hidden">
+            <form hx-post="/admin/save" hx-swap="none" class="space-y-6">
+                <div class="bg-gray-800 rounded-lg p-5">
+                    <h3 class="font-semibold mb-4">📁 Chemins</h3>
+                    <div class="grid grid-cols-1 gap-3">
+                        <div>
+                            <label class="text-xs text-gray-400">AUDIO_PARTS_FOLDER</label>
+                            <input type="text" name="AUDIO_PARTS_FOLDER" value="{{ config.AUDIO_PARTS_FOLDER }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">GNL_BACKLOG</label>
+                            <input type="text" name="GNL_BACKLOG" value="{{ config.GNL_BACKLOG }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">PDF_PARTS_FOLDER</label>
+                            <input type="text" name="PDF_PARTS_FOLDER" value="{{ config.PDF_PARTS_FOLDER }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-800 rounded-lg p-5">
+                    <h3 class="font-semibold mb-4">🎵 Audio</h3>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs text-gray-400">Langue</label>
+                            <select name="NOTEBOOKLM_LANGUAGE" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                                <option value="ar-EG" {% if config.NOTEBOOKLM_LANGUAGE == 'ar-EG' %}selected{% endif %}>Arabic</option>
+                                <option value="fr" {% if config.NOTEBOOKLM_LANGUAGE == 'fr' %}selected{% endif %}>French</option>
+                                <option value="en" {% if config.NOTEBOOKLM_LANGUAGE == 'en' %}selected{% endif %}>English</option>
+                                <option value="es" {% if config.NOTEBOOKLM_LANGUAGE == 'es' %}selected{% endif %}>Spanish</option>
+                                <option value="de" {% if config.NOTEBOOKLM_LANGUAGE == 'de' %}selected{% endif %}>German</option>
+                                <option value="it" {% if config.NOTEBOOKLM_LANGUAGE == 'it' %}selected{% endif %}>Italian</option>
+                                <option value="pt" {% if config.NOTEBOOKLM_LANGUAGE == 'pt' %}selected{% endif %}>Portuguese</option>
+                                <option value="ja" {% if config.NOTEBOOKLM_LANGUAGE == 'ja' %}selected{% endif %}>Japanese</option>
+                                <option value="ko" {% if config.NOTEBOOKLM_LANGUAGE == 'ko' %}selected{% endif %}>Korean</option>
+                                <option value="zh" {% if config.NOTEBOOKLM_LANGUAGE == 'zh' %}selected{% endif %}>Chinese</option>
+                                <option value="hi" {% if config.NOTEBOOKLM_LANGUAGE == 'hi' %}selected{% endif %}>Hindi</option>
+                                <option value="tr" {% if config.NOTEBOOKLM_LANGUAGE == 'tr' %}selected{% endif %}>Turkish</option>
+                                <option value="ru" {% if config.NOTEBOOKLM_LANGUAGE == 'ru' %}selected{% endif %}>Russian</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">Vitesse: <span id="speedValue">{{ config.DEFAULT_SPEED }}</span>x</label>
+                            <input type="range" min="0.5" max="3" step="0.01" name="DEFAULT_SPEED" value="{{ config.DEFAULT_SPEED }}" 
+                                class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                oninput="document.getElementById('speedValue').textContent=this.value">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-800 rounded-lg p-5">
+                    <h3 class="font-semibold mb-4">⚡ Limites</h3>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs text-gray-400">Timeout download (secondes)</label>
+                            <input type="number" name="MCP_DOWNLOAD_TIMEOUT" value="{{ config.MCP_DOWNLOAD_TIMEOUT }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">Max retries génération</label>
+                            <input type="number" name="MAX_GENERATION_RETRIES" value="{{ config.MAX_GENERATION_RETRIES }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-800 rounded-lg p-5">
+                    <h3 class="font-semibold mb-4">⏰ Scheduler</h3>
+                    <div>
+                        <label class="text-xs text-gray-400">Exécution quotidienne à</label>
+                        <input type="time" name="GNL_SCHEDULE_TIME" value="{{ config.GNL_SCHEDULE_TIME }}" class="bg-gray-700 rounded px-3 py-2 text-sm">
+                    </div>
+                </div>
+
+                <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium">💾 Sauvegarder</button>
+                <button type="button" onclick="window.location.href='/admin/export'" class="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-sm font-medium">📥 Exporter</button>
             </form>
+
+            <div class="mt-4 bg-gray-800 rounded-lg p-5">
+                <h3 class="font-semibold mb-3">📂 Importer une configuration</h3>
+                <form hx-post="/admin/import" hx-swap="none" hx-encoding="multipart/form-data" class="flex items-center gap-3">
+                    <input type="file" name="config_file" accept=".json" class="bg-gray-700 rounded px-2 py-1 text-sm">
+                    <button type="submit" class="px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-sm font-medium">Importer</button>
+                </form>
+            </div>
         </div>
 
-        <!-- Logs -->
-        <div class="mt-6 bg-gray-800 rounded-lg p-4">
-            <h3 class="font-semibold mb-2 text-sm">Logs</h3>
-            <div id="logs" class="font-mono text-xs h-40 overflow-y-auto bg-black rounded p-3 space-y-1">
-                <div class="text-gray-500">En attente...</div>
+        <!-- Tab: Changelog -->
+        <div id="tab-changelog" class="tab-content hidden">
+            <div class="bg-gray-800 rounded-lg p-5 prose prose-invert prose-sm max-w-none">
+                {{ changelog_html | safe }}
             </div>
         </div>
     </div>
 
     <script>
         let catalog = {};
+        function handlePdfSelect(input) {
+            const f = input.files[0];
+            if (!f) return;
+            const n = f.name.replace('.pdf', '');
+            input.closest('form').querySelector('[name=name]').value = n;
+            const r = new FileReader();
+            r.onload = function(e) {
+                const s = new TextDecoder('latin1').decode(new Uint8Array(e.target.result));
+                const m = s.match(/\/Type\s*\/Page[^s]/g);
+                document.getElementById('pageCount').textContent = '(' + (m ? m.length : '?') + ' pages)';
+            };
+            r.readAsArrayBuffer(f);
+        }
         fetch('/api/catalog').then(r=>r.json()).then(data=>{
             catalog = data;
             const sel = document.getElementById('themeSelect');
@@ -181,6 +311,17 @@
             const sel = document.getElementById('subthemeSelect');
             sel.innerHTML = '';
             (catalog[theme]||[]).forEach(s=>{sel.add(new Option(s,s))});
+        }
+
+        function switchTab(name) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById('tab-' + name).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('border-blue-500', 'text-blue-400');
+                btn.classList.add('border-transparent', 'text-gray-400');
+            });
+            event.target.classList.remove('border-transparent', 'text-gray-400');
+            event.target.classList.add('border-blue-500', 'text-blue-400');
         }
 
         // Handle reset side effects after successful request
@@ -239,7 +380,6 @@
                 else if (data.msg.startsWith('⏳')) line.className = 'text-yellow-400 animate-pulse';
                 logsDiv.appendChild(line);
                 logsDiv.scrollTop = logsDiv.scrollHeight;
-                // Unlock on completion
                 if (data.msg === '__done__') {
                     running = false;
                     document.getElementById('stopBtn').classList.add('hidden');
@@ -248,6 +388,9 @@
             } else if (data.type === 'status_update') {
                 document.getElementById('editions').innerHTML = data.html;
                 htmx.process(document.getElementById('editions'));
+                if (data.history_html) {
+                    document.getElementById('history-content').innerHTML = data.history_html;
+                }
                 if (data.quota !== undefined) {
                     const q = document.getElementById('quota');
                     q.textContent = `🎯 ${data.quota}/20`;
