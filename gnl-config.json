@@ -8,5 +8,6 @@
   "MAX_GENERATION_RETRIES": "3",
   "GNL_SCHEDULE_TIME": "08:00",
   "TEST_MODE": "",
-  "TEST_GENERATION_DELAY": ""
+  "TEST_GENERATION_DELAY": "",
+  "BEDROCK_MODEL_ID": "us.anthropic.claude-sonnet-4-20250514-v1:0"
 }

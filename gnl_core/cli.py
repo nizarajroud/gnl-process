@@ -15,18 +15,19 @@ def cli():
 
 @cli.command()
 @click.option('--pdf', required=True, help='Path to PDF file')
-@click.option('--pages', required=True, type=int, help='Pages per split')
+@click.option('--pages', default=1, type=int, help='Pages per split (for pages mode)')
 @click.option('--name', required=True, help='Parent name (folder name)')
 @click.option('--theme', required=True, help='Podcast theme (e.g. aws)')
 @click.option('--subtheme', required=True, help='Podcast subtheme (e.g. whatsnew-mars)')
-def prepare(pdf, pages, name, theme, subtheme):
+@click.option('--mode', default='pages', type=click.Choice(['pages', 'semantic']), help='Split mode')
+def prepare(pdf, pages, name, theme, subtheme, mode):
     """Split PDF + insert DB + generate titles. Returns parent_id."""
     from gnl_core.split import split
     from gnl_core.collect import collect
     from gnl_core.titles import generate_titles
 
-    click.echo(f"Splitting {pdf} ({pages} pages/chunk)...")
-    result = split(pdf, pages, name, podcast_theme=theme, podcast_subtheme=subtheme)
+    click.echo(f"Splitting {pdf} (mode={mode})...")
+    result = split(pdf, pages, name, podcast_theme=theme, podcast_subtheme=subtheme, mode=mode)
     click.echo(f"  → {len(result['files'])} chunks")
 
     parent_id = collect(result)

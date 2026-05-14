@@ -55,6 +55,13 @@
                             onchange="handlePdfSelect(this)">
                     </div>
                     <div>
+                        <label class="text-xs text-gray-400">Mode</label>
+                        <select name="mode" class="w-full bg-gray-700 rounded px-2 py-1 text-sm" onchange="document.querySelector('[name=pages]').disabled=this.value==='semantic'">
+                            <option value="pages">Pages</option>
+                            <option value="semantic">Sémantique (AI)</option>
+                        </select>
+                    </div>
+                    <div>
                         <label class="text-xs text-gray-400">Pages par épisode</label>
                         <input type="number" name="pages" value="1" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
                     </div>
@@ -253,6 +260,10 @@
                             <label class="text-xs text-gray-400">Max retries génération</label>
                             <input type="number" name="MAX_GENERATION_RETRIES" value="{{ config.MAX_GENERATION_RETRIES }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
                         </div>
+                        <div class="col-span-2">
+                            <label class="text-xs text-gray-400">Modèle Bedrock (semantic chunking)</label>
+                            <input type="text" name="BEDROCK_MODEL_ID" value="{{ config.BEDROCK_MODEL_ID }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                        </div>
                     </div>
                 </div>
 
@@ -270,8 +281,10 @@
 
             <!-- Prompts -->
             <div class="mt-6 bg-gray-800 rounded-lg p-5">
-                <h3 class="font-semibold mb-4">🎤 Prompts par sous-thème</h3>
-                <div id="prompts-section" class="space-y-3">Chargement...</div>
+                <button onclick="document.getElementById('prompts-section').classList.toggle('hidden')" class="flex items-center gap-2 font-semibold w-full text-left">
+                    <span id="prompts-arrow" class="text-xs">▶</span> 🎤 Prompts par sous-thème
+                </button>
+                <div id="prompts-section" class="hidden mt-4 space-y-3">Chargement...</div>
             </div>
 
             <div class="mt-4 bg-gray-800 rounded-lg p-5">
