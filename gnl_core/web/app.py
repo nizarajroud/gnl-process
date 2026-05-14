@@ -256,6 +256,33 @@ async def get_prompts():
     return [dict(r) for r in rows]
 
 
+@app.post("/api/catalog/add")
+async def add_catalog_entry(request: Request):
+    """Add a theme/subtheme to the catalog."""
+    from gnl_core.db import get_db
+    form = await request.form()
+    theme = form.get("theme", "").strip()
+    subtheme = form.get("subtheme", "").strip()
+    if not theme or not subtheme:
+        return {"status": "error", "message": "Theme and subtheme required"}
+    with get_db() as conn:
+        conn.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt) VALUES (?, ?, '')", (theme, subtheme))
+        conn.commit()
+    await broadcast_log(f"✓ Ajouté: {theme}/{subtheme}")
+    return {"status": "ok"}
+
+
+@app.post("/api/catalog/delete/{catalog_id}")
+async def delete_catalog_entry(catalog_id: int):
+    """Delete a catalog entry."""
+    from gnl_core.db import get_db
+    with get_db() as conn:
+        conn.execute("DELETE FROM series_catalog WHERE id=?", (catalog_id,))
+        conn.commit()
+    await broadcast_log("✓ Sous-thème supprimé")
+    return {"status": "ok"}
+
+
 @app.post("/api/prompts/{catalog_id}")
 async def save_prompt(catalog_id: int, request: Request):
     """Save prompt for a catalog entry."""
