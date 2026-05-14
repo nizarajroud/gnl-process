@@ -55,6 +55,13 @@
                             onchange="handlePdfSelect(this)">
                     </div>
                     <div>
+                        <label class="text-xs text-gray-400">Mode</label>
+                        <select name="mode" class="w-full bg-gray-700 rounded px-2 py-1 text-sm" onchange="document.querySelector('[name=pages]').disabled=this.value==='semantic'">
+                            <option value="pages">Pages</option>
+                            <option value="semantic">Sémantique (AI)</option>
+                        </select>
+                    </div>
+                    <div>
                         <label class="text-xs text-gray-400">Pages par épisode</label>
                         <input type="number" name="pages" value="1" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
                     </div>

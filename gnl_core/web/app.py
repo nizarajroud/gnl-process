@@ -495,24 +495,25 @@ async def prepare_pdf(request: Request):
 
     form = await request.form()
     pdf_file = form.get("pdf")
-    pages = int(form.get("pages", 3))
+    pages = int(form.get("pages", 1))
     name = form.get("name", "")
     theme = form.get("theme", "")
     subtheme = form.get("subtheme", "")
+    mode = form.get("mode", "pages")
 
     # Save uploaded file to temp
     tmp = os.path.join(tempfile.gettempdir(), pdf_file.filename)
     with open(tmp, "wb") as f:
         f.write(await pdf_file.read())
 
-    await broadcast_log(f"▶ Preparing {pdf_file.filename} ({pages}p/chunk)")
+    await broadcast_log(f"▶ Preparing {pdf_file.filename} (mode={mode})")
 
     try:
         from gnl_core.split import split
         from gnl_core.collect import collect
         from gnl_core.titles import generate_titles
 
-        result = split(tmp, pages, name, podcast_theme=theme, podcast_subtheme=subtheme)
+        result = split(tmp, pages, name, podcast_theme=theme, podcast_subtheme=subtheme, mode=mode)
         parent_id = collect(result)
         count = generate_titles(parent_id)
         os.unlink(tmp)
