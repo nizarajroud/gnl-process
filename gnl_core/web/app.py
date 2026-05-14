@@ -291,7 +291,8 @@ async def admin_save(request: Request):
     
     config_keys = ['AUDIO_PARTS_FOLDER', 'GNL_BACKLOG', 'PDF_PARTS_FOLDER', 
                    'NOTEBOOKLM_LANGUAGE', 'DEFAULT_SPEED', 'MCP_DOWNLOAD_TIMEOUT',
-                   'MAX_GENERATION_RETRIES', 'GNL_SCHEDULE_TIME', 'TEST_MODE', 'TEST_GENERATION_DELAY']
+                   'MAX_GENERATION_RETRIES', 'GNL_SCHEDULE_TIME', 'TEST_MODE', 'TEST_GENERATION_DELAY',
+                   'BEDROCK_MODEL_ID']
     
     data = {key: form.get(key, '') for key in config_keys}
 

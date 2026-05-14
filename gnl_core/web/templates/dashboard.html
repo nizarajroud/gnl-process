@@ -260,6 +260,10 @@
                             <label class="text-xs text-gray-400">Max retries génération</label>
                             <input type="number" name="MAX_GENERATION_RETRIES" value="{{ config.MAX_GENERATION_RETRIES }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
                         </div>
+                        <div class="col-span-2">
+                            <label class="text-xs text-gray-400">Modèle Bedrock (semantic chunking)</label>
+                            <input type="text" name="BEDROCK_MODEL_ID" value="{{ config.BEDROCK_MODEL_ID }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                        </div>
                     </div>
                 </div>
 
