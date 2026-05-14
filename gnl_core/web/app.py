@@ -101,11 +101,14 @@ async def broadcast_status():
     quota_remaining = _get_quota()
 
     with get_db() as conn:
-        rows = conn.execute("SELECT id, podcast_subtheme, parent_file FROM parent_configuration").fetchall()
+        rows = conn.execute("SELECT id, podcast_subtheme, parent_file FROM parent_configuration WHERE combination_state != -1").fetchall()
 
     html = ""
     for row in rows:
         s = parent_status(row['id'])
+        # Skip completed editions (they go to history)
+        if s['combined'] == 1 and s['converted'] == s['total'] and s['downloaded'] == s['total']:
+            continue
         pid = row['id']
         sub = row['podcast_subtheme']
         total = s['total']
@@ -171,9 +174,22 @@ async def broadcast_status():
     if not html:
         html = '<div class="bg-gray-800 rounded-lg p-8 text-center text-gray-500">Aucune édition.</div>'
 
+    # Build history HTML
+    with get_db() as conn:
+        all_rows = conn.execute("SELECT id, podcast_subtheme, parent_file FROM parent_configuration").fetchall()
+    history_html = ""
+    for row in all_rows:
+        s = parent_status(row['id'])
+        if s['combined'] == -1:
+            history_html += f'<div class="bg-gray-800 rounded-lg p-4 flex justify-between items-center"><div><h3 class="font-semibold">{row["parent_file"]}</h3><span class="text-xs text-gray-400">{s["total"]} épisodes · {row["podcast_subtheme"]}</span></div><span class="px-3 py-1 bg-red-900 text-red-300 rounded-full text-xs">🗑 Supprimé</span></div>'
+        elif s['combined'] == 1 and s['converted'] == s['total'] and s['downloaded'] == s['total']:
+            history_html += f'<div class="bg-gray-800 rounded-lg p-4 flex justify-between items-center"><div><h3 class="font-semibold">{row["parent_file"]}</h3><span class="text-xs text-gray-400">{s["total"]} épisodes · {row["podcast_subtheme"]}</span></div><span class="px-3 py-1 bg-green-900 text-green-300 rounded-full text-xs">✅ Terminé</span></div>'
+    if not history_html:
+        history_html = '<div class="bg-gray-800 rounded-lg p-8 text-center text-gray-500">Aucune édition terminée.</div>'
+
     for ws in ws_clients[:]:
         try:
-            await ws.send_text(json.dumps({"type": "status_update", "html": html, "quota": quota_remaining}))
+            await ws.send_text(json.dumps({"type": "status_update", "html": html, "history_html": history_html, "quota": quota_remaining}))
         except Exception:
             ws_clients.remove(ws)
 @app.get("/", response_class=HTMLResponse)
@@ -189,7 +205,11 @@ async def dashboard(request: Request):
     for row in rows:
         s = parent_status(row['id'])
         item = {'id': row['id'], 'subtheme': row['podcast_subtheme'], 'parent_file': row['parent_file'], **s}
-        if s['combined'] == 1 and s['converted'] == s['total'] and s['downloaded'] == s['total']:
+        if s['combined'] == -1:
+            item['status_tag'] = 'deleted'
+            history.append(item)
+        elif s['combined'] == 1 and s['converted'] == s['total'] and s['downloaded'] == s['total']:
+            item['status_tag'] = 'completed'
             history.append(item)
         else:
             parents.append(item)
@@ -243,7 +263,7 @@ async def refresh():
 
 @app.post("/admin/save")
 async def admin_save(request: Request):
-    """Save configuration to gnl-config.json."""
+    """Save configuration to gnl-config.json with validation."""
     from gnl_core.config import save_config
     form = await request.form()
     
@@ -252,6 +272,37 @@ async def admin_save(request: Request):
                    'MAX_GENERATION_RETRIES', 'GNL_SCHEDULE_TIME', 'TEST_MODE', 'TEST_GENERATION_DELAY']
     
     data = {key: form.get(key, '') for key in config_keys}
+
+    # Validation
+    errors = []
+    for path_key in ['AUDIO_PARTS_FOLDER', 'GNL_BACKLOG', 'PDF_PARTS_FOLDER']:
+        if data[path_key] and not os.path.exists(data[path_key]):
+            errors.append(f"{path_key}: chemin inexistant")
+    try:
+        speed = float(data['DEFAULT_SPEED'])
+        if not (0.5 <= speed <= 3):
+            errors.append("DEFAULT_SPEED: doit être entre 0.5 et 3")
+    except ValueError:
+        errors.append("DEFAULT_SPEED: nombre invalide")
+    try:
+        timeout = int(data['MCP_DOWNLOAD_TIMEOUT'])
+        if timeout < 60:
+            errors.append("MCP_DOWNLOAD_TIMEOUT: minimum 60 secondes")
+    except ValueError:
+        errors.append("MCP_DOWNLOAD_TIMEOUT: nombre invalide")
+    try:
+        retries = int(data['MAX_GENERATION_RETRIES'])
+        if retries < 1:
+            errors.append("MAX_GENERATION_RETRIES: minimum 1")
+    except ValueError:
+        errors.append("MAX_GENERATION_RETRIES: nombre invalide")
+    if not data['GNL_SCHEDULE_TIME'] or ':' not in data['GNL_SCHEDULE_TIME']:
+        errors.append("GNL_SCHEDULE_TIME: format HH:MM requis")
+
+    if errors:
+        await broadcast_log(f"⚠ Validation: {'; '.join(errors)}")
+        return {"status": "error", "errors": errors}
+
     save_config(data)
     
     # Reschedule if time changed
@@ -268,8 +319,11 @@ async def admin_export():
     """Download config as JSON file."""
     from gnl_core.config import export_config
     from fastapi.responses import Response
-    return Response(content=export_config(), media_type="application/json",
-                    headers={"Content-Disposition": "attachment; filename=gnl-config.json"})
+    return Response(
+        content=export_config(),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": "attachment; filename=gnl-config.json"}
+    )
 
 
 @app.post("/admin/import")
@@ -352,7 +406,9 @@ async def _run_action(action: str, parent_id: int):
                 await broadcast_log(f"▶ GENERATE ({max_count or to_generate} épisodes)")
 
                 def on_episode_generated(rec):
-                    asyncio.run_coroutine_threadsafe(broadcast_status(), loop)
+                    import time as _t
+                    future = asyncio.run_coroutine_threadsafe(broadcast_status(), loop)
+                    future.result(timeout=5)  # wait for it to complete
 
                 await loop.run_in_executor(None, lambda: generate(parent_id, max_count=max_count, on_progress=on_episode_generated, should_stop=_stopped))
                 await broadcast_status()

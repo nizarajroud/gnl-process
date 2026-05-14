@@ -80,9 +80,10 @@ def combine(parent_id, output_file, db_path=None, suffix=None):
                 if f.name.startswith("adjusted_"):
                     f.unlink()
 
-    # Mark parent as combined
-    with get_db(db_path) as conn:
-        conn.execute("UPDATE parent_configuration SET combination_state = 1 WHERE id = ?", (parent_id,))
-        conn.commit()
+    # Mark parent as combined only if full (no suffix = complete)
+    if not suffix:
+        with get_db(db_path) as conn:
+            conn.execute("UPDATE parent_configuration SET combination_state = 1 WHERE id = ?", (parent_id,))
+            conn.commit()
 
     return str(output_path)

@@ -52,14 +52,14 @@
                     <div>
                         <label class="text-xs text-gray-400">PDF</label>
                         <input type="file" name="pdf" accept=".pdf" class="w-full bg-gray-700 rounded px-2 py-1 text-sm"
-                            onchange="const n=this.files[0]?.name.replace('.pdf','');if(n)this.closest('form').querySelector('[name=name]').value=n">
+                            onchange="handlePdfSelect(this)">
                     </div>
                     <div>
                         <label class="text-xs text-gray-400">Pages par épisode</label>
                         <input type="number" name="pages" value="1" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
                     </div>
                     <div>
-                        <label class="text-xs text-gray-400">Nom</label>
+                        <label class="text-xs text-gray-400">Nom <span id="pageCount" class="text-yellow-400"></span></label>
                         <input type="text" name="name" placeholder="" class="w-full bg-gray-700 rounded px-2 py-1 text-sm">
                     </div>
                     <div>
@@ -125,7 +125,7 @@
                                 <span class="text-xs mt-1 {% if done == total %}text-green-400{% elif done > 0 %}text-yellow-400{% else %}text-gray-500{% endif %}">
                                     {{ label }}
                                 </span>
-                                <span class="text-xs text-gray-500">{{ done }}/{{ total }}</span>
+                                <span class="text-xs text-gray-500">{% if label == "Combiné" %}{{ ((p.converted / p.total) * 100)|int if p.total > 0 else 0 }}%{% else %}{{ done }}/{{ total }}{% endif %}</span>
                             </div>
                             {% if not loop.last %}
                             {% set next_done = steps[loop.index][1] %}
@@ -169,14 +169,18 @@
 
         <!-- Tab: History -->
         <div id="tab-history" class="tab-content hidden">
-            <div class="space-y-3">
+            <div id="history-content" class="space-y-3">
                 {% for p in history %}
                 <div class="bg-gray-800 rounded-lg p-4 flex justify-between items-center">
                     <div>
                         <h3 class="font-semibold">{{ p.parent_file }}</h3>
                         <span class="text-xs text-gray-400">{{ p.total }} épisodes · {{ p.subtheme }}</span>
                     </div>
+                    {% if p.status_tag == 'deleted' %}
+                    <span class="px-3 py-1 bg-red-900 text-red-300 rounded-full text-xs">🗑 Supprimé</span>
+                    {% else %}
                     <span class="px-3 py-1 bg-green-900 text-green-300 rounded-full text-xs">✅ Terminé</span>
+                    {% endif %}
                 </div>
                 {% endfor %}
                 {% if not history %}
@@ -214,7 +218,7 @@
                         <div>
                             <label class="text-xs text-gray-400">Langue</label>
                             <select name="NOTEBOOKLM_LANGUAGE" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
-                                <option value="ar" {% if config.NOTEBOOKLM_LANGUAGE == 'ar' %}selected{% endif %}>Arabic</option>
+                                <option value="ar-EG" {% if config.NOTEBOOKLM_LANGUAGE == 'ar-EG' %}selected{% endif %}>Arabic</option>
                                 <option value="fr" {% if config.NOTEBOOKLM_LANGUAGE == 'fr' %}selected{% endif %}>French</option>
                                 <option value="en" {% if config.NOTEBOOKLM_LANGUAGE == 'en' %}selected{% endif %}>English</option>
                                 <option value="es" {% if config.NOTEBOOKLM_LANGUAGE == 'es' %}selected{% endif %}>Spanish</option>
@@ -261,7 +265,7 @@
                 </div>
 
                 <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium">💾 Sauvegarder</button>
-                <a href="/admin/export" class="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-sm font-medium inline-block">📥 Exporter</a>
+                <button type="button" onclick="window.location.href='/admin/export'" class="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-sm font-medium">📥 Exporter</button>
             </form>
 
             <div class="mt-4 bg-gray-800 rounded-lg p-5">
@@ -283,6 +287,19 @@
 
     <script>
         let catalog = {};
+        function handlePdfSelect(input) {
+            const f = input.files[0];
+            if (!f) return;
+            const n = f.name.replace('.pdf', '');
+            input.closest('form').querySelector('[name=name]').value = n;
+            const r = new FileReader();
+            r.onload = function(e) {
+                const s = new TextDecoder('latin1').decode(new Uint8Array(e.target.result));
+                const m = s.match(/\/Type\s*\/Page[^s]/g);
+                document.getElementById('pageCount').textContent = '(' + (m ? m.length : '?') + ' pages)';
+            };
+            r.readAsArrayBuffer(f);
+        }
         fetch('/api/catalog').then(r=>r.json()).then(data=>{
             catalog = data;
             const sel = document.getElementById('themeSelect');
@@ -371,6 +388,9 @@
             } else if (data.type === 'status_update') {
                 document.getElementById('editions').innerHTML = data.html;
                 htmx.process(document.getElementById('editions'));
+                if (data.history_html) {
+                    document.getElementById('history-content').innerHTML = data.history_html;
+                }
                 if (data.quota !== undefined) {
                     const q = document.getElementById('quota');
                     q.textContent = `🎯 ${data.quota}/20`;
