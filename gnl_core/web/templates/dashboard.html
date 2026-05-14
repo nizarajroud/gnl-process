@@ -279,6 +279,27 @@
                 <button type="button" onclick="window.location.href='/admin/export'" class="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-sm font-medium">📥 Exporter</button>
             </form>
 
+            <!-- Catalogue -->
+            <div class="mt-6 bg-gray-800 rounded-lg p-5">
+                <button onclick="document.getElementById('catalog-section').classList.toggle('hidden')" class="flex items-center gap-2 font-semibold w-full text-left">
+                    <span class="text-xs">▶</span> 📚 Catalogue (thèmes / sous-thèmes)
+                </button>
+                <div id="catalog-section" class="hidden mt-4">
+                    <div id="catalog-list" class="space-y-2 mb-4">Chargement...</div>
+                    <div class="flex gap-2 items-end border-t border-gray-700 pt-3">
+                        <div>
+                            <label class="text-xs text-gray-400">Thème</label>
+                            <input type="text" id="new-theme" placeholder="aws" class="bg-gray-700 rounded px-2 py-1 text-sm">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">Sous-thème</label>
+                            <input type="text" id="new-subtheme" placeholder="aws-new-feature" class="bg-gray-700 rounded px-2 py-1 text-sm">
+                        </div>
+                        <button onclick="addCatalogEntry()" class="px-3 py-1 bg-green-600 hover:bg-green-500 rounded text-sm">+ Ajouter</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Prompts -->
             <div class="mt-6 bg-gray-800 rounded-lg p-5">
                 <button onclick="document.getElementById('prompts-section').classList.toggle('hidden')" class="flex items-center gap-2 font-semibold w-full text-left">
@@ -306,6 +327,49 @@
 
     <script>
         let catalog = {};
+        // Load catalog list
+        function loadCatalogList() {
+            fetch('/api/prompts').then(r=>r.json()).then(items=>{
+                const div = document.getElementById('catalog-list');
+                const grouped = {};
+                items.forEach(i => { (grouped[i.theme] = grouped[i.theme]||[]).push(i); });
+                div.innerHTML = Object.entries(grouped).map(([theme, subs]) => `
+                    <div class="border border-gray-700 rounded p-2">
+                        <span class="text-sm font-medium text-blue-400">${theme}</span>
+                        <div class="ml-4 mt-1 space-y-1">${subs.map(s => `
+                            <div class="flex justify-between items-center text-xs">
+                                <span>${s.subtheme}</span>
+                                <button onclick="deleteCatalogEntry(${s.id})" class="text-red-400 hover:text-red-300">×</button>
+                            </div>`).join('')}
+                        </div>
+                    </div>
+                `).join('');
+            });
+        }
+        loadCatalogList();
+
+        function addCatalogEntry() {
+            const theme = document.getElementById('new-theme').value;
+            const subtheme = document.getElementById('new-subtheme').value;
+            if (!theme || !subtheme) return;
+            const form = new FormData();
+            form.append('theme', theme);
+            form.append('subtheme', subtheme);
+            fetch('/api/catalog/add', {method:'POST', body:form}).then(()=>{
+                loadCatalogList();
+                document.getElementById('new-subtheme').value='';
+                // Refresh dropdowns
+                fetch('/api/catalog').then(r=>r.json()).then(data=>{catalog=data;updateSubthemes()});
+            });
+        }
+
+        function deleteCatalogEntry(id) {
+            fetch('/api/catalog/delete/'+id, {method:'POST'}).then(()=>{
+                loadCatalogList();
+                fetch('/api/catalog').then(r=>r.json()).then(data=>{catalog=data;updateSubthemes()});
+            });
+        }
+
         // Load prompts
         fetch('/api/prompts').then(r=>r.json()).then(prompts=>{
             const div = document.getElementById('prompts-section');
