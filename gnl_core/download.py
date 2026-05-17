@@ -6,15 +6,14 @@ import asyncio
 from .db import get_records, update_state, resolve_parent
 
 POLL_INTERVAL = 60
-MAX_STALE_POLLS = 3  # Stop if no progress after 3 consecutive polls
 
 
 def _is_test_mode():
     return os.getenv('TEST_MODE', '0') == '1'
 
 
-def download(parent_id, db_path=None, timeout=None):
-    """Download completed audio for a parent. Polls until all done or stale. Returns (succeeded, failed)."""
+def download(parent_id, db_path=None, timeout=None, on_progress=None):
+    """Download completed audio for a parent. Polls until all done or timeout. Returns (succeeded, failed)."""
     timeout = timeout or int(os.getenv('MCP_DOWNLOAD_TIMEOUT', '10800'))  # 3h default
 
     records = get_records(parent_id, db_path, generation_state=1, download_state=0)
@@ -47,7 +46,6 @@ def download(parent_id, db_path=None, timeout=None):
             pending.append({**rec, 'notebook_id': notebooks[rec['podcast_name']]['id']})
 
     start_time = time.time()
-    stale_count = 0
 
     while pending and (time.time() - start_time) < timeout:
         downloaded_this_round = 0
@@ -99,6 +97,8 @@ def download(parent_id, db_path=None, timeout=None):
                 update_state(rec['id'], db_path, download_state=1)
                 succeeded.append(rec)
                 downloaded_this_round += 1
+                if on_progress:
+                    on_progress(rec)
             except Exception as e:
                 failed.append({**rec, 'reason': str(e)[:80]})
 
@@ -106,16 +106,6 @@ def download(parent_id, db_path=None, timeout=None):
 
         if not pending:
             break
-
-        # Stale detection
-        if downloaded_this_round == 0:
-            stale_count += 1
-            if stale_count >= MAX_STALE_POLLS:
-                for rec in pending:
-                    failed.append({**rec, 'reason': 'Stale - no progress'})
-                break
-        else:
-            stale_count = 0
 
         time.sleep(POLL_INTERVAL)
 

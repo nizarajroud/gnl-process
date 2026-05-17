@@ -145,3 +145,8 @@ Every story must include:
 - Download: waits `TEST_GENERATION_DELAY` seconds then creates dummy .m4a files
 - Use TEST_MODE for all UI/flow development. Only disable for real production runs.
 - **Rule**: Never test with real API during development. Always use TEST_MODE=1.
+
+## Configuration Rules
+- **gnl-config.json is controlled by the UI** — every parameter in the JSON must have a corresponding field in the Configuration tab
+- No hidden/orphan parameters allowed in gnl-config.json that aren't editable via the web interface
+- The UI is the single source of truth for configuration
