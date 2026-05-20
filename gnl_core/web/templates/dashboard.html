@@ -32,12 +32,6 @@
                     <button hx-post="/stop" hx-swap="none" data-reset class="px-3 py-1 bg-yellow-800 hover:bg-yellow-700 rounded text-xs" id="stopBtn">⏹ Stop</button>
                     <button hx-post="/action/reset/0" hx-swap="none" data-reset hx-confirm="Tout réinitialiser ?"
                         class="px-3 py-1 bg-red-800 hover:bg-red-700 rounded text-xs">🔄 Reset</button>
-                    <span class="text-xs text-gray-400">TEST</span>
-                    <button id="test-toggle" hx-post="/toggle-test-mode" hx-swap="none"
-                        onclick="this.classList.toggle('bg-green-600');this.classList.toggle('bg-gray-600')"
-                        class="relative w-10 h-5 rounded-full transition-colors {{ 'bg-green-600' if test_mode else 'bg-gray-600' }}">
-                        <span class="absolute top-0.5 {{ 'left-5' if test_mode else 'left-0.5' }} w-4 h-4 bg-white rounded-full transition-all"></span>
-                    </button>
                 </div>
             </div>
             <!-- New Edition -->
@@ -264,6 +258,21 @@
                             <label class="text-xs text-gray-400">Modèle Bedrock (semantic chunking)</label>
                             <input type="text" name="BEDROCK_MODEL_ID" value="{{ config.BEDROCK_MODEL_ID }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
                         </div>
+                        <div>
+                            <label class="text-xs text-gray-400">AWS Region</label>
+                            <select name="AWS_REGION" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                                <option value="us-east-1" {% if config.AWS_REGION == 'us-east-1' %}selected{% endif %}>us-east-1</option>
+                                <option value="ca-central-1" {% if config.AWS_REGION == 'ca-central-1' %}selected{% endif %}>ca-central-1</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">AWS Profile (SSO)</label>
+                            <select name="AWS_PROFILE" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                                <option value="csna-sandbox-sso-865" {% if config.AWS_PROFILE == 'csna-sandbox-sso-865' %}selected{% endif %}>csna-sandbox-sso-865</option>
+                                <option value="csna-operations-sso-828" {% if config.AWS_PROFILE == 'csna-operations-sso-828' %}selected{% endif %}>csna-operations-sso-828</option>
+                                <option value="personal-production-sso-760" {% if config.AWS_PROFILE == 'personal-production-sso-760' %}selected{% endif %}>personal-production-sso-760</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -272,6 +281,24 @@
                     <div>
                         <label class="text-xs text-gray-400">Exécution quotidienne à</label>
                         <input type="time" name="GNL_SCHEDULE_TIME" value="{{ config.GNL_SCHEDULE_TIME }}" class="bg-gray-700 rounded px-3 py-2 text-sm">
+                    </div>
+                </div>
+
+                <div class="bg-gray-800 rounded-lg p-5">
+                    <h3 class="font-semibold mb-4">🧪 Test</h3>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="flex items-center gap-3">
+                            <label class="text-xs text-gray-400">Test Mode</label>
+                            <button type="button" id="test-toggle-config" onclick="toggleTestMode(this)"
+                                class="relative w-10 h-5 rounded-full transition-colors {{ 'bg-green-600' if config.TEST_MODE == '1' else 'bg-gray-600' }}">
+                                <span class="absolute top-0.5 {{ 'left-5' if config.TEST_MODE == '1' else 'left-0.5' }} w-4 h-4 bg-white rounded-full transition-all"></span>
+                            </button>
+                            <input type="hidden" name="TEST_MODE" id="test-mode-input" value="{{ config.TEST_MODE or '0' }}">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">Délai simulation (secondes)</label>
+                            <input type="number" name="TEST_GENERATION_DELAY" value="{{ config.TEST_GENERATION_DELAY or '5' }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                        </div>
                     </div>
                 </div>
 
@@ -327,6 +354,17 @@
 
     <script>
         let catalog = {};
+        function toggleTestMode(btn) {
+            const input = document.getElementById('test-mode-input');
+            const isOn = input.value === '1';
+            input.value = isOn ? '0' : '1';
+            btn.classList.toggle('bg-green-600');
+            btn.classList.toggle('bg-gray-600');
+            const dot = btn.querySelector('span');
+            dot.classList.toggle('left-5');
+            dot.classList.toggle('left-0.5');
+        }
+
         // Load catalog list
         function loadCatalogList() {
             fetch('/api/prompts').then(r=>r.json()).then(items=>{

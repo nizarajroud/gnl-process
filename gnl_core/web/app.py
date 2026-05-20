@@ -319,7 +319,7 @@ async def admin_save(request: Request):
     config_keys = ['AUDIO_PARTS_FOLDER', 'GNL_BACKLOG', 'PDF_PARTS_FOLDER', 
                    'NOTEBOOKLM_LANGUAGE', 'DEFAULT_SPEED', 'MCP_DOWNLOAD_TIMEOUT',
                    'MAX_GENERATION_RETRIES', 'GNL_SCHEDULE_TIME', 'TEST_MODE', 'TEST_GENERATION_DELAY',
-                   'BEDROCK_MODEL_ID']
+                   'BEDROCK_MODEL_ID', 'AWS_REGION', 'AWS_PROFILE']
     
     data = {key: form.get(key, '') for key in config_keys}
 
@@ -465,8 +465,13 @@ async def _run_action(action: str, parent_id: int):
 
             s = parent_status(parent_id)
             if s['downloaded'] < s['generated']:
-                await broadcast_log("▶ DOWNLOAD")
-                await loop.run_in_executor(None, lambda: download(parent_id))
+                await broadcast_log(f"▶ DOWNLOAD ({s['generated'] - s['downloaded']} en attente)")
+
+                def on_dl_progress(rec):
+                    asyncio.run_coroutine_threadsafe(broadcast_status(), loop)
+                    asyncio.run_coroutine_threadsafe(broadcast_log(f"⬇ {rec['podcast_name']} téléchargé"), loop)
+
+                await loop.run_in_executor(None, lambda: download(parent_id, on_progress=on_dl_progress))
                 await broadcast_status()
 
             s = parent_status(parent_id)
