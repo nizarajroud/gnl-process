@@ -303,6 +303,37 @@ async def stop_processing():
     return {"status": "stopping"}
 
 
+@app.post("/content/generate")
+async def generate_content(request: Request):
+    """Generate source PDF from AWS content."""
+    form = await request.form()
+    source = form.get("source")
+    param = form.get("param")
+
+    asyncio.create_task(_generate_content(source, param))
+    return {"status": "started"}
+
+
+async def _generate_content(source, param):
+    loop = asyncio.get_event_loop()
+    await broadcast_log(f"▶ Génération contenu: {source} ({param})")
+    try:
+        if source == "whats-new":
+            from gnl_core.content import generate_whats_new
+
+            def on_progress(msg):
+                asyncio.run_coroutine_threadsafe(broadcast_log(msg), loop)
+
+            result = await loop.run_in_executor(None, lambda: generate_whats_new(param, on_progress=on_progress))
+            if result:
+                await broadcast_log(f"✓ PDF généré: {result}")
+            else:
+                await broadcast_log("⚠ Aucune annonce trouvée pour ce mois")
+    except Exception as e:
+        await broadcast_log(f"⚠ Erreur: {str(e)[:100]}")
+    await broadcast_log("__done__")
+
+
 @app.post("/refresh")
 async def refresh():
     """Force UI refresh."""
