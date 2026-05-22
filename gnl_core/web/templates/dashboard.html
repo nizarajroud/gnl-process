@@ -16,15 +16,15 @@
 
         <!-- Tabs -->
         <div class="flex border-b border-gray-700 mb-6">
-            <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-blue-500 text-blue-400" onclick="switchTab('production')">📻 Production</button>
-            <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('content')">📄 Contenu</button>
+            <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-blue-500 text-blue-400" onclick="switchTab('content')">📄 Contenu</button>
+            <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('production')">📻 Production</button>
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('history')">📜 Historique</button>
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('config')">⚙️ Configuration</button>
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('changelog')">📋 Changelog</button>
         </div>
 
         <!-- Tab: Production -->
-        <div id="tab-production" class="tab-content">
+        <div id="tab-production" class="tab-content hidden">
             <!-- Production toolbar -->
             <div class="flex justify-between items-center mb-4">
                 <div></div>
@@ -160,46 +160,19 @@
                 {% endif %}
             </div>
 
-            <!-- Logs -->
-            <div class="mt-6 bg-gray-800 rounded-lg p-4">
-                <h3 class="font-semibold mb-2 text-sm">Logs</h3>
-                <div id="logs" class="font-mono text-xs h-40 overflow-y-auto bg-black rounded p-3 space-y-1">
-                    <div class="text-gray-500">En attente...</div>
-                </div>
-            </div>
+            <!-- Logs moved to global -->
         </div>
 
         <!-- Tab: Content -->
-        <div id="tab-content" class="tab-content hidden">
+        <div id="tab-content" class="tab-content">
             <div class="bg-gray-800 rounded-lg p-5">
                 <h3 class="font-semibold mb-4">📄 Générer du contenu source</h3>
-                <div class="space-y-4">
-                    <!-- AWS What's New -->
-                    <div class="border border-gray-700 rounded p-4">
-                        <h4 class="text-sm font-medium mb-3">AWS What's New</h4>
-                        <div class="flex items-end gap-3">
-                            <div>
-                                <label class="text-xs text-gray-400">Mois</label>
-                                <select id="wn-month" class="bg-gray-700 rounded px-2 py-1 text-sm">
-                                    <option value="01">Janvier</option>
-                                    <option value="02">Février</option>
-                                    <option value="03">Mars</option>
-                                    <option value="04">Avril</option>
-                                    <option value="05">Mai</option>
-                                    <option value="06">Juin</option>
-                                    <option value="07">Juillet</option>
-                                    <option value="08">Août</option>
-                                    <option value="09">Septembre</option>
-                                    <option value="10">Octobre</option>
-                                    <option value="11">Novembre</option>
-                                    <option value="12">Décembre</option>
-                                </select>
-                            </div>
-                            <button onclick="generateContent('whats-new', document.getElementById('wn-month').value)" 
-                                class="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">Générer PDF</button>
-                        </div>
-                    </div>
-                </div>
+
+                <!-- Provider tabs (generated from catalog) -->
+                <div id="content-provider-tabs" class="flex border-b border-gray-700 mb-4"></div>
+
+                <!-- Provider panels (generated from catalog) -->
+                <div id="content-provider-panels"></div>
             </div>
         </div>
 
@@ -229,10 +202,20 @@
 
         <!-- Tab: Configuration -->
         <div id="tab-config" class="tab-content hidden">
-            <form hx-post="/admin/save" hx-swap="none" class="space-y-6">
+            <form hx-post="/admin/save" hx-swap="none" class="space-y-4">
                 <div class="bg-gray-800 rounded-lg p-5">
-                    <h3 class="font-semibold mb-4">📁 Chemins</h3>
-                    <div class="grid grid-cols-1 gap-3">
+                    <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('span').textContent=this.nextElementSibling.classList.contains('hidden')?'▶':'▼'" class="flex items-center gap-2 font-semibold w-full text-left">
+                        <span class="text-xs">▼</span> 📁 Chemins
+                    </button>
+                    <div class="mt-4 grid grid-cols-1 gap-3">
+                        <div>
+                            <label class="text-xs text-gray-400">INBOX_FOLDER</label>
+                            <input type="text" name="INBOX_FOLDER" value="{{ config.INBOX_FOLDER }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">PDF_PARTS_FOLDER</label>
+                            <input type="text" name="PDF_PARTS_FOLDER" value="{{ config.PDF_PARTS_FOLDER }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                        </div>
                         <div>
                             <label class="text-xs text-gray-400">AUDIO_PARTS_FOLDER</label>
                             <input type="text" name="AUDIO_PARTS_FOLDER" value="{{ config.AUDIO_PARTS_FOLDER }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
@@ -241,16 +224,14 @@
                             <label class="text-xs text-gray-400">GNL_BACKLOG</label>
                             <input type="text" name="GNL_BACKLOG" value="{{ config.GNL_BACKLOG }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
                         </div>
-                        <div>
-                            <label class="text-xs text-gray-400">PDF_PARTS_FOLDER</label>
-                            <input type="text" name="PDF_PARTS_FOLDER" value="{{ config.PDF_PARTS_FOLDER }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
-                        </div>
                     </div>
                 </div>
 
                 <div class="bg-gray-800 rounded-lg p-5">
-                    <h3 class="font-semibold mb-4">🎵 Audio</h3>
-                    <div class="grid grid-cols-2 gap-3">
+                    <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('span').textContent=this.nextElementSibling.classList.contains('hidden')?'▶':'▼'" class="flex items-center gap-2 font-semibold w-full text-left">
+                        <span class="text-xs">▶</span> 🎵 Audio
+                    </button>
+                    <div class="hidden mt-4 grid grid-cols-2 gap-3">
                         <div>
                             <label class="text-xs text-gray-400">Langue</label>
                             <select name="NOTEBOOKLM_LANGUAGE" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
@@ -279,8 +260,10 @@
                 </div>
 
                 <div class="bg-gray-800 rounded-lg p-5">
-                    <h3 class="font-semibold mb-4">⚡ Limites</h3>
-                    <div class="grid grid-cols-2 gap-3">
+                    <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('span').textContent=this.nextElementSibling.classList.contains('hidden')?'▶':'▼'" class="flex items-center gap-2 font-semibold w-full text-left">
+                        <span class="text-xs">▶</span> ⚡ Limites
+                    </button>
+                    <div class="hidden mt-4 grid grid-cols-2 gap-3">
                         <div>
                             <label class="text-xs text-gray-400">Timeout download (secondes)</label>
                             <input type="number" name="MCP_DOWNLOAD_TIMEOUT" value="{{ config.MCP_DOWNLOAD_TIMEOUT }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
@@ -312,16 +295,20 @@
                 </div>
 
                 <div class="bg-gray-800 rounded-lg p-5">
-                    <h3 class="font-semibold mb-4">⏰ Scheduler</h3>
-                    <div>
+                    <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('span').textContent=this.nextElementSibling.classList.contains('hidden')?'▶':'▼'" class="flex items-center gap-2 font-semibold w-full text-left">
+                        <span class="text-xs">▶</span> ⏰ Scheduler
+                    </button>
+                    <div class="hidden mt-4">
                         <label class="text-xs text-gray-400">Exécution quotidienne à</label>
                         <input type="time" name="GNL_SCHEDULE_TIME" value="{{ config.GNL_SCHEDULE_TIME }}" class="bg-gray-700 rounded px-3 py-2 text-sm">
                     </div>
                 </div>
 
                 <div class="bg-gray-800 rounded-lg p-5">
-                    <h3 class="font-semibold mb-4">🧪 Test</h3>
-                    <div class="grid grid-cols-2 gap-3">
+                    <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('span').textContent=this.nextElementSibling.classList.contains('hidden')?'▶':'▼'" class="flex items-center gap-2 font-semibold w-full text-left">
+                        <span class="text-xs">▶</span> 🧪 Test
+                    </button>
+                    <div class="hidden mt-4 grid grid-cols-2 gap-3">
                         <div class="flex items-center gap-3">
                             <label class="text-xs text-gray-400">Test Mode</label>
                             <button type="button" id="test-toggle-config" onclick="toggleTestMode(this)"
@@ -385,16 +372,142 @@
                 {{ changelog_html | safe }}
             </div>
         </div>
+
+        <!-- Global Logs -->
+        <div class="mt-6 bg-gray-800 rounded-lg p-4">
+            <h3 class="font-semibold mb-2 text-sm">Logs</h3>
+            <div id="logs" class="font-mono text-xs h-40 overflow-y-auto bg-black rounded p-3 space-y-1">
+                <div class="text-gray-500">En attente...</div>
+            </div>
+        </div>
     </div>
 
     <script>
         let catalog = {};
+        function switchProvider(name) {
+            document.querySelectorAll('.provider-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById('provider-' + name).classList.remove('hidden');
+            document.querySelectorAll('.provider-tab-btn').forEach(btn => {
+                btn.classList.remove('border-blue-500', 'text-blue-400');
+                btn.classList.add('border-transparent', 'text-gray-400');
+            });
+            event.target.classList.remove('border-transparent', 'text-gray-400');
+            event.target.classList.add('border-blue-500', 'text-blue-400');
+        }
+
+        function switchSubTab(name) {
+            document.querySelectorAll('.subtab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById('subtab-' + name).classList.remove('hidden');
+            document.querySelectorAll('.sub-tab-btn').forEach(btn => {
+                btn.classList.remove('border-blue-500', 'text-blue-400');
+                btn.classList.add('border-transparent', 'text-gray-400');
+            });
+            event.target.classList.remove('border-transparent', 'text-gray-400');
+            event.target.classList.add('border-blue-500', 'text-blue-400');
+        }
+
+        function loadFileList(theme, sub) {
+            fetch(`/content/files/${theme}/${sub}`).then(r=>r.json()).then(files => {
+                const div = document.getElementById(`filelist-${theme}-${sub}`);
+                if (!files.length) { div.innerHTML = '<span class="text-gray-500">Aucun fichier PDF dans ce dossier.</span>'; return; }
+                div.innerHTML = '<table class="w-full text-xs"><thead><tr class="text-gray-400 border-b border-gray-700"><th class="text-left py-1">Fichier</th><th class="text-right py-1">Statut</th></tr></thead><tbody>' +
+                    files.map(f => `<tr class="border-b border-gray-800"><td class="py-1">${f.name}</td><td class="text-right py-1">${f.processed ? '<span class="text-green-400">✅ Traité</span>' : `<button onclick="prepareFromInbox('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-orange-600 hover:bg-orange-500 rounded text-white">Traiter</button>`}</td></tr>`).join('') +
+                    '</tbody></table>';
+            });
+        }
+
+        function prepareFromInbox(theme, sub, filename) {
+            fetch('/prepare-from-inbox', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: `theme=${theme}&subtheme=${sub}&filename=${filename}`
+            }).then(r=>r.json()).then(data => {
+                if (data.status === 'ok') switchTab('production');
+            });
+        }
+
         function generateContent(source, param) {
             fetch('/content/generate', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                 body: `source=${source}&param=${param}`
             });
+        }
+
+        function renderContentTabs() {
+            const tabs = document.getElementById('content-provider-tabs');
+            const panels = document.getElementById('content-provider-panels');
+            const themes = Object.keys(catalog);
+            tabs.innerHTML = '';
+            panels.innerHTML = '';
+
+            themes.forEach((theme, i) => {
+                const active = i === 0;
+                const btn = document.createElement('button');
+                btn.className = `provider-tab-btn px-3 py-1 text-sm border-b-2 ${active ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400'}`;
+                btn.textContent = theme.toUpperCase();
+                btn.onclick = (e) => switchProvider(theme, e.target);
+                tabs.appendChild(btn);
+
+                const panel = document.createElement('div');
+                panel.id = 'provider-' + theme;
+                panel.className = 'provider-content' + (active ? '' : ' hidden');
+
+                const subTabs = document.createElement('div');
+                subTabs.className = 'flex border-b border-gray-600 mb-4 flex-wrap';
+
+                const subPanels = document.createElement('div');
+
+                catalog[theme].forEach((entry, j) => {
+                    const sub = entry.subtheme;
+                    const mode = entry.mode;
+                    const subActive = j === 0;
+                    const subBtn = document.createElement('button');
+                    subBtn.className = `sub-tab-btn-${theme} px-3 py-1 text-xs border-b-2 ${subActive ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400'}`;
+                    subBtn.textContent = sub;
+                    subBtn.onclick = (e) => switchSubTabDyn(theme, sub, e.target);
+                    subTabs.appendChild(subBtn);
+
+                    const subPanel = document.createElement('div');
+                    subPanel.id = `subtab-${theme}-${sub}`;
+                    subPanel.className = 'subtab-content-' + theme + (subActive ? '' : ' hidden');
+
+                    let html = '';
+                    if (mode === 'generate' && sub === 'aws-whats-new') {
+                        html += `<div class="mb-4 p-3 border border-gray-700 rounded"><div class="flex items-end gap-3"><div><label class="text-xs text-gray-400">Mois</label><select id="wn-month" class="bg-gray-700 rounded px-2 py-1 text-sm"><option value="01">Janvier</option><option value="02">Février</option><option value="03">Mars</option><option value="04">Avril</option><option value="05">Mai</option><option value="06">Juin</option><option value="07">Juillet</option><option value="08">Août</option><option value="09">Septembre</option><option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Décembre</option></select></div><button onclick="generateContent('whats-new', document.getElementById('wn-month').value)" class="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">Générer PDF</button></div></div>`;
+                    }
+                    html += `<div id="filelist-${theme}-${sub}" class="text-sm text-gray-400">Chargement...</div>`;
+                    subPanel.innerHTML = html;
+                    subPanels.appendChild(subPanel);
+                    loadFileList(theme, sub);
+                });
+
+                panel.appendChild(subTabs);
+                panel.appendChild(subPanels);
+                panels.appendChild(panel);
+            });
+        }
+
+        function switchProvider(name, btn) {
+            document.querySelectorAll('.provider-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById('provider-' + name).classList.remove('hidden');
+            document.querySelectorAll('.provider-tab-btn').forEach(b => {
+                b.classList.remove('border-blue-500', 'text-blue-400');
+                b.classList.add('border-transparent', 'text-gray-400');
+            });
+            btn.classList.remove('border-transparent', 'text-gray-400');
+            btn.classList.add('border-blue-500', 'text-blue-400');
+        }
+
+        function switchSubTabDyn(theme, sub, btn) {
+            document.querySelectorAll('.subtab-content-' + theme).forEach(el => el.classList.add('hidden'));
+            document.getElementById(`subtab-${theme}-${sub}`).classList.remove('hidden');
+            document.querySelectorAll(`.sub-tab-btn-${theme}`).forEach(b => {
+                b.classList.remove('border-blue-500', 'text-blue-400');
+                b.classList.add('border-transparent', 'text-gray-400');
+            });
+            btn.classList.remove('border-transparent', 'text-gray-400');
+            btn.classList.add('border-blue-500', 'text-blue-400');
         }
 
         function toggleTestMode(btn) {
@@ -440,14 +553,14 @@
                 loadCatalogList();
                 document.getElementById('new-subtheme').value='';
                 // Refresh dropdowns
-                fetch('/api/catalog').then(r=>r.json()).then(data=>{catalog=data;updateSubthemes()});
+                fetch('/api/catalog').then(r=>r.json()).then(data=>{catalog=data;updateSubthemes();renderContentTabs()});
             });
         }
 
         function deleteCatalogEntry(id) {
             fetch('/api/catalog/delete/'+id, {method:'POST'}).then(()=>{
                 loadCatalogList();
-                fetch('/api/catalog').then(r=>r.json()).then(data=>{catalog=data;updateSubthemes()});
+                fetch('/api/catalog').then(r=>r.json()).then(data=>{catalog=data;updateSubthemes();renderContentTabs()});
             });
         }
 
@@ -490,12 +603,13 @@
             const sel = document.getElementById('themeSelect');
             Object.keys(data).forEach(t=>{sel.add(new Option(t,t))});
             updateSubthemes();
+            renderContentTabs();
         });
         function updateSubthemes(){
             const theme = document.getElementById('themeSelect').value;
             const sel = document.getElementById('subthemeSelect');
             sel.innerHTML = '';
-            (catalog[theme]||[]).forEach(s=>{sel.add(new Option(s,s))});
+            (catalog[theme]||[]).forEach(s=>{sel.add(new Option(s.subtheme,s.subtheme))});
         }
 
         function switchTab(name) {

@@ -35,25 +35,27 @@ def download(parent_id, db_path=None, timeout=None, on_progress=None):
     _, _, _, subfolder = resolve_parent(parent_id, db_path)
     audio_parts_folder = os.getenv('AUDIO_PARTS_FOLDER', '')
 
-    succeeded, failed = [], []
-
     # Build pending list
-    pending = []
-    for rec in records:
-        if rec['podcast_name'] not in notebooks:
-            failed.append({**rec, 'reason': 'Notebook not found'})
-        else:
-            pending.append({**rec, 'notebook_id': notebooks[rec['podcast_name']]['id']})
+    pending = [r for r in records]
+    succeeded, failed = [], []
 
     start_time = time.time()
 
     while pending and (time.time() - start_time) < timeout:
+        # Refresh notebook list each iteration
+        nb_result = list_notebooks(client)
+        notebooks = {nb['title']: nb for nb in nb_result['notebooks']}
+
         downloaded_this_round = 0
         still_pending = []
 
         for rec in pending:
+            if rec['podcast_name'] not in notebooks:
+                still_pending.append(rec)
+                continue
+            nb_id = notebooks[rec['podcast_name']]['id']
             try:
-                status = get_studio_status(client, rec['notebook_id'])
+                status = get_studio_status(client, nb_id)
                 audio = next((a for a in status.get('artifacts', []) if a.get('type') == 'audio' and a.get('status') == 'completed'), None)
             except Exception:
                 still_pending.append(rec)
@@ -78,7 +80,7 @@ def download(parent_id, db_path=None, timeout=None, on_progress=None):
                             conn.commit()
                         try:
                             from notebooklm_tools.services.notebooks import delete_notebook as del_nb
-                            del_nb(client, rec['notebook_id'])
+                            del_nb(client, nb_id)
                         except Exception:
                             pass
                     else:
@@ -93,7 +95,7 @@ def download(parent_id, db_path=None, timeout=None, on_progress=None):
             os.makedirs(dest_dir, exist_ok=True)
 
             try:
-                asyncio.run(download_async(client, rec['notebook_id'], "audio", dest_file, artifact_id=audio.get('artifact_id')))
+                asyncio.run(download_async(client, nb_id, "audio", dest_file, artifact_id=audio.get('artifact_id')))
                 update_state(rec['id'], db_path, download_state=1)
                 succeeded.append(rec)
                 downloaded_this_round += 1
