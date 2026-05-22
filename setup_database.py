@@ -10,7 +10,7 @@ import os
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gnl.db')
 
-CURRENT_VERSION = 4
+CURRENT_VERSION = 5
 
 
 def setup_database(db_path=None):
@@ -39,6 +39,8 @@ def setup_database(db_path=None):
         _apply_v3(cursor)
     if current < 4:
         _apply_v4(cursor)
+    if current < 5:
+        _apply_v5(cursor)
 
     conn.commit()
     conn.close()
@@ -136,6 +138,13 @@ def _apply_v4(cursor):
     """v4: Add prompt column to series_catalog."""
     cursor.execute("ALTER TABLE series_catalog ADD COLUMN prompt TEXT DEFAULT ''")
     cursor.execute("INSERT INTO schema_version (version) VALUES (4)")
+
+
+def _apply_v5(cursor):
+    """v5: Add content_mode column to series_catalog."""
+    cursor.execute("ALTER TABLE series_catalog ADD COLUMN content_mode TEXT DEFAULT 'manual'")
+    cursor.execute("UPDATE series_catalog SET content_mode = 'generate' WHERE subtheme = 'aws-whats-new'")
+    cursor.execute("INSERT INTO schema_version (version) VALUES (5)")
 
 
 if __name__ == "__main__":

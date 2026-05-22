@@ -240,10 +240,10 @@ async def get_catalog():
     """Return series catalog for form dropdowns."""
     from gnl_core.db import get_db
     with get_db() as conn:
-        rows = conn.execute("SELECT theme, subtheme FROM series_catalog ORDER BY theme, id").fetchall()
+        rows = conn.execute("SELECT theme, subtheme, content_mode FROM series_catalog ORDER BY theme, id").fetchall()
     catalog = {}
     for r in rows:
-        catalog.setdefault(r['theme'], []).append(r['subtheme'])
+        catalog.setdefault(r['theme'], []).append({'subtheme': r['subtheme'], 'mode': r['content_mode'] or 'manual'})
     return catalog
 
 
@@ -301,6 +301,62 @@ async def stop_processing():
     _stop_signal = True
     await broadcast_log("⏹ Stop signal sent")
     return {"status": "stopping"}
+
+
+@app.get("/content/files/{theme}/{subtheme}")
+async def list_content_files(theme: str, subtheme: str):
+    """List PDFs in INBOX_FOLDER/{theme}/{subtheme}/ with processed status."""
+    from gnl_core.config import get_config
+    from gnl_core.db import get_db
+    config = get_config()
+    inbox = config.get('INBOX_FOLDER', '')
+    folder = os.path.join(inbox, theme, subtheme)
+    if not os.path.isdir(folder):
+        return []
+
+    backlog = config.get('GNL_BACKLOG', '')
+    backlog_dir = os.path.join(backlog, theme, subtheme)
+    delivered = set()
+    if os.path.isdir(backlog_dir):
+        delivered = {os.path.splitext(f)[0] for f in os.listdir(backlog_dir) if f.lower().endswith('.mp3')}
+
+    files = []
+    for f in sorted(os.listdir(folder)):
+        if f.lower().endswith('.pdf'):
+            name_no_ext = os.path.splitext(f)[0]
+            files.append({'name': f, 'processed': name_no_ext in delivered})
+    return files
+
+
+@app.post("/content/generate")
+async def generate_content(request: Request):
+    """Generate source PDF from AWS content."""
+    form = await request.form()
+    source = form.get("source")
+    param = form.get("param")
+
+    asyncio.create_task(_generate_content(source, param))
+    return {"status": "started"}
+
+
+async def _generate_content(source, param):
+    loop = asyncio.get_event_loop()
+    await broadcast_log(f"▶ Génération contenu: {source} ({param})")
+    try:
+        if source == "whats-new":
+            from gnl_core.content import generate_whats_new
+
+            def on_progress(msg):
+                asyncio.run_coroutine_threadsafe(broadcast_log(msg), loop)
+
+            result = await loop.run_in_executor(None, lambda: generate_whats_new(param, on_progress=on_progress))
+            if result:
+                await broadcast_log(f"✓ PDF généré: {result}")
+            else:
+                await broadcast_log("⚠ Aucune annonce trouvée pour ce mois")
+    except Exception as e:
+        await broadcast_log(f"⚠ Erreur: {str(e)[:100]}")
+    await broadcast_log("__done__")
 
 
 @app.post("/refresh")
@@ -416,6 +472,21 @@ async def quota_check(parent_id: int):
 async def run_action(action: str, parent_id: int, request: Request = None):
     asyncio.create_task(_run_action(action, parent_id))
     return {"status": "started", "action": action, "parent_id": parent_id}
+async def _wait_quota_reset(deliver_start, deliver_timeout):
+    """Wait until quota resets (midnight Pacific = 3:00 AM EST)."""
+    import time as _time
+    from datetime import datetime, timezone, timedelta
+    pacific = timezone(timedelta(hours=-7))
+    now = datetime.now(pacific)
+    tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=5, second=0, microsecond=0)
+    wait_seconds = (tomorrow - now).total_seconds()
+    # Cap wait to remaining timeout
+    remaining = deliver_timeout - (_time.time() - deliver_start)
+    wait_seconds = min(wait_seconds, remaining)
+    if wait_seconds > 0:
+        await asyncio.sleep(wait_seconds)
+
+
 async def _run_action(action: str, parent_id: int):
     await broadcast_log(f"▶ {action} (parent_id={parent_id})")
     try:
@@ -445,56 +516,76 @@ async def _run_action(action: str, parent_id: int):
             from gnl_core.db import parent_status, resolve_parent, get_db
             from gnl_core.combine import combine
             from datetime import datetime, timezone as tz, timedelta
+            import time as _time
 
-            s = parent_status(parent_id)
+            deliver_timeout = int(os.environ.get('DELIVER_TIMEOUT', '48')) * 3600  # hours to seconds
+            deliver_start = _time.time()
 
-            # Generate phase (quota-aware)
-            if s['generated'] < s['total']:
-                remaining_quota = _get_quota()
-                to_generate = s['total'] - s['generated']
-                max_count = min(to_generate, remaining_quota) if remaining_quota < to_generate else None
-                await broadcast_log(f"▶ GENERATE ({max_count or to_generate} épisodes)")
+            while _time.time() - deliver_start < deliver_timeout:
+                if _stop_signal:
+                    await broadcast_log("⛔ Arrêté par l'utilisateur")
+                    break
 
-                def on_episode_generated(rec):
-                    import time as _t
-                    future = asyncio.run_coroutine_threadsafe(broadcast_status(), loop)
-                    future.result(timeout=5)  # wait for it to complete
+                s = parent_status(parent_id)
 
-                await loop.run_in_executor(None, lambda: generate(parent_id, max_count=max_count, on_progress=on_episode_generated, should_stop=_stopped))
-                await broadcast_status()
+                # All done?
+                if s['converted'] == s['total'] and s['combined'] > 0:
+                    break
 
-            s = parent_status(parent_id)
-            if s['downloaded'] < s['generated']:
-                await broadcast_log(f"▶ DOWNLOAD ({s['generated'] - s['downloaded']} en attente)")
+                # Generate phase (quota-aware)
+                if s['generated'] < s['total']:
+                    remaining_quota = _get_quota()
+                    if remaining_quota > 0:
+                        to_generate = s['total'] - s['generated']
+                        max_count = min(to_generate, remaining_quota)
+                        await broadcast_log(f"▶ GENERATE ({max_count} épisodes)")
 
-                def on_dl_progress(rec):
-                    asyncio.run_coroutine_threadsafe(broadcast_status(), loop)
-                    asyncio.run_coroutine_threadsafe(broadcast_log(f"⬇ {rec['podcast_name']} téléchargé"), loop)
+                        def on_episode_generated(rec):
+                            future = asyncio.run_coroutine_threadsafe(broadcast_status(), loop)
+                            future.result(timeout=5)
 
-                await loop.run_in_executor(None, lambda: download(parent_id, on_progress=on_dl_progress))
-                await broadcast_status()
+                        await loop.run_in_executor(None, lambda: generate(parent_id, max_count=max_count, on_progress=on_episode_generated, should_stop=_stopped))
+                        await broadcast_status()
+                    elif s['generated'] == 0:
+                        await broadcast_log("⏳ Quota épuisé — attente du reset (minuit Pacific)...")
+                        await _wait_quota_reset(deliver_start, deliver_timeout)
+                        continue
 
-            s = parent_status(parent_id)
-            if s['downloaded'] > 0 and s['converted'] < s['downloaded']:
-                await broadcast_log("▶ CONVERT")
-                await loop.run_in_executor(None, lambda: convert(parent_id))
-                await broadcast_status()
+                # Download phase
+                s = parent_status(parent_id)
+                if s['downloaded'] < s['generated']:
+                    await broadcast_log(f"▶ DOWNLOAD ({s['generated'] - s['downloaded']} en attente)")
 
-            # Combine: full or partial
-            s = parent_status(parent_id)
-            if s['converted'] > 0 and s['combined'] == 0:
-                with get_db() as conn:
-                    pf = conn.execute("SELECT parent_file FROM parent_configuration WHERE id=?", (parent_id,)).fetchone()['parent_file']
-                if s['converted'] == s['total']:
+                    def on_dl_progress(rec):
+                        asyncio.run_coroutine_threadsafe(broadcast_status(), loop)
+                        asyncio.run_coroutine_threadsafe(broadcast_log(f"⬇ {rec['podcast_name']} téléchargé"), loop)
+
+                    await loop.run_in_executor(None, lambda: download(parent_id, on_progress=on_dl_progress))
+                    await broadcast_status()
+
+                # Convert phase
+                s = parent_status(parent_id)
+                if s['downloaded'] > 0 and s['converted'] < s['downloaded']:
+                    await broadcast_log("▶ CONVERT")
+                    await loop.run_in_executor(None, lambda: convert(parent_id))
+                    await broadcast_status()
+
+                # Check if we need another loop iteration (quota was exhausted mid-generate)
+                s = parent_status(parent_id)
+                if s['generated'] < s['total']:
+                    await broadcast_log("⏳ Quota épuisé — attente du reset (minuit Pacific)...")
+                    await _wait_quota_reset(deliver_start, deliver_timeout)
+                    continue
+
+                # All generated and downloaded — combine
+                if s['converted'] == s['total'] and s['combined'] == 0:
+                    with get_db() as conn:
+                        pf = conn.execute("SELECT parent_file FROM parent_configuration WHERE id=?", (parent_id,)).fetchone()['parent_file']
                     await broadcast_log("▶ COMBINE (complet)")
                     await broadcast_log("⏳ Combinaison en cours...")
                     await loop.run_in_executor(None, lambda: combine(parent_id, pf))
-                else:
-                    pct = int(s['converted'] / s['total'] * 100)
-                    await broadcast_log(f"▶ COMBINE (partiel {pct}%)")
-                    await broadcast_log("⏳ Combinaison en cours...")
-                    await loop.run_in_executor(None, lambda: combine(parent_id, pf, suffix=str(pct)))
-                await broadcast_status()
+                    await broadcast_status()
+                break
 
             s = parent_status(parent_id)
             await broadcast_log(f"✓ Deliver done: {s['converted']}/{s['total']} converted, combined={'✓' if s['combined'] else '✗'}")
@@ -520,6 +611,48 @@ async def _run_action(action: str, parent_id: int):
     finally:
         await broadcast_log("__done__")
         await broadcast_status()
+@app.post("/prepare-from-inbox")
+async def prepare_from_inbox(request: Request):
+    """Prepare a PDF already on disk (from content tab)."""
+    form = await request.form()
+    theme = form.get("theme", "")
+    subtheme = form.get("subtheme", "")
+    filename = form.get("filename", "")
+
+    from gnl_core.config import get_config
+    config = get_config()
+    inbox = config.get('INBOX_FOLDER', '')
+    pdf_path = os.path.join(inbox, theme, subtheme, filename)
+
+    if not os.path.isfile(pdf_path):
+        return {"status": "error", "error": "File not found"}
+
+    name = os.path.splitext(filename)[0]
+
+    # Calculate pages per episode: ceil(total_pages / 20) to fit in one day's quota
+    import math
+    from PyPDF2 import PdfReader
+    total_pages = len(PdfReader(pdf_path).pages)
+    pages_per_episode = math.ceil(total_pages / 20)
+
+    await broadcast_log(f"▶ Preparing {filename} ({total_pages} pages, {pages_per_episode} pages/épisode)")
+
+    try:
+        from gnl_core.split import split
+        from gnl_core.collect import collect
+        from gnl_core.titles import generate_titles
+
+        result = split(pdf_path, pages_per_episode, name, podcast_theme=theme, podcast_subtheme=subtheme, mode="pages")
+        parent_id = collect(result)
+        count = generate_titles(parent_id)
+        await broadcast_log(f"✓ Prepared: {len(result['files'])} chunks, parent_id={parent_id}, {count} titles")
+        await broadcast_status()
+        return {"status": "ok", "parent_id": parent_id}
+    except Exception as e:
+        await broadcast_log(f"⚠ Prepare failed: {str(e)[:100]}")
+        return {"status": "error", "error": str(e)}
+
+
 @app.post("/prepare")
 async def prepare_pdf(request: Request):
     """Upload PDF, split, collect, generate titles."""
