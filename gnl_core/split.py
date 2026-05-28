@@ -23,7 +23,7 @@ def split(pdf_path, pages_per_split, name, source_type="LocalStorage", podcast_t
 def _split_pages(pdf_path, pages_per_split, name, source_type, podcast_theme, podcast_subtheme):
     """Split by fixed page count."""
     pdf_parts_folder = os.getenv("PDF_PARTS_FOLDER", "PDF-Parts")
-    output_dir = Path(pdf_parts_folder) / podcast_subtheme / name
+    output_dir = Path(pdf_parts_folder) / podcast_theme / podcast_subtheme / name
 
     if output_dir.exists():
         shutil.rmtree(output_dir)
@@ -80,7 +80,7 @@ def _split_semantic(pdf_path, name, source_type, podcast_theme, podcast_subtheme
 
     # Create PDF chunks
     pdf_parts_folder = os.getenv("PDF_PARTS_FOLDER", "PDF-Parts")
-    output_dir = Path(pdf_parts_folder) / podcast_subtheme / name
+    output_dir = Path(pdf_parts_folder) / podcast_theme / podcast_subtheme / name
 
     if output_dir.exists():
         shutil.rmtree(output_dir)

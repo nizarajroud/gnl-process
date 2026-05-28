@@ -23,7 +23,7 @@ def combine(parent_id, output_file, db_path=None, suffix=None):
     default_speed = float(os.getenv('DEFAULT_SPEED', '1'))
 
     parent_file = records[0]['parent_file']
-    audio_dir = Path(audio_parts_folder) / subfolder / parent_file
+    audio_dir = Path(audio_parts_folder) / theme / subfolder / parent_file
 
     mp3_files = [audio_dir / f"{rec['podcast_name']}.mp3" for rec in records if (audio_dir / f"{rec['podcast_name']}.mp3").exists()]
     if not mp3_files:

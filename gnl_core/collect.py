@@ -22,7 +22,7 @@ def collect(split_result, db_path=None):
     # Clean existing audio parts
     audio_parts_folder = os.getenv('AUDIO_PARTS_FOLDER', '')
     if audio_parts_folder and podcast_subtheme and parent_file:
-        audio_dir = os.path.join(audio_parts_folder, podcast_subtheme, parent_file)
+        audio_dir = os.path.join(audio_parts_folder, podcast_theme, podcast_subtheme, parent_file)
         if os.path.exists(audio_dir):
             shutil.rmtree(audio_dir)
 
