@@ -364,10 +364,10 @@ async def _launch_interactive(theme, subtheme, filename):
 
             client = get_client()
             nb = create_notebook(client, f"[Interactive] {name}")
-            nb_id = nb['id']
+            nb_id = nb['notebook_id']
             add_source(client, nb_id, "pdf", pdf_path)
             create_artifact(client, nb_id, "audio", language="en")
-            return f"https://notebooklm.google.com/notebook/{nb_id}"
+            return nb.get('url', f"https://notebooklm.google.com/notebook/{nb_id}")
 
         url = await loop.run_in_executor(None, _do)
         await broadcast_log(f"✓ Notebook prêt: {url}")
