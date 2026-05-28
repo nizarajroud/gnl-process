@@ -328,6 +328,55 @@ async def list_content_files(theme: str, subtheme: str):
     return files
 
 
+@app.post("/content/interactive")
+async def launch_interactive(request: Request):
+    """Create a notebook with full PDF and generate audio in English for interactive mode."""
+    form = await request.form()
+    theme = form.get("theme", "")
+    subtheme = form.get("subtheme", "")
+    filename = form.get("filename", "")
+
+    asyncio.create_task(_launch_interactive(theme, subtheme, filename))
+    return {"status": "started"}
+
+
+async def _launch_interactive(theme, subtheme, filename):
+    from gnl_core.config import get_config
+    config = get_config()
+    inbox = config.get('INBOX_FOLDER', '')
+    pdf_path = os.path.join(inbox, theme, subtheme, filename)
+
+    if not os.path.isfile(pdf_path):
+        await broadcast_log(f"⚠ Fichier introuvable: {pdf_path}")
+        await broadcast_log("__done__")
+        return
+
+    loop = asyncio.get_event_loop()
+    name = os.path.splitext(filename)[0]
+    await broadcast_log(f"▶ Mode interactif: {filename} (anglais, vitesse 1x)")
+
+    try:
+        def _do():
+            from notebooklm_tools.mcp.tools._utils import get_client
+            from notebooklm_tools.services.notebooks import create_notebook, list_notebooks
+            from notebooklm_tools.services.sources import add_source
+            from notebooklm_tools.services.studio import create_artifact
+
+            client = get_client()
+            nb = create_notebook(client, f"[Interactive] {name}")
+            nb_id = nb['id']
+            add_source(client, nb_id, "pdf", pdf_path)
+            create_artifact(client, nb_id, "audio", language="en")
+            return f"https://notebooklm.google.com/notebook/{nb_id}"
+
+        url = await loop.run_in_executor(None, _do)
+        await broadcast_log(f"✓ Notebook prêt: {url}")
+        await broadcast_log(f"🔗 <a href='{url}' target='_blank' class='text-blue-400 underline'>{url}</a>")
+    except Exception as e:
+        await broadcast_log(f"⚠ Erreur: {str(e)[:100]}")
+    await broadcast_log("__done__")
+
+
 @app.post("/content/generate")
 async def generate_content(request: Request):
     """Generate source PDF from AWS content."""
