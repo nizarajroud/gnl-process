@@ -577,6 +577,13 @@ async def _run_action(action: str, parent_id: int):
                     await _wait_quota_reset(deliver_start, deliver_timeout)
                     continue
 
+                # Not all downloaded yet — wait and retry
+                if s['downloaded'] < s['generated']:
+                    retry_delay = int(os.environ.get('DELIVER_RETRY_DELAY', '180'))
+                    await broadcast_log(f"⏳ {s['downloaded']}/{s['generated']} téléchargés — nouvelle tentative dans {retry_delay//60} min...")
+                    await asyncio.sleep(retry_delay)
+                    continue
+
                 # All generated and downloaded — combine
                 if s['converted'] == s['total'] and s['combined'] == 0:
                     with get_db() as conn:
