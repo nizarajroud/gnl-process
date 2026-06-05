@@ -32,7 +32,7 @@ def download(parent_id, db_path=None, timeout=None, on_progress=None):
     nb_result = list_notebooks(client)
     notebooks = {nb['title']: nb for nb in nb_result['notebooks']}
 
-    _, _, _, subfolder = resolve_parent(parent_id, db_path)
+    _, _, theme, subfolder = resolve_parent(parent_id, db_path)
     audio_parts_folder = os.getenv('AUDIO_PARTS_FOLDER', '')
 
     # Build pending list
@@ -90,7 +90,7 @@ def download(parent_id, db_path=None, timeout=None, on_progress=None):
                     still_pending.append(rec)
                 continue
 
-            dest_dir = os.path.join(audio_parts_folder, subfolder, rec['parent_file'])
+            dest_dir = os.path.join(audio_parts_folder, theme, subfolder, rec['parent_file'])
             dest_file = os.path.join(dest_dir, f"{rec['podcast_name']}.m4a")
             os.makedirs(dest_dir, exist_ok=True)
 
@@ -121,7 +121,7 @@ def download(parent_id, db_path=None, timeout=None, on_progress=None):
 
 def _download_test(records, parent_id, db_path):
     """Test mode: simulate download with delay then create dummy file."""
-    _, _, _, subfolder = resolve_parent(parent_id, db_path)
+    _, _, theme, subfolder = resolve_parent(parent_id, db_path)
     audio_parts_folder = os.getenv('AUDIO_PARTS_FOLDER', '')
     delay = int(os.getenv('TEST_GENERATION_DELAY', '5'))
 
@@ -129,7 +129,7 @@ def _download_test(records, parent_id, db_path):
 
     succeeded = []
     for rec in records:
-        dest_dir = os.path.join(audio_parts_folder, subfolder, rec['parent_file'])
+        dest_dir = os.path.join(audio_parts_folder, theme, subfolder, rec['parent_file'])
         dest_file = os.path.join(dest_dir, f"{rec['podcast_name']}.m4a")
         os.makedirs(dest_dir, exist_ok=True)
         # Create a small dummy file

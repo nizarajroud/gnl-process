@@ -328,6 +328,55 @@ async def list_content_files(theme: str, subtheme: str):
     return files
 
 
+@app.post("/content/interactive")
+async def launch_interactive(request: Request):
+    """Create a notebook with full PDF and generate audio in English for interactive mode."""
+    form = await request.form()
+    theme = form.get("theme", "")
+    subtheme = form.get("subtheme", "")
+    filename = form.get("filename", "")
+
+    asyncio.create_task(_launch_interactive(theme, subtheme, filename))
+    return {"status": "started"}
+
+
+async def _launch_interactive(theme, subtheme, filename):
+    from gnl_core.config import get_config
+    config = get_config()
+    inbox = config.get('INBOX_FOLDER', '')
+    pdf_path = os.path.join(inbox, theme, subtheme, filename)
+
+    if not os.path.isfile(pdf_path):
+        await broadcast_log(f"⚠ Fichier introuvable: {pdf_path}")
+        await broadcast_log("__done__")
+        return
+
+    loop = asyncio.get_event_loop()
+    name = os.path.splitext(filename)[0]
+    await broadcast_log(f"▶ Mode interactif: {filename} (anglais, vitesse 1x)")
+
+    try:
+        def _do():
+            from notebooklm_tools.mcp.tools._utils import get_client
+            from notebooklm_tools.services.notebooks import create_notebook, list_notebooks
+            from notebooklm_tools.services.sources import add_source
+            from notebooklm_tools.services.studio import create_artifact
+
+            client = get_client()
+            nb = create_notebook(client, f"[Interactive] {name}")
+            nb_id = nb['notebook_id']
+            add_source(client, nb_id, "file", file_path=pdf_path, wait=True)
+            create_artifact(client, nb_id, "audio", language="en")
+            return nb.get('url', f"https://notebooklm.google.com/notebook/{nb_id}")
+
+        url = await loop.run_in_executor(None, _do)
+        await broadcast_log(f"✓ Notebook prêt: {url}")
+        await broadcast_log(f"🔗 <a href='{url}' target='_blank' class='text-blue-400 underline'>{url}</a>")
+    except Exception as e:
+        await broadcast_log(f"⚠ Erreur: {str(e)[:100]}")
+    await broadcast_log("__done__")
+
+
 @app.post("/content/generate")
 async def generate_content(request: Request):
     """Generate source PDF from AWS content."""
@@ -577,6 +626,13 @@ async def _run_action(action: str, parent_id: int):
                     await _wait_quota_reset(deliver_start, deliver_timeout)
                     continue
 
+                # Not all downloaded yet — wait and retry
+                if s['downloaded'] < s['generated']:
+                    retry_delay = int(os.environ.get('DELIVER_RETRY_DELAY', '180'))
+                    await broadcast_log(f"⏳ {s['downloaded']}/{s['generated']} téléchargés — nouvelle tentative dans {retry_delay//60} min...")
+                    await asyncio.sleep(retry_delay)
+                    continue
+
                 # All generated and downloaded — combine
                 if s['converted'] == s['total'] and s['combined'] == 0:
                     with get_db() as conn:
@@ -611,6 +667,23 @@ async def _run_action(action: str, parent_id: int):
     finally:
         await broadcast_log("__done__")
         await broadcast_status()
+@app.get("/content/preview/{theme}/{subtheme}/{filename}")
+async def preview_prepare(theme: str, subtheme: str, filename: str):
+    """Return PDF info for the prepare dialog."""
+    from gnl_core.config import get_config
+    import math
+    from PyPDF2 import PdfReader
+    config = get_config()
+    inbox = config.get('INBOX_FOLDER', '')
+    pdf_path = os.path.join(inbox, theme, subtheme, filename)
+    if not os.path.isfile(pdf_path):
+        return {"error": "File not found"}
+    total_pages = len(PdfReader(pdf_path).pages)
+    suggested_pages = math.ceil(total_pages / 20)
+    name = os.path.splitext(filename)[0]
+    return {"name": name, "total_pages": total_pages, "suggested_pages": suggested_pages}
+
+
 @app.post("/prepare-from-inbox")
 async def prepare_from_inbox(request: Request):
     """Prepare a PDF already on disk (from content tab)."""
@@ -618,6 +691,9 @@ async def prepare_from_inbox(request: Request):
     theme = form.get("theme", "")
     subtheme = form.get("subtheme", "")
     filename = form.get("filename", "")
+    mode = form.get("mode", "pages")
+    pages_per_episode = int(form.get("pages", 0))
+    custom_name = form.get("name", "")
 
     from gnl_core.config import get_config
     config = get_config()
@@ -627,22 +703,23 @@ async def prepare_from_inbox(request: Request):
     if not os.path.isfile(pdf_path):
         return {"status": "error", "error": "File not found"}
 
-    name = os.path.splitext(filename)[0]
+    name = custom_name or os.path.splitext(filename)[0]
 
-    # Calculate pages per episode: ceil(total_pages / 20) to fit in one day's quota
-    import math
-    from PyPDF2 import PdfReader
-    total_pages = len(PdfReader(pdf_path).pages)
-    pages_per_episode = math.ceil(total_pages / 20)
+    # Calculate pages per episode if not provided
+    if pages_per_episode <= 0:
+        import math
+        from PyPDF2 import PdfReader
+        total_pages = len(PdfReader(pdf_path).pages)
+        pages_per_episode = math.ceil(total_pages / 20)
 
-    await broadcast_log(f"▶ Preparing {filename} ({total_pages} pages, {pages_per_episode} pages/épisode)")
+    await broadcast_log(f"▶ Preparing {filename} (mode={mode}, {pages_per_episode} pages/épisode)")
 
     try:
         from gnl_core.split import split
         from gnl_core.collect import collect
         from gnl_core.titles import generate_titles
 
-        result = split(pdf_path, pages_per_episode, name, podcast_theme=theme, podcast_subtheme=subtheme, mode="pages")
+        result = split(pdf_path, pages_per_episode, name, podcast_theme=theme, podcast_subtheme=subtheme, mode=mode)
         parent_id = collect(result)
         count = generate_titles(parent_id)
         await broadcast_log(f"✓ Prepared: {len(result['files'])} chunks, parent_id={parent_id}, {count} titles")

@@ -14,12 +14,12 @@ def convert(parent_id, db_path=None):
         return [], []
 
     test_mode = os.getenv('TEST_MODE', '0') == '1'
-    _, _, _, subfolder = resolve_parent(parent_id, db_path)
+    _, _, theme, subfolder = resolve_parent(parent_id, db_path)
     audio_parts_folder = os.getenv('AUDIO_PARTS_FOLDER', '')
     succeeded, failed = [], []
 
     for rec in records:
-        audio_dir = Path(audio_parts_folder) / subfolder / rec['parent_file']
+        audio_dir = Path(audio_parts_folder) / theme / subfolder / rec['parent_file']
         input_file = audio_dir / f"{rec['podcast_name']}.m4a"
         output_file = audio_dir / f"{rec['podcast_name']}.mp3"
 
