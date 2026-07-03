@@ -4,8 +4,8 @@ import os
 import time
 from .db import get_records, update_state
 
-CONFIRM_TIMEOUT = 120
-CONFIRM_POLL_INTERVAL = 10
+CONFIRM_TIMEOUT = int(os.getenv('CONFIRM_TIMEOUT', '300'))
+CONFIRM_POLL_INTERVAL = int(os.getenv('CONFIRM_POLL_INTERVAL', '10'))
 
 
 def _is_test_mode():
