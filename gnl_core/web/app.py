@@ -590,8 +590,7 @@ async def _run_action(action: str, parent_id: int):
                         await broadcast_log(f"▶ GENERATE ({max_count} épisodes)")
 
                         def on_episode_generated(rec):
-                            future = asyncio.run_coroutine_threadsafe(broadcast_status(), loop)
-                            future.result(timeout=5)
+                            asyncio.run_coroutine_threadsafe(broadcast_status(), loop)
 
                         await loop.run_in_executor(None, lambda: generate(parent_id, max_count=max_count, on_progress=on_episode_generated, should_stop=_stopped))
                         await broadcast_status()
