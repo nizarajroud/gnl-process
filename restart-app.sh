@@ -22,15 +22,24 @@ sleep 1
 
 # Installer les dépendances si nécessaire
 echo "[$MODE] Vérification des dépendances..."
-pip install -e "$SCRIPT_DIR" --quiet 2>/dev/null
+if [ "$MODE" = "prod" ]; then
+  if [ ! -d "$SCRIPT_DIR/.venv" ]; then
+    python3 -m venv "$SCRIPT_DIR/.venv"
+  fi
+  "$SCRIPT_DIR/.venv/bin/pip" install -e "$SCRIPT_DIR" --quiet 2>/dev/null
+  PYTHON="$SCRIPT_DIR/.venv/bin/python3"
+else
+  pip install -e "$SCRIPT_DIR" --quiet 2>/dev/null
+  PYTHON=python3
+fi
 
 # Appliquer les migrations DB
-python3 "$SCRIPT_DIR/setup_database.py"
+$PYTHON "$SCRIPT_DIR/setup_database.py"
 
 # Lancer l'application
 echo "[$MODE] Démarrage de GNL Process (port $PORT)..."
 if [ "$MODE" = "prod" ]; then
-  nohup python3 -m uvicorn gnl_core.web.app:app --host 0.0.0.0 --port $PORT > "$SCRIPT_DIR/gnl-${MODE}.log" 2>&1 &
+  nohup $PYTHON -m uvicorn gnl_core.web.app:app --host 0.0.0.0 --port $PORT > "$SCRIPT_DIR/gnl-${MODE}.log" 2>&1 &
   echo "[$MODE] PID: $!"
 else
   python3 -m uvicorn gnl_core.web.app:app --host 0.0.0.0 --port $PORT

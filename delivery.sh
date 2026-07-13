@@ -85,10 +85,18 @@ case "$CHOICE" in
   # Écrire la version déployée
   echo "$LATEST_TAG" > .deployed-version
 
-  # Installer les dépendances
-  echo "Installation des dépendances..."
-  pip install -e . --quiet 2>/dev/null
-  python setup_database.py
+  # Créer/utiliser virtualenv isolé pour la prod
+  if [ ! -d "$PROD_DIR/.venv" ]; then
+    echo "Création du virtualenv prod..."
+    python3 -m venv "$PROD_DIR/.venv"
+  fi
+  PROD_PYTHON="$PROD_DIR/.venv/bin/python3"
+  PROD_PIP="$PROD_DIR/.venv/bin/pip"
+
+  # Installer les dépendances dans le venv prod
+  echo "Installation des dépendances (venv prod)..."
+  $PROD_PIP install -e . --quiet 2>/dev/null
+  $PROD_PYTHON setup_database.py
 
   # Copier .env et config depuis dev
   cp "$DEV_DIR/.env" .env 2>/dev/null || true
@@ -110,12 +118,12 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=${PROD_DIR}
-ExecStart=$(which python3) -m uvicorn gnl_core.web.app:app --host 0.0.0.0 --port ${PROD_PORT}
+ExecStart=${PROD_DIR}/.venv/bin/python3 -m uvicorn gnl_core.web.app:app --host 0.0.0.0 --port ${PROD_PORT}
 ExecStop=/bin/kill -SIGTERM \$MAINPID
 Restart=on-failure
 RestartSec=5
 User=$(whoami)
-Environment=PATH=$(dirname $(which python3)):/usr/bin:/usr/local/bin
+Environment=PATH=${PROD_DIR}/.venv/bin:/usr/bin:/usr/local/bin
 EnvironmentFile=${PROD_DIR}/.env
 
 [Install]
