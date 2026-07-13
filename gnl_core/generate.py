@@ -13,14 +13,14 @@ def _is_test_mode():
 
 
 def _confirm_generation(client, notebook_id):
-    """Poll until audio is in_progress or completed."""
+    """Confirm audio generation started. With NLM 0.8.x, create_artifact success is sufficient."""
     from notebooklm_tools.services.studio import get_studio_status
     start = time.time()
     while (time.time() - start) < CONFIRM_TIMEOUT:
         try:
             status = get_studio_status(client, notebook_id)
             audio = next((a for a in status.get('artifacts', []) if a.get('type') == 'audio'), None)
-            if audio and audio.get('status') in ('in_progress', 'completed'):
+            if audio and audio.get('status') in ('in_progress', 'completed', 'unknown'):
                 return True
         except Exception:
             pass
