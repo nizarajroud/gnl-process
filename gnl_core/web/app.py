@@ -383,7 +383,7 @@ async def get_saved_articles(source: str):
     from gnl_core.db import get_db
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT id, title, source_url, saved_date, processed, output_path FROM saved_articles WHERE source=? ORDER BY id DESC",
+            "SELECT id, title, source_url, saved_date, processed, output_path FROM saved_articles WHERE source=? ORDER BY CAST(saved_date AS INTEGER) ASC",
             (source,)
         ).fetchall()
     return [dict(r) for r in rows]
@@ -452,17 +452,17 @@ def _fetch_linkedin_from_cache():
     if not cache_db.exists():
         return -1
 
-    # Read from LinkedIn cache
+    # Read from LinkedIn cache (ordered by id DESC = most recent first)
     conn_cache = sqlite.connect(cache_db)
     conn_cache.row_factory = sqlite.Row
-    rows = conn_cache.execute("SELECT author, content, url, scraped_at FROM saved_posts ORDER BY scraped_at DESC").fetchall()
+    rows = conn_cache.execute("SELECT author, content, url, scraped_at FROM saved_posts ORDER BY id DESC").fetchall()
     conn_cache.close()
 
-    # Import into our DB
+    # Import into our DB with position (for ordering)
     added = 0
     now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     with get_db() as conn:
-        for r in rows:
+        for position, r in enumerate(rows):
             url = r['url'] or ''
             if not url or url.startswith('no-url'):
                 continue
@@ -477,8 +477,8 @@ def _fetch_linkedin_from_cache():
                     break
             try:
                 conn.execute(
-                    "INSERT OR IGNORE INTO saved_articles (source, source_id, title, content, source_url, fetched_at, processed) VALUES (?, ?, ?, ?, ?, ?, 0)",
-                    ('linkedin', url, title, content, url, now)
+                    "INSERT OR IGNORE INTO saved_articles (source, source_id, title, content, source_url, saved_date, fetched_at, processed) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
+                    ('linkedin', url, title, content, url, str(position), now)
                 )
                 added += 1
             except Exception:
