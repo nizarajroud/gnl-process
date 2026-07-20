@@ -407,7 +407,12 @@
         }
 
         function fetchSavedArticles(source) {
-            fetch(`/saved-articles/fetch/${source}`, {method: 'POST'});
+            const btn = event.target;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="animate-pulse">⏳ Scraping...</span>';
+            fetch(`/saved-articles/fetch/${source}`, {method: 'POST'}).then(() => {
+                // Button reset will happen on __done__ via WS
+            });
         }
 
         function loadSavedArticles(source) {
@@ -525,7 +530,7 @@
                         subPanel.innerHTML = html;
                         loadFileList(theme, sub);
                     } else if (mode === 'fetch') {
-                        html += `<div class="mb-4"><button onclick="fetchSavedArticles('${sub}')" class="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">🔄 Récupérer</button></div>`;
+                        html += `<div class="mb-4"><button onclick="fetchSavedArticles('${sub}')" data-source="${sub}" class="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">🔄 Récupérer</button></div>`;
                         html += `<div id="articles-${sub}" class="text-sm text-gray-400">Chargement...</div>`;
                         subPanel.innerHTML = html;
                         loadSavedArticles(sub);
@@ -737,6 +742,15 @@
                 if (data.msg === '__done__') {
                     running = false;
                     document.getElementById('stopBtn').classList.add('hidden');
+                    // Reset fetch buttons and reload articles
+                    document.querySelectorAll('button[disabled]').forEach(b => {
+                        if (b.innerHTML.includes('Scraping')) {
+                            const source = b.dataset.source;
+                            b.disabled = false;
+                            b.innerHTML = '🔄 Récupérer';
+                            if (source) loadSavedArticles(source);
+                        }
+                    });
                     return;
                 }
             } else if (data.type === 'status_update') {
