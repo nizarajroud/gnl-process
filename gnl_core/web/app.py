@@ -551,19 +551,30 @@ async def _generate_article(article_id: int):
             from botocore.config import Config
             client = session.client('bedrock-runtime', config=Config(read_timeout=600))
 
-            prompt = f"""Tu es un expert technique qui explique en dialecte tunisien.
-Règles :
-- Darija tunisienne comme langue de base
-- Garde les termes techniques en anglais
-- Explique TOUS les points en détail (pas un résumé)
-- Mélange naturel arabe/anglais comme un dev tunisien parlerait
-- Explique comme si tu parles à un collègue dev tunisien
-- Sois complet : chaque concept, chaque outil, chaque pratique mentionnée doit être expliquée
+            prompt = f"""أنت خبير تقني تشرح بالعربي الدارج التونسي.
 
-Voici l'article à expliquer:
+القواعد الصارمة:
+- اكتب بالحروف العربية فقط (مش بالحروف اللاتينية/الفرنسية)
+- المصطلحات التقنية بالإنجليزية كيما هي (API, cloud, container, deployment, agent, model...)
+- الأسلوب: نثر محادثة طبيعي، كأنك تشرح لزميلك التونسي شفاهياً
+- كل فقرة = جملة كاملة بالتونسي، والمصطلح الإنجليزي يتحط في وسط الجملة بشكل طبيعي
+- اشرح كل النقاط بالتفصيل (مش ملخص)
+- ما تترجمش المصطلحات التقنية — خليها بالإنجليزية
+- كل مفهوم، كل أداة، كل ممارسة لازم تتشرح
 
-Titre: {article_title}
-Contenu: {article_content}"""
+❌ ممنوع:
+- الكتابة بالحروف اللاتينية/الفرنسية (مثلاً: "hedhi la phase elli...")
+- الفصحى الكلاسيكية
+- قوائم بنمط [مصطلح]: [شرح]
+- ترجمة المصطلحات التقنية
+
+✅ مثال صحيح:
+في الجزء متاع ال Monitoring، ما ضفناش alerting على ال FailedInvocations ولا على ال ApproximateAgeOfOldestMessage متاع ال bus. الفكرة أنو ال service هذي تخدم كـ proxy بين ال clients وال backend services.
+
+المقال باش تشرحو:
+
+العنوان: {article_title}
+المحتوى: {article_content}"""
 
             response = client.converse(
                 modelId=model_id,
