@@ -425,6 +425,12 @@ async def _call_linkedin_mcp():
     try:
         from mcp import ClientSession, StdioServerParameters
         from mcp.client.stdio import stdio_client
+        from pathlib import Path
+
+        # Delete old cache to get a fresh ordered scrape
+        cache_db = Path.home() / ".linkedin-mcp" / "saved_posts.db"
+        if cache_db.exists():
+            cache_db.unlink()
 
         server_params = StdioServerParameters(
             command='python3',
@@ -452,10 +458,10 @@ def _fetch_linkedin_from_cache():
     if not cache_db.exists():
         return -1
 
-    # Read from LinkedIn cache (ordered by id DESC = most recent first)
+    # Read from LinkedIn cache (ordered by id ASC = top of page = most recent)
     conn_cache = sqlite.connect(cache_db)
     conn_cache.row_factory = sqlite.Row
-    rows = conn_cache.execute("SELECT author, content, url, scraped_at FROM saved_posts ORDER BY id DESC").fetchall()
+    rows = conn_cache.execute("SELECT author, content, url, scraped_at FROM saved_posts ORDER BY id ASC").fetchall()
     conn_cache.close()
 
     # Import into our DB with position (for ordering)
