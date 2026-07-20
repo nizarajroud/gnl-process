@@ -383,7 +383,7 @@ async def get_saved_articles(source: str):
     from gnl_core.db import get_db
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT id, title, source_url, saved_date, processed, output_path FROM saved_articles WHERE source=? ORDER BY CAST(saved_date AS INTEGER) ASC",
+            "SELECT id, title, source_url, saved_date, processed, output_path FROM saved_articles WHERE source=? ORDER BY saved_date DESC, id ASC",
             (source,)
         ).fetchall()
     return [dict(r) for r in rows]
@@ -452,7 +452,7 @@ def _fetch_linkedin_from_cache():
     from gnl_core.db import get_db
     from pathlib import Path
     import sqlite3 as sqlite
-    from datetime import datetime
+    from datetime import datetime, timedelta
 
     cache_db = Path.home() / ".linkedin-mcp" / "saved_posts.db"
     if not cache_db.exists():
@@ -467,6 +467,7 @@ def _fetch_linkedin_from_cache():
     # Import into our DB with position (for ordering)
     added = 0
     now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    today = datetime.now()
     with get_db() as conn:
         for position, r in enumerate(rows):
             url = r['url'] or ''
@@ -481,10 +482,30 @@ def _fetch_linkedin_from_cache():
                 if len(l) > 40 and '•' not in l and 'abonnés' not in l and 'Architect' not in l and 'Engineer' not in l and 'Creator' not in l:
                     title = l[:100]
                     break
+            # Extract relative date from content (e.g. "• 1 j", "• 2 sem.", "• 3 h")
+            import re
+            date_str = ''
+            date_match = re.search(r'•\s*(\d+)\s*(j|h|sem|mois|min)', content)
+            if date_match:
+                num = int(date_match.group(1))
+                unit = date_match.group(2)
+                if unit == 'h' or unit == 'min':
+                    post_date = today
+                elif unit == 'j':
+                    post_date = today - timedelta(days=num)
+                elif unit == 'sem':
+                    post_date = today - timedelta(weeks=num)
+                elif unit == 'mois':
+                    post_date = today - timedelta(days=num * 30)
+                else:
+                    post_date = today
+                date_str = post_date.strftime('%Y-%m-%d')
+            else:
+                date_str = today.strftime('%Y-%m-%d')
             try:
                 conn.execute(
                     "INSERT OR IGNORE INTO saved_articles (source, source_id, title, content, source_url, saved_date, fetched_at, processed) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
-                    ('linkedin', url, title, content, url, str(position), now)
+                    ('linkedin', url, title, content, url, date_str, now)
                 )
                 added += 1
             except Exception:
