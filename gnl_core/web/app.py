@@ -600,10 +600,67 @@ async def _generate_article(article_id: int):
             conn.execute("UPDATE saved_articles SET processed=1, output_path=? WHERE id=?", (output_path, article_id))
             conn.commit()
 
-        await broadcast_log(f"✓ Généré: {output_path}")
+        await broadcast_log(f"✓ Texte généré: {output_path}")
+
+        # Step 2: Generate audio via Google TTS (Orus voice)
+        await broadcast_log("🔊 Génération audio (Google TTS - Orus)...")
+        audio_ok = await _generate_tts_audio(result, article_title, article_id)
+        if audio_ok:
+            await broadcast_log(f"✓ Audio généré")
+        else:
+            await broadcast_log("⚠ Audio échoué")
+
     except Exception as e:
         await broadcast_log(f"⚠ Erreur: {str(e)[:100]}")
     await broadcast_log("__done__")
+
+
+async def _generate_tts_audio(text, title, article_id):
+    """Generate MP3 from text using Google TTS MCP (Orus voice)."""
+    try:
+        from mcp import ClientSession, StdioServerParameters
+        from mcp.client.stdio import stdio_client
+        from gnl_core.config import get_config
+        from gnl_core.db import get_db
+
+        config = get_config()
+        audio_parts = config.get('AUDIO_PARTS_FOLDER', '')
+        audio_dir = os.path.join(audio_parts, 'articles', 'linkedin')
+        os.makedirs(audio_dir, exist_ok=True)
+
+        server_params = StdioServerParameters(
+            command='/home/nizar/go/bin/mcp-tts',
+            args=[],
+            env={
+                **os.environ,
+                'GOOGLE_AI_API_KEY': os.environ.get('GOOGLE_AI_API_KEY', ''),
+                'MCP_TTS_SUPPRESS_SPEAKING_OUTPUT': 'true',
+                'MCP_TTS_DEFAULT_PROVIDER': 'google_tts',
+                'MCP_TTS_OUTPUT_DIR': audio_dir,
+                'MCP_TTS_NO_PLAY': 'true'
+            }
+        )
+
+        async with stdio_client(server_params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                await session.call_tool('google_tts', {
+                    'text': text,
+                    'voice': 'Orus'
+                })
+
+        # Find the generated audio file (most recent in dir)
+        import glob
+        files = sorted(glob.glob(os.path.join(audio_dir, '*.mp3')), key=os.path.getmtime, reverse=True)
+        if files:
+            audio_path = files[0]
+            with get_db() as conn:
+                conn.execute("UPDATE saved_articles SET audio_path=? WHERE id=?", (audio_path, article_id))
+                conn.commit()
+            return True
+        return False
+    except Exception:
+        return False
 
 
 @app.post("/content/generate")

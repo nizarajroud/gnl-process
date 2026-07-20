@@ -162,7 +162,8 @@ def _apply_v6(cursor):
             saved_date TEXT,
             fetched_at TEXT,
             processed INTEGER DEFAULT 0,
-            output_path TEXT
+            output_path TEXT,
+            audio_path TEXT
         )
     ''')
     cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('saved-articles', 'linkedin', '', 'fetch')")
