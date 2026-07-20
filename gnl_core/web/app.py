@@ -548,7 +548,8 @@ async def _generate_article(article_id: int):
             profile = config.get('AWS_PROFILE', '')
 
             session = boto3.Session(profile_name=profile, region_name=region)
-            client = session.client('bedrock-runtime')
+            from botocore.config import Config
+            client = session.client('bedrock-runtime', config=Config(read_timeout=600))
 
             prompt = f"""Tu es un expert technique qui explique en dialecte tunisien.
 Règles :
