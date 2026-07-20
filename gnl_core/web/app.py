@@ -401,14 +401,44 @@ async def _fetch_saved_articles(source):
 
     if source == 'linkedin':
         loop = asyncio.get_event_loop()
+        # Step 1: Call LinkedIn MCP to refresh cache
+        await broadcast_log("🔄 Appel MCP LinkedIn (scraping)...")
+        refresh_ok = await _call_linkedin_mcp()
+        if refresh_ok:
+            await broadcast_log("✓ Cache LinkedIn mis à jour")
+        else:
+            await broadcast_log("⚠ Scraping échoué — utilisation du cache existant")
+
+        # Step 2: Import from cache to our DB
         count = await loop.run_in_executor(None, _fetch_linkedin_from_cache)
         if count >= 0:
-            await broadcast_log(f"✓ {count} nouveaux articles importés depuis le cache LinkedIn")
+            await broadcast_log(f"✓ {count} nouveaux articles importés")
         else:
-            await broadcast_log("⚠ Cache LinkedIn introuvable. Lancez d'abord 'get_saved_posts' via l'agent Connect1.")
+            await broadcast_log("⚠ Cache LinkedIn introuvable")
     else:
         await broadcast_log(f"⚠ Fetch {source}: pas encore implémenté")
     await broadcast_log("__done__")
+
+
+async def _call_linkedin_mcp():
+    """Call LinkedIn MCP server to refresh saved posts cache."""
+    try:
+        from mcp import ClientSession, StdioServerParameters
+        from mcp.client.stdio import stdio_client
+
+        server_params = StdioServerParameters(
+            command='python3',
+            args=['-m', 'linkedin_mcp_server'],
+            env={**os.environ, 'PYTHONPATH': '/home/nizar/HomeWspce/linkedin-mcp-fork'}
+        )
+
+        async with stdio_client(server_params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                await session.call_tool('get_saved_posts', {'num_posts': 50})
+        return True
+    except Exception as e:
+        return False
 
 
 def _fetch_linkedin_from_cache():
