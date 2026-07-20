@@ -10,7 +10,7 @@ import os
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gnl.db')
 
-CURRENT_VERSION = 5
+CURRENT_VERSION = 6
 
 
 def setup_database(db_path=None):
@@ -40,6 +40,8 @@ def setup_database(db_path=None):
     if current < 4:
         _apply_v4(cursor)
     if current < 5:
+    if current < 6:
+        _apply_v6(cursor)
         _apply_v5(cursor)
 
     conn.commit()
@@ -145,6 +147,27 @@ def _apply_v5(cursor):
     cursor.execute("ALTER TABLE series_catalog ADD COLUMN content_mode TEXT DEFAULT 'manual'")
     cursor.execute("UPDATE series_catalog SET content_mode = 'generate' WHERE subtheme = 'aws-whats-new'")
     cursor.execute("INSERT INTO schema_version (version) VALUES (5)")
+
+
+def _apply_v6(cursor):
+    """v6: Add saved_articles table and saved-articles catalog entries."""
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS saved_articles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source TEXT NOT NULL,
+            source_id TEXT UNIQUE,
+            title TEXT,
+            content TEXT,
+            source_url TEXT,
+            saved_date TEXT,
+            fetched_at TEXT,
+            processed INTEGER DEFAULT 0,
+            output_path TEXT
+        )
+    ''')
+    cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('saved-articles', 'linkedin', '', 'fetch')")
+    cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('saved-articles', 'medium', '', 'fetch')")
+    cursor.execute("INSERT INTO schema_version (version) VALUES (6)")
 
 
 if __name__ == "__main__":

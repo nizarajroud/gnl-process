@@ -406,6 +406,24 @@
             event.target.classList.add('border-blue-500', 'text-blue-400');
         }
 
+        function fetchSavedArticles(source) {
+            fetch(`/saved-articles/fetch/${source}`, {method: 'POST'});
+        }
+
+        function loadSavedArticles(source) {
+            fetch(`/saved-articles/${source}`).then(r=>r.json()).then(articles => {
+                const div = document.getElementById(`articles-${source}`);
+                if (!articles.length) { div.innerHTML = '<span class="text-gray-500">Aucun article. Cliquez "🔄 Récupérer" pour importer.</span>'; return; }
+                div.innerHTML = '<table class="w-full text-xs"><thead><tr class="text-gray-400 border-b border-gray-700"><th class="text-left py-1">Titre</th><th class="py-1">Date</th><th class="text-right py-1">Action</th></tr></thead><tbody>' +
+                    articles.map(a => `<tr class="border-b border-gray-800"><td class="py-1 truncate max-w-xs">${a.title || 'Sans titre'}</td><td class="py-1 text-gray-500">${a.saved_date || ''}</td><td class="text-right py-1">${a.processed ? '<span class="text-green-400">✅</span>' : `<button onclick="generateArticle(${a.id})" class="px-2 py-0.5 bg-purple-600 hover:bg-purple-500 rounded text-white">Générer</button>`}</td></tr>`).join('') +
+                    '</tbody></table>';
+            });
+        }
+
+        function generateArticle(id) {
+            fetch(`/saved-articles/generate/${id}`, {method: 'POST'});
+        }
+
         function loadFileList(theme, sub) {
             fetch(`/content/files/${theme}/${sub}`).then(r=>r.json()).then(files => {
                 const div = document.getElementById(`filelist-${theme}-${sub}`);
@@ -503,11 +521,19 @@
                     let html = '';
                     if (mode === 'generate' && sub === 'aws-whats-new') {
                         html += `<div class="mb-4 p-3 border border-gray-700 rounded"><div class="flex items-end gap-3"><div><label class="text-xs text-gray-400">Mois</label><select id="wn-month" class="bg-gray-700 rounded px-2 py-1 text-sm"><option value="01">Janvier</option><option value="02">Février</option><option value="03">Mars</option><option value="04">Avril</option><option value="05">Mai</option><option value="06">Juin</option><option value="07">Juillet</option><option value="08">Août</option><option value="09">Septembre</option><option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Décembre</option></select></div><button onclick="generateContent('whats-new', document.getElementById('wn-month').value)" class="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">Générer PDF</button></div></div>`;
+                        html += `<div id="filelist-${theme}-${sub}" class="text-sm text-gray-400">Chargement...</div>`;
+                        subPanel.innerHTML = html;
+                        loadFileList(theme, sub);
+                    } else if (mode === 'fetch') {
+                        html += `<div class="mb-4"><button onclick="fetchSavedArticles('${sub}')" class="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">🔄 Récupérer</button></div>`;
+                        html += `<div id="articles-${sub}" class="text-sm text-gray-400">Chargement...</div>`;
+                        subPanel.innerHTML = html;
+                        loadSavedArticles(sub);
+                    } else {
+                        html += `<div id="filelist-${theme}-${sub}" class="text-sm text-gray-400">Chargement...</div>`;
+                        subPanel.innerHTML = html;
+                        loadFileList(theme, sub);
                     }
-                    html += `<div id="filelist-${theme}-${sub}" class="text-sm text-gray-400">Chargement...</div>`;
-                    subPanel.innerHTML = html;
-                    subPanels.appendChild(subPanel);
-                    loadFileList(theme, sub);
                 });
 
                 panel.appendChild(subTabs);

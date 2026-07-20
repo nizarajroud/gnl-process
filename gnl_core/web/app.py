@@ -377,6 +377,108 @@ async def _launch_interactive(theme, subtheme, filename):
     await broadcast_log("__done__")
 
 
+@app.get("/saved-articles/{source}")
+async def get_saved_articles(source: str):
+    """List saved articles for a source (linkedin, medium, etc.)."""
+    from gnl_core.db import get_db
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, title, source_url, saved_date, processed, output_path FROM saved_articles WHERE source=? ORDER BY id DESC",
+            (source,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/saved-articles/fetch/{source}")
+async def fetch_saved_articles(source: str):
+    """Fetch saved items from source (linkedin, medium) via MCP."""
+    asyncio.create_task(_fetch_saved_articles(source))
+    return {"status": "started"}
+
+
+async def _fetch_saved_articles(source):
+    await broadcast_log(f"▶ Fetch saved articles ({source})...")
+    # TODO: implement MCP fetch per source
+    await broadcast_log(f"⚠ Fetch {source}: pas encore implémenté (MCP)")
+    await broadcast_log("__done__")
+
+
+@app.post("/saved-articles/generate/{article_id}")
+async def generate_article_explanation(article_id: int):
+    """Generate tunisian explanation for a saved article."""
+    asyncio.create_task(_generate_article(article_id))
+    return {"status": "started"}
+
+
+async def _generate_article(article_id: int):
+    from gnl_core.db import get_db
+    import boto3
+
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM saved_articles WHERE id=?", (article_id,)).fetchone()
+    if not row:
+        await broadcast_log(f"⚠ Article {article_id} non trouvé")
+        await broadcast_log("__done__")
+        return
+
+    await broadcast_log(f"▶ Génération explication tunisienne: {row['title'][:50]}...")
+    loop = asyncio.get_event_loop()
+
+    try:
+        def _do():
+            from gnl_core.config import get_config
+            config = get_config()
+            model_id = config.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
+            region = config.get('AWS_REGION', 'ca-central-1')
+            profile = config.get('AWS_PROFILE', '')
+
+            session = boto3.Session(profile_name=profile, region_name=region)
+            client = session.client('bedrock-runtime')
+
+            prompt = f"""Tu es un expert technique qui explique en dialecte tunisien.
+Règles :
+- Darija tunisienne comme langue de base
+- Garde les termes techniques en anglais
+- Explique TOUS les points en détail (pas un résumé)
+- Mélange naturel arabe/anglais comme un dev tunisien parlerait
+- Explique comme si tu parles à un collègue dev tunisien
+- Sois complet : chaque concept, chaque outil, chaque pratique mentionnée doit être expliquée
+
+Voici l'article à expliquer:
+
+Titre: {row['title']}
+Contenu: {row['content']}"""
+
+            response = client.converse(
+                modelId=model_id,
+                messages=[{"role": "user", "content": [{"text": prompt}]}],
+                inferenceConfig={"maxTokens": 4096}
+            )
+            return response['output']['message']['content'][0]['text']
+
+        result = await loop.run_in_executor(None, _do)
+
+        # Save output
+        from gnl_core.config import get_config
+        config = get_config()
+        output_dir = os.path.join(config.get('INBOX_FOLDER', ''), 'saved-articles', 'linkedin')
+        os.makedirs(output_dir, exist_ok=True)
+        safe_title = "".join(c if c.isalnum() or c in '-_ ' else '' for c in (row['title'] or f'article-{article_id}'))[:60]
+        output_path = os.path.join(output_dir, f"{safe_title}.txt")
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(result)
+
+        with get_db() as conn:
+            conn.execute("UPDATE saved_articles SET processed=1, output_path=? WHERE id=?", (output_path, article_id))
+            conn.commit()
+
+        await broadcast_log(f"✓ Généré: {output_path}")
+    except Exception as e:
+        await broadcast_log(f"⚠ Erreur: {str(e)[:100]}")
+    await broadcast_log("__done__")
+
+
 @app.post("/content/generate")
 async def generate_content(request: Request):
     """Generate source PDF from AWS content."""
