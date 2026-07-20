@@ -616,10 +616,10 @@ async def _generate_article(article_id: int):
 
 
 async def _generate_tts_audio(text, title, article_id):
-    """Generate MP3 from text using Google TTS MCP (Orus voice)."""
+    """Generate MP3 from text using Google Gemini TTS API directly (Orus voice)."""
     try:
-        from mcp import ClientSession, StdioServerParameters
-        from mcp.client.stdio import stdio_client
+        import requests
+        import base64
         from gnl_core.config import get_config
         from gnl_core.db import get_db
 
@@ -628,37 +628,47 @@ async def _generate_tts_audio(text, title, article_id):
         audio_dir = os.path.join(audio_parts, 'articles', 'linkedin')
         os.makedirs(audio_dir, exist_ok=True)
 
-        server_params = StdioServerParameters(
-            command='/home/nizar/go/bin/mcp-tts',
-            args=[],
-            env={
-                **os.environ,
-                'GOOGLE_AI_API_KEY': os.environ.get('GOOGLE_AI_API_KEY', ''),
-                'MCP_TTS_SUPPRESS_SPEAKING_OUTPUT': 'true',
-                'MCP_TTS_DEFAULT_PROVIDER': 'google_tts',
-                'MCP_TTS_OUTPUT_DIR': audio_dir,
-                'MCP_TTS_NO_PLAY': 'true'
+        api_key = os.environ.get('GOOGLE_AI_API_KEY', '')
+        if not api_key:
+            return False
+
+        url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={api_key}'
+
+        payload = {
+            'contents': [{'parts': [{'text': text}]}],
+            'generationConfig': {
+                'responseModalities': ['AUDIO'],
+                'speechConfig': {
+                    'voiceConfig': {
+                        'prebuiltVoiceConfig': {'voiceName': 'Orus'}
+                    }
+                }
             }
-        )
+        }
 
-        async with stdio_client(server_params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                await session.call_tool('google_tts', {
-                    'text': text,
-                    'voice': 'Orus'
-                })
+        loop = asyncio.get_event_loop()
 
-        # Find the generated audio file (most recent in dir)
-        import glob
-        files = sorted(glob.glob(os.path.join(audio_dir, '*.mp3')), key=os.path.getmtime, reverse=True)
-        if files:
-            audio_path = files[0]
-            with get_db() as conn:
-                conn.execute("UPDATE saved_articles SET audio_path=? WHERE id=?", (audio_path, article_id))
-                conn.commit()
-            return True
-        return False
+        def _call_tts():
+            resp = requests.post(url, json=payload, timeout=300)
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            audio_b64 = data['candidates'][0]['content']['parts'][0]['inlineData']['data']
+            return base64.b64decode(audio_b64)
+
+        audio_bytes = await loop.run_in_executor(None, _call_tts)
+        if not audio_bytes:
+            return False
+
+        safe_title = "".join(c if c.isalnum() or c in '-_ ' else '' for c in (title or f'article-{article_id}'))[:60]
+        audio_path = os.path.join(audio_dir, f"{safe_title}.mp3")
+        with open(audio_path, 'wb') as f:
+            f.write(audio_bytes)
+
+        with get_db() as conn:
+            conn.execute("UPDATE saved_articles SET audio_path=? WHERE id=?", (audio_path, article_id))
+            conn.commit()
+        return True
     except Exception:
         return False
 
