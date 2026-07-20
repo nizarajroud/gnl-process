@@ -398,9 +398,63 @@ async def fetch_saved_articles(source: str):
 
 async def _fetch_saved_articles(source):
     await broadcast_log(f"▶ Fetch saved articles ({source})...")
-    # TODO: implement MCP fetch per source
-    await broadcast_log(f"⚠ Fetch {source}: pas encore implémenté (MCP)")
+
+    if source == 'linkedin':
+        loop = asyncio.get_event_loop()
+        count = await loop.run_in_executor(None, _fetch_linkedin_from_cache)
+        if count >= 0:
+            await broadcast_log(f"✓ {count} nouveaux articles importés depuis le cache LinkedIn")
+        else:
+            await broadcast_log("⚠ Cache LinkedIn introuvable. Lancez d'abord 'get_saved_posts' via l'agent Connect1.")
+    else:
+        await broadcast_log(f"⚠ Fetch {source}: pas encore implémenté")
     await broadcast_log("__done__")
+
+
+def _fetch_linkedin_from_cache():
+    """Read LinkedIn MCP cache and import into our saved_articles table."""
+    from gnl_core.db import get_db
+    from pathlib import Path
+    import sqlite3 as sqlite
+    from datetime import datetime
+
+    cache_db = Path.home() / ".linkedin-mcp" / "saved_posts.db"
+    if not cache_db.exists():
+        return -1
+
+    # Read from LinkedIn cache
+    conn_cache = sqlite.connect(cache_db)
+    conn_cache.row_factory = sqlite.Row
+    rows = conn_cache.execute("SELECT author, content, url, scraped_at FROM saved_posts ORDER BY scraped_at DESC").fetchall()
+    conn_cache.close()
+
+    # Import into our DB
+    added = 0
+    now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    with get_db() as conn:
+        for r in rows:
+            url = r['url'] or ''
+            if not url or url.startswith('no-url'):
+                continue
+            content = r['content'] or ''
+            # Extract title: first substantial line (not author name/metadata)
+            lines = content.split('\n')
+            title = 'Sans titre'
+            for l in lines:
+                l = l.strip()
+                if len(l) > 40 and '•' not in l and 'abonnés' not in l and 'Architect' not in l and 'Engineer' not in l and 'Creator' not in l:
+                    title = l[:100]
+                    break
+            try:
+                conn.execute(
+                    "INSERT OR IGNORE INTO saved_articles (source, source_id, title, content, source_url, fetched_at, processed) VALUES (?, ?, ?, ?, ?, ?, 0)",
+                    ('linkedin', url, title, content, url, now)
+                )
+                added += 1
+            except Exception:
+                pass
+        conn.commit()
+    return added
 
 
 @app.post("/saved-articles/generate/{article_id}")
