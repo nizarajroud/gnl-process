@@ -535,6 +535,10 @@ async def _generate_article(article_id: int):
     await broadcast_log(f"▶ Génération explication tunisienne: {row['title'][:50]}...")
     loop = asyncio.get_event_loop()
 
+    # Extract values before passing to thread (Row object not thread-safe)
+    article_title = row['title'] or ''
+    article_content = row['content'] or ''
+
     try:
         def _do():
             from gnl_core.config import get_config
@@ -557,8 +561,8 @@ Règles :
 
 Voici l'article à expliquer:
 
-Titre: {row['title']}
-Contenu: {row['content']}"""
+Titre: {article_title}
+Contenu: {article_content}"""
 
             response = client.converse(
                 modelId=model_id,
@@ -574,7 +578,7 @@ Contenu: {row['content']}"""
         config = get_config()
         output_dir = os.path.join(config.get('INBOX_FOLDER', ''), 'saved-articles', 'linkedin')
         os.makedirs(output_dir, exist_ok=True)
-        safe_title = "".join(c if c.isalnum() or c in '-_ ' else '' for c in (row['title'] or f'article-{article_id}'))[:60]
+        safe_title = "".join(c if c.isalnum() or c in '-_ ' else '' for c in (article_title or f'article-{article_id}'))[:60]
         output_path = os.path.join(output_dir, f"{safe_title}.txt")
 
         with open(output_path, 'w', encoding='utf-8') as f:
