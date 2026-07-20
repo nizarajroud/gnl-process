@@ -667,8 +667,17 @@ async def _generate_tts_audio(text, title, article_id):
 
         safe_title = "".join(c if c.isalnum() or c in '-_ ' else '' for c in (title or f'article-{article_id}'))[:60]
         audio_path = os.path.join(audio_dir, f"{safe_title}.mp3")
-        with open(audio_path, 'wb') as f:
+
+        # Convert PCM (L16, 24kHz) to MP3 via ffmpeg
+        import subprocess
+        pcm_path = audio_path.replace('.mp3', '.pcm')
+        with open(pcm_path, 'wb') as f:
             f.write(audio_bytes)
+        subprocess.run([
+            'ffmpeg', '-y', '-f', 's16le', '-ar', '24000', '-ac', '1',
+            '-i', pcm_path, audio_path
+        ], capture_output=True)
+        os.unlink(pcm_path)
 
         with get_db() as conn:
             conn.execute("UPDATE saved_articles SET audio_path=? WHERE id=?", (audio_path, article_id))
