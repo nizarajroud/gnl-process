@@ -420,7 +420,7 @@
                 const div = document.getElementById(`articles-${source}`);
                 if (!articles.length) { div.innerHTML = '<span class="text-gray-500">Aucun article. Cliquez "🔄 Récupérer" pour importer.</span>'; return; }
                 div.innerHTML = '<table class="w-full text-xs"><thead><tr class="text-gray-400 border-b border-gray-700"><th class="text-left py-1">Titre</th><th class="py-1">Date</th><th class="text-right py-1">Action</th></tr></thead><tbody>' +
-                    articles.map(a => `<tr class="border-b border-gray-800"><td class="py-1 truncate max-w-xs">${a.title || 'Sans titre'}</td><td class="py-1 text-gray-500">${a.saved_date || ''}</td><td class="text-right py-1">${a.processed ? '<span class="text-green-400">✅</span>' : `<button onclick="generateArticle(${a.id})" class="px-2 py-0.5 bg-purple-600 hover:bg-purple-500 rounded text-white">Générer</button>`}</td></tr>`).join('') +
+                    articles.map(a => `<tr class="border-b border-gray-800"><td class="py-1 truncate max-w-xs"><a href="${a.source_url}" target="_blank" class="text-blue-400 hover:underline">${a.title || 'Sans titre'}</a></td><td class="py-1 text-gray-500">${a.saved_date || ''}</td><td class="text-right py-1">${a.processed ? '<span class="text-green-400">✅</span>' : `<button onclick="generateArticle(${a.id})" class="px-2 py-0.5 bg-purple-600 hover:bg-purple-500 rounded text-white">Générer</button>`}</td></tr>`).join('') +
                     '</tbody></table>';
             });
         }
