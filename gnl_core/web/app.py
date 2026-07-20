@@ -630,6 +630,11 @@ async def _generate_tts_audio(text, title, article_id):
 
         api_key = os.environ.get('GOOGLE_AI_API_KEY', '')
         if not api_key:
+            # Try loading from .env
+            from dotenv import load_dotenv
+            load_dotenv()
+            api_key = os.environ.get('GOOGLE_AI_API_KEY', '')
+        if not api_key:
             return False
 
         url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={api_key}'
@@ -669,7 +674,9 @@ async def _generate_tts_audio(text, title, article_id):
             conn.execute("UPDATE saved_articles SET audio_path=? WHERE id=?", (audio_path, article_id))
             conn.commit()
         return True
-    except Exception:
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         return False
 
 
