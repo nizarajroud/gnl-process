@@ -401,92 +401,14 @@ async def _fetch_saved_articles(source):
 
     if source == 'linkedin':
         loop = asyncio.get_event_loop()
-        # Step 1: Call LinkedIn MCP scraper to refresh cache
-        await broadcast_log("🔄 Scraping LinkedIn saved posts...")
-        refresh_ok = await loop.run_in_executor(None, _refresh_linkedin_cache)
-        if refresh_ok:
-            await broadcast_log("✓ Cache LinkedIn mis à jour")
-        else:
-            await broadcast_log("⚠ Scraping échoué — utilisation du cache existant")
-
-        # Step 2: Import from cache to our DB
         count = await loop.run_in_executor(None, _fetch_linkedin_from_cache)
         if count >= 0:
-            await broadcast_log(f"✓ {count} nouveaux articles importés")
+            await broadcast_log(f"✓ {count} nouveaux articles importés depuis le cache LinkedIn")
         else:
-            await broadcast_log("⚠ Cache LinkedIn introuvable")
+            await broadcast_log("⚠ Cache LinkedIn introuvable. Lancez d'abord 'get_saved_posts' via l'agent Connect1.")
     else:
         await broadcast_log(f"⚠ Fetch {source}: pas encore implémenté")
     await broadcast_log("__done__")
-
-
-def _refresh_linkedin_cache():
-    """Call LinkedIn MCP scraper to refresh saved_posts.db cache."""
-    import subprocess
-    try:
-        # Use the MCP protocol to call get_saved_posts tool
-        # Simplest approach: run a Python script that uses the scraper directly
-        script = '''
-import asyncio
-import sys
-sys.path.insert(0, "/home/nizar/HomeWspce/linkedin-mcp-fork")
-
-from playwright.async_api import async_playwright
-from linkedin_mcp_server.scraping.extractor import LinkedInExtractor
-from linkedin_mcp_server.tools.saved import _store_posts
-
-async def main():
-    async with async_playwright() as p:
-        user_data_dir = str(__import__("pathlib").Path.home() / ".linkedin-mcp" / "browser-data")
-        context = await p.chromium.launch_persistent_context(
-            user_data_dir,
-            headless=True,
-            viewport={"width": 1280, "height": 800}
-        )
-        page = context.pages[0] if context.pages else await context.new_page()
-        
-        await page.goto("https://www.linkedin.com/my-items/saved-posts/", wait_until="domcontentloaded", timeout=30000)
-        await page.wait_for_timeout(5000)
-        
-        # Scroll to load items
-        for i in range(10):
-            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await page.wait_for_timeout(2000)
-        
-        # Extract items
-        content = await page.evaluate("""
-            () => {
-                const items = [];
-                const main = document.querySelector('main');
-                if (!main) return items;
-                const listItems = main.querySelectorAll('li');
-                for (const li of listItems) {
-                    const text = li.innerText.trim();
-                    if (text.length > 50 && text.length < 5000) {
-                        const link = li.querySelector('a[href*="/posts/"], a[href*="/feed/update/"], a[href*="/pulse/"]');
-                        const url = link ? link.href : '';
-                        if (text.includes('Sign in') || text.includes('Join now')) continue;
-                        if (!text.includes('\\u2022') && text.length < 100) continue;
-                        items.push({"text": text[:800], "url": url, "author": ""});
-                    }
-                }
-                return items;
-            }
-        """)
-        
-        _store_posts(content)
-        print(f"OK:{len(content)}")
-        await context.close()
-
-asyncio.run(main())
-'''
-        result = subprocess.run(
-            ['python3', '-c', script],
-            capture_output=True, text=True, timeout=120
-        )
-        return result.stdout.strip().startswith('OK:')
-    except Exception:
-        return False
 
 
 def _fetch_linkedin_from_cache():
