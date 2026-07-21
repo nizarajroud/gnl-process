@@ -59,24 +59,58 @@ def step1_format(input_path, theme, subtheme, origin='udemy', on_progress=None):
     text = re.sub(r"\n\s*\n", "\n", text)
     text = re.sub(r"={50,}\n?", "", text)
 
-    # Renumber questions
+    # Renumber questions and format options
     lines = text.split('\n')
     result_lines = []
     question_counter = 0
+    i = 0
 
-    for line in lines:
+    while i < len(lines):
+        line = lines[i]
         stripped = line.strip()
+
         if re.match(r'^\d+\.\s*Question$', stripped) or re.match(r'^Question$', stripped):
             question_counter += 1
             result_lines.append(f"Question {question_counter}:")
+            i += 1
         elif re.match(r'^Question\s+\d+:?', stripped):
             question_counter += 1
             rest = re.sub(r'^Question\s+\d+:?\s*', '', stripped)
             result_lines.append(f"Question {question_counter}:")
             if rest:
                 result_lines.append(rest)
+            i += 1
+        elif stripped == 'Incorrect' or re.match(r'^Correct\s+options?:', stripped, re.IGNORECASE):
+            # Find the last question mark to identify where options start
+            last_q_idx = -1
+            for j in range(len(result_lines) - 1, -1, -1):
+                if '?' in result_lines[j]:
+                    last_q_idx = j
+                    break
+
+            if last_q_idx != -1:
+                # Lines between question mark and here are options
+                options = []
+                for j in range(last_q_idx + 1, len(result_lines)):
+                    if result_lines[j].strip():
+                        options.append(result_lines[j].strip())
+
+                # Remove option lines from result
+                result_lines = result_lines[:last_q_idx + 1]
+
+                # Add as bullet list
+                for opt in options:
+                    if not opt.startswith('- '):
+                        result_lines.append(f"- {opt}")
+                    else:
+                        result_lines.append(opt)
+
+            # Add Explanations marker
+            result_lines.append("Explanations:")
+            i += 1
         else:
             result_lines.append(line)
+            i += 1
 
     # Save cleaned DOCX
     new_doc = Document()
