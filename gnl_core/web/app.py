@@ -525,6 +525,200 @@ def _fetch_linkedin_from_cache():
     return added
 
 
+@app.post("/saved-articles/batch/{source}")
+async def batch_generate_articles(source: str):
+    """Generate text + audio for next 10 unprocessed articles, then combine."""
+    asyncio.create_task(_batch_generate(source))
+    return {"status": "started"}
+
+
+async def _batch_generate(source):
+    from gnl_core.db import get_db
+    from gnl_core.config import get_config
+    import subprocess
+
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, title, content FROM saved_articles WHERE source=? AND processed=0 ORDER BY saved_date ASC LIMIT 10",
+            (source,)
+        ).fetchall()
+
+    if not rows:
+        await broadcast_log("⚠ Aucun article à traiter")
+        await broadcast_log("__done__")
+        return
+
+    total = len(rows)
+    await broadcast_log(f"▶ Batch: {total} articles à traiter")
+
+    generated_audio_paths = []
+
+    for i, row in enumerate(rows):
+        article_id = row['id']
+        article_title = row['title'] or ''
+        article_content = row['content'] or ''
+
+        await broadcast_log(f"▶ [{i+1}/{total}] {article_title[:50]}...")
+
+        # Step 1: Generate tunisian explanation
+        loop = asyncio.get_event_loop()
+        try:
+            import boto3
+            from botocore.config import Config as BotoConfig
+
+            def _gen_text():
+                from gnl_core.config import get_config
+                config = get_config()
+                model_id = config.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
+                region = config.get('AWS_REGION', 'ca-central-1')
+                profile = config.get('AWS_PROFILE', '')
+
+                session = boto3.Session(profile_name=profile, region_name=region)
+                client = session.client('bedrock-runtime', config=BotoConfig(read_timeout=600))
+
+                prompt = f"""أنت خبير تقني تشرح بالعربي الدارج التونسي.
+
+القواعد الصارمة:
+- اكتب بالحروف العربية فقط (مش بالحروف اللاتينية/الفرنسية)
+- المصطلحات التقنية بالإنجليزية كيما هي (API, cloud, container, deployment, agent, model...)
+- الأسلوب: نثر محادثة طبيعي، كأنك تشرح لزميلك التونسي شفاهياً
+- كل فقرة = جملة كاملة بالتونسي، والمصطلح الإنجليزي يتحط في وسط الجملة بشكل طبيعي
+- اشرح كل النقاط بالتفصيل (مش ملخص)
+- ما تترجمش المصطلحات التقنية — خليها بالإنجليزية
+- كل مفهوم، كل أداة، كل ممارسة لازم تتشرح
+
+❌ ممنوع:
+- الكتابة بالحروف اللاتينية/الفرنسية
+- الفصحى الكلاسيكية
+- قوائم بنمط [مصطلح]: [شرح]
+- ترجمة المصطلحات التقنية
+
+المقال باش تشرحو:
+
+العنوان: {article_title}
+المحتوى: {article_content}"""
+
+                response = client.converse(
+                    modelId=model_id,
+                    messages=[{"role": "user", "content": [{"text": prompt}]}],
+                    inferenceConfig={"maxTokens": 4096}
+                )
+                return response['output']['message']['content'][0]['text']
+
+            text_result = await loop.run_in_executor(None, _gen_text)
+
+            # Save explanation to PDF_PARTS_FOLDER
+            config = get_config()
+            text_dir = os.path.join(config.get('PDF_PARTS_FOLDER', ''), 'saved-articles', source)
+            os.makedirs(text_dir, exist_ok=True)
+            safe_title = "".join(c if c.isalnum() or c in '-_ ' else '' for c in article_title)[:60]
+            text_path = os.path.join(text_dir, f"{safe_title}.txt")
+            with open(text_path, 'w', encoding='utf-8') as f:
+                f.write(text_result)
+
+        except Exception as e:
+            await broadcast_log(f"  ⚠ Texte échoué: {str(e)[:60]}")
+            continue
+
+        # Step 2: TTS
+        try:
+            import requests
+            import base64
+
+            api_key = os.environ.get('GOOGLE_AI_API_KEY', '')
+            if not api_key:
+                from dotenv import load_dotenv
+                load_dotenv()
+                api_key = os.environ.get('GOOGLE_AI_API_KEY', '')
+
+            url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={api_key}'
+            payload = {
+                'contents': [{'parts': [{'text': text_result}]}],
+                'generationConfig': {
+                    'responseModalities': ['AUDIO'],
+                    'speechConfig': {
+                        'voiceConfig': {
+                            'prebuiltVoiceConfig': {'voiceName': 'Orus'}
+                        }
+                    }
+                }
+            }
+
+            def _call_tts():
+                resp = requests.post(url, json=payload, timeout=300)
+                if resp.status_code != 200:
+                    return None
+                data = resp.json()
+                audio_b64 = data['candidates'][0]['content']['parts'][0]['inlineData']['data']
+                return base64.b64decode(audio_b64)
+
+            audio_bytes = await loop.run_in_executor(None, _call_tts)
+            if not audio_bytes:
+                await broadcast_log(f"  ⚠ Audio échoué")
+                continue
+
+            # Save MP3
+            audio_dir = os.path.join(config.get('AUDIO_PARTS_FOLDER', ''), 'saved-articles', source)
+            os.makedirs(audio_dir, exist_ok=True)
+            audio_path = os.path.join(audio_dir, f"{safe_title}.mp3")
+
+            pcm_path = audio_path.replace('.mp3', '.pcm')
+            with open(pcm_path, 'wb') as f:
+                f.write(audio_bytes)
+            subprocess.run(['ffmpeg', '-y', '-f', 's16le', '-ar', '24000', '-ac', '1', '-i', pcm_path, audio_path], capture_output=True)
+            os.unlink(pcm_path)
+
+            generated_audio_paths.append(audio_path)
+
+            # Mark processed
+            with get_db() as conn:
+                conn.execute("UPDATE saved_articles SET processed=1, output_path=?, audio_path=? WHERE id=?", (text_path, audio_path, article_id))
+                conn.commit()
+
+            await broadcast_log(f"  ✓ [{i+1}/{total}] OK")
+            await broadcast_status()
+
+        except Exception as e:
+            await broadcast_log(f"  ⚠ Audio échoué: {str(e)[:60]}")
+            continue
+
+    # Step 3: Combine all generated MP3s into one batch file
+    if generated_audio_paths:
+        await broadcast_log(f"▶ COMBINE ({len(generated_audio_paths)} articles)")
+        try:
+            config = get_config()
+            backlog_dir = os.path.join(config.get('GNL_BACKLOG', ''), 'saved-articles', source)
+            os.makedirs(backlog_dir, exist_ok=True)
+
+            from datetime import datetime
+            date_str = datetime.now().strftime('%Y-%m-%d')
+            output_file = os.path.join(backlog_dir, f"batch-{date_str}.mp3")
+
+            # Check if batch already exists today
+            counter = 1
+            while os.path.exists(output_file):
+                counter += 1
+                output_file = os.path.join(backlog_dir, f"batch-{date_str}-{counter}.mp3")
+
+            # Create ffmpeg concat file
+            import tempfile
+            concat_path = os.path.join(tempfile.gettempdir(), 'batch_concat.txt')
+            with open(concat_path, 'w') as f:
+                for p in generated_audio_paths:
+                    f.write(f"file '{p}'\n")
+
+            subprocess.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', concat_path, '-c', 'copy', output_file], capture_output=True)
+            os.unlink(concat_path)
+
+            await broadcast_log(f"✓ Batch combiné: {output_file}")
+        except Exception as e:
+            await broadcast_log(f"⚠ Combine échoué: {str(e)[:80]}")
+    else:
+        await broadcast_log("⚠ Aucun audio généré pour le batch")
+
+    await broadcast_log("__done__")
+
+
 @app.post("/saved-articles/generate/{article_id}")
 async def generate_article_explanation(article_id: int):
     """Generate tunisian explanation for a saved article."""
