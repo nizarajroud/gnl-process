@@ -1350,9 +1350,15 @@ async def preview_prepare(theme: str, subtheme: str, filename: str):
     pdf_path = os.path.join(inbox, theme, subtheme, filename)
     if not os.path.isfile(pdf_path):
         return {"error": "File not found"}
-    total_pages = len(PdfReader(pdf_path).pages)
-    suggested_pages = math.ceil(total_pages / 20)
     name = os.path.splitext(filename)[0]
+    if filename.lower().endswith('.docx'):
+        # DOCX: count paragraphs as rough page estimate
+        from docx import Document
+        doc = Document(pdf_path)
+        total_pages = max(1, len(doc.paragraphs) // 30)
+    else:
+        total_pages = len(PdfReader(pdf_path).pages)
+    suggested_pages = math.ceil(total_pages / 20)
     return {"name": name, "total_pages": total_pages, "suggested_pages": suggested_pages}
 
 
