@@ -700,12 +700,15 @@ async def _batch_generate(source):
                 counter += 1
                 output_file = os.path.join(backlog_dir, f"batch-{date_str}-{counter}.mp3")
 
-            # Create ffmpeg concat file
+            # Create ffmpeg concat file (with silence separator between articles)
             import tempfile
+            silence_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'assets', 'silence-3s.mp3')
             concat_path = os.path.join(tempfile.gettempdir(), 'batch_concat.txt')
             with open(concat_path, 'w') as f:
-                for p in generated_audio_paths:
+                for idx, p in enumerate(generated_audio_paths):
                     f.write(f"file '{p}'\n")
+                    if idx < len(generated_audio_paths) - 1:
+                        f.write(f"file '{silence_file}'\n")
 
             subprocess.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', concat_path, '-c', 'copy', output_file], capture_output=True)
             os.unlink(concat_path)
