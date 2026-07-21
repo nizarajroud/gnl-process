@@ -340,8 +340,9 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
                 options.append(line)
 
         if question_text and correct:
-            front = f"{question_text}\n" + "\n".join(f"  {o}" for o in options)
-            back = "\n".join(f"✓ {c}" for c in correct)
+            # Anki format: one card per line, newlines as <br>, tab separates front/back
+            front = f"{question_text}<br>" + "<br>".join(f"  {o}" for o in options)
+            back = "<br>".join(f"✓ {c}" for c in correct)
             anki_cards.append(f"{front}\t{back}")
 
     anki_dir = base / 'Anki-generation' / 'anki'
