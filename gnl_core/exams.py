@@ -1,41 +1,65 @@
-"""Exam processing pipeline — from raw PDF/DOCX to Anki flashcards."""
+"""Exam processing pipeline — from raw DOCX to Anki flashcards.
+
+Structure:
+    {EXAM_BASE}/pdf-formatting/origin/    ← DOCX brut (input)
+    {EXAM_BASE}/pdf-formatting/word/      ← DOCX nettoyé (format)
+    {EXAM_BASE}/pdf-formatting/pdf/       ← PDF converti (libreoffice)
+    {EXAM_BASE}/pdf-formatting/compact-exam-versions/ ← PDF compact
+    {EXAM_BASE}/Anki-generation/markdown/ ← Markdown compact
+    {EXAM_BASE}/Anki-generation/anki/     ← Fichier Anki importable
+"""
 
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
 
-def format_exam(input_path, origin='udemy'):
-    """Step 1: Clean and format raw exam document.
+def get_exam_base(theme, subtheme):
+    """Get base path for exam assets: INBOX_FOLDER/{theme}/{subtheme}/assets/"""
+    inbox = os.environ.get('INBOX_FOLDER', '')
+    return Path(inbox) / theme / subtheme / 'assets'
+
+
+def step1_format(input_path, theme, subtheme, origin='udemy', on_progress=None):
+    """Step 1: origin/ → word/ (clean DOCX)
     
     Args:
-        input_path: Path to DOCX file
+        input_path: Path to original DOCX in origin/
         origin: 'udemy' or 'dojo'
     Returns:
-        Path to formatted PDF
+        Path to cleaned DOCX in word/
     """
     from docx import Document
 
-    doc = Document(input_path)
+    base = get_exam_base(theme, subtheme)
+    word_dir = base / 'pdf-formatting' / 'word'
+    word_dir.mkdir(parents=True, exist_ok=True)
+
+    filename = Path(input_path).name
+    output_path = word_dir / filename
+
+    # Copy original to word folder
+    shutil.copy2(input_path, output_path)
+
+    # Process based on origin
+    doc = Document(str(output_path))
     full_text = [para.text for para in doc.paragraphs]
     text = "\n".join(full_text)
 
     if origin == 'dojo':
-        # Remove References sections
         text = re.sub(r"References:.*?(?=Question|\Z)", "", text, flags=re.DOTALL | re.IGNORECASE)
     else:
-        # Remove Udemy-specific patterns
         for p in [r"\[ \]", r"Ignoré.*?\n", r"Bonne réponse", r"Sélection correcte", r"Explication générale", r"via -.*?\n"]:
             text = re.sub(p, "", text)
         text = re.sub(r"\[Unofficial\].*?Tentative \d+\s*\n", "", text, flags=re.DOTALL)
         text = re.sub(r"Ressources\s*\nDomaine\s*\n.*?\n(?=Question)", "", text, flags=re.IGNORECASE)
 
-    # Remove multiple blank lines
     text = re.sub(r"\n\s*\n", "\n", text)
     text = re.sub(r"={50,}\n?", "", text)
 
-    # Renumber questions sequentially
+    # Renumber questions
     lines = text.split('\n')
     result_lines = []
     question_counter = 0
@@ -54,30 +78,60 @@ def format_exam(input_path, origin='udemy'):
         else:
             result_lines.append(line)
 
-    text = '\n'.join(result_lines)
+    # Save cleaned DOCX
+    new_doc = Document()
+    for line in result_lines:
+        para = new_doc.add_paragraph()
+        if re.match(r'^Question\s+\d+:', line.strip()):
+            para.add_run(line).bold = True
+        elif line.strip() == "Explanations:":
+            para.add_run(line).bold = True
+        else:
+            para.add_run(line)
+    new_doc.save(str(output_path))
 
-    # Save as markdown
-    output_dir = Path(os.environ.get('PDF_PARTS_FOLDER', '')) / 'exams'
-    output_dir.mkdir(parents=True, exist_ok=True)
-    name = Path(input_path).stem
-    md_path = output_dir / f"{name}-formatted.md"
-    with open(md_path, 'w', encoding='utf-8') as f:
-        f.write(text)
+    if on_progress:
+        on_progress(f"origin/ → word/{filename}")
 
-    return str(md_path)
+    return str(output_path)
 
 
-def highlight_answers(text, on_progress=None):
-    """Step 2: Use Bedrock to identify correct answers.
+def step2_convert_pdf(word_path, theme, subtheme, on_progress=None):
+    """Step 2: word/ → pdf/ (LibreOffice conversion)
     
-    Args:
-        text: Formatted exam text
-        on_progress: Optional callback
+    Returns:
+        Path to PDF
+    """
+    base = get_exam_base(theme, subtheme)
+    pdf_dir = base / 'pdf-formatting' / 'pdf'
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+
+    subprocess.run([
+        "libreoffice", "--headless", "--convert-to", "pdf",
+        "--outdir", str(pdf_dir), word_path
+    ], capture_output=True)
+
+    pdf_path = pdf_dir / Path(word_path).with_suffix('.pdf').name
+
+    if on_progress:
+        on_progress(f"word/ → pdf/{pdf_path.name}")
+
+    return str(pdf_path)
+
+
+def step3_highlight(word_path, on_progress=None):
+    """Step 3: Identify correct answers using Bedrock/Claude.
+    
     Returns:
         Dict {question_number: [correct_answers]}
     """
     import boto3
     from botocore.config import Config
+    from docx import Document
+
+    # Read text from cleaned DOCX
+    doc = Document(word_path)
+    text = "\n".join([para.text for para in doc.paragraphs])
 
     config_data = _get_config()
     model_id = config_data.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
@@ -97,14 +151,14 @@ def highlight_answers(text, on_progress=None):
                 question_blocks.append((q_num.group(), questions[i] + questions[i + 1]))
 
     all_answers = {}
+    max_tokens = int(os.environ.get('BEDROCK_MAX_TOKENS', '4096'))
 
-    # Process in batches of 10
     for batch_start in range(0, len(question_blocks), 10):
         batch_end = min(batch_start + 10, len(question_blocks))
         batch = question_blocks[batch_start:batch_end]
 
         if on_progress:
-            on_progress(f"Analyse questions {batch_start + 1}-{batch_end}...")
+            on_progress(f"Questions {batch_start + 1}-{batch_end}...")
 
         batch_text = "\n\n".join([content for _, content in batch])
 
@@ -125,10 +179,9 @@ Only return the JSON, nothing else."""
             response = client.converse(
                 modelId=model_id,
                 messages=[{"role": "user", "content": [{"text": prompt}]}],
-                inferenceConfig={"maxTokens": int(os.environ.get('BEDROCK_MAX_TOKENS', '4096'))}
+                inferenceConfig={"maxTokens": max_tokens}
             )
             result_text = response['output']['message']['content'][0]['text']
-            # Parse JSON from response
             import json
             json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
             if json_match:
@@ -141,16 +194,24 @@ Only return the JSON, nothing else."""
     return all_answers
 
 
-def generate_compact(text, answers, name):
-    """Step 3: Generate compact markdown with questions + correct answers only.
+def step4_compact(word_path, answers, theme, subtheme, on_progress=None):
+    """Step 4: Generate compact version (Markdown + PDF).
     
-    Args:
-        text: Formatted exam text
-        answers: Dict from highlight_answers
-        name: Exam name
     Returns:
-        Path to compact markdown file
+        Path to compact markdown
     """
+    from docx import Document
+    import markdown
+    from weasyprint import HTML
+
+    base = get_exam_base(theme, subtheme)
+    name = Path(word_path).stem
+
+    # Read formatted text
+    doc = Document(word_path)
+    text = "\n".join([para.text for para in doc.paragraphs])
+
+    # Parse and generate compact
     questions = re.split(r'(Question\s+\d+:)', text)
     compact_lines = [f"# {name} — Compact Version\n"]
 
@@ -163,70 +224,79 @@ def generate_compact(text, answers, name):
                 continue
             num = q_num.group()
 
-            # Extract question text (before options)
+            # Get question text and options
             lines = q_content.split('\n')
             question_text = []
             options = []
-            in_explanation = False
 
             for line in lines:
                 if line.strip().startswith('- '):
-                    options.append(line.strip())
+                    options.append(line.strip()[2:])
                 elif 'Explanation' in line or 'Hence,' in line:
-                    in_explanation = True
-                elif not in_explanation and not options:
-                    question_text.append(line)
+                    break
+                elif not options:
+                    if line.strip():
+                        question_text.append(line.strip())
 
             compact_lines.append(f"\n**Question {num}:**")
-            compact_lines.append(' '.join(question_text).strip())
+            compact_lines.append(' '.join(question_text[:3]))  # First 3 lines as question
 
-            # Add options with correct ones marked
             correct = answers.get(num, [])
             for opt in options:
-                opt_text = opt[2:]  # Remove "- "
                 is_correct = any(
-                    opt_text.lower().strip() in ans.lower() or ans.lower() in opt_text.lower()
+                    opt.lower().strip()[:50] in ans.lower() or ans.lower()[:50] in opt.lower()
                     for ans in correct
-                )
+                ) if correct else False
                 marker = "✓" if is_correct else "○"
-                compact_lines.append(f"  {marker} {opt_text}")
+                compact_lines.append(f"  {marker} {opt}")
 
-    output_dir = Path(os.environ.get('PDF_PARTS_FOLDER', '')) / 'exams'
-    output_dir.mkdir(parents=True, exist_ok=True)
-    compact_path = output_dir / f"{name}-compact.md"
-    with open(compact_path, 'w', encoding='utf-8') as f:
+    # Save markdown
+    md_dir = base / 'Anki-generation' / 'markdown'
+    md_dir.mkdir(parents=True, exist_ok=True)
+    md_path = md_dir / f"{name}.md"
+    with open(md_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(compact_lines))
 
-    return str(compact_path)
+    # Generate compact PDF
+    compact_pdf_dir = base / 'pdf-formatting' / 'compact-exam-versions'
+    compact_pdf_dir.mkdir(parents=True, exist_ok=True)
+    html_content = markdown.markdown('\n'.join(compact_lines))
+    html_full = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+    <style>body{{font-family:Arial;font-size:11px;margin:30px;}}
+    h1{{color:#232f3e;border-bottom:2px solid #ff9900;}}
+    strong{{color:#0073bb;}}</style></head><body>{html_content}</body></html>"""
+    HTML(string=html_full).write_pdf(str(compact_pdf_dir / f"{name}.pdf"))
+
+    if on_progress:
+        on_progress(f"compact → {md_path.name}")
+
+    return str(md_path)
 
 
-def generate_anki(compact_path, name):
-    """Step 4: Generate Anki flashcard file from compact markdown.
+def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
+    """Step 5: Generate Anki flashcard file from compact markdown.
     
-    Args:
-        compact_path: Path to compact markdown
-        name: Exam name
     Returns:
         Path to Anki file
     """
-    with open(compact_path, 'r', encoding='utf-8') as f:
+    base = get_exam_base(theme, subtheme)
+    name = Path(compact_md_path).stem
+
+    with open(compact_md_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    # Parse questions
     questions = re.split(r'\*\*Question\s+\d+:\*\*', content)
     anki_cards = []
 
-    for q in questions[1:]:  # Skip header
+    for q in questions[1:]:
         lines = q.strip().split('\n')
         if not lines:
             continue
 
-        # Question text = first non-empty line
         question_text = lines[0].strip()
-
-        # Options
         options = []
         correct = []
+
         for line in lines[1:]:
             line = line.strip()
             if line.startswith('✓ '):
@@ -236,22 +306,22 @@ def generate_anki(compact_path, name):
                 options.append(line)
 
         if question_text and correct:
-            # Front: question + all options
             front = f"{question_text}\n" + "\n".join(f"  {o}" for o in options)
-            # Back: correct answers
             back = "\n".join(f"✓ {c}" for c in correct)
             anki_cards.append(f"{front}\t{back}")
 
-    output_dir = Path(os.environ.get('PDF_PARTS_FOLDER', '')) / 'exams'
-    output_dir.mkdir(parents=True, exist_ok=True)
-    anki_path = output_dir / f"{name}-anki.txt"
+    anki_dir = base / 'Anki-generation' / 'anki'
+    anki_dir.mkdir(parents=True, exist_ok=True)
+    anki_path = anki_dir / f"{name}-anki.txt"
     with open(anki_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(anki_cards))
+
+    if on_progress:
+        on_progress(f"anki → {anki_path.name} ({len(anki_cards)} cards)")
 
     return str(anki_path)
 
 
 def _get_config():
-    """Load config."""
     from gnl_core.config import get_config
     return get_config()

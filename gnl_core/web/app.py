@@ -373,37 +373,38 @@ async def _process_exam(theme, subtheme, filename):
 
     loop = asyncio.get_event_loop()
     name = os.path.splitext(filename)[0]
+    origin = 'dojo' if 'dojo' in filename.lower() else 'udemy'
 
     try:
-        from gnl_core.exams import format_exam, highlight_answers, generate_compact, generate_anki
+        from gnl_core.exams import step1_format, step2_convert_pdf, step3_highlight, step4_compact, step5_anki
 
-        # Step 1: Format
-        await broadcast_log(f"▶ [1/4] Format: {filename}")
-        origin = 'dojo' if 'dojo' in filename.lower() else 'udemy'
-        formatted_path = await loop.run_in_executor(None, lambda: format_exam(file_path, origin))
-        await broadcast_log(f"  ✓ Formatté: {formatted_path}")
+        # Step 1: origin/ → word/
+        await broadcast_log(f"▶ [1/5] FORMAT (origin → word)")
 
-        # Read formatted text
-        with open(formatted_path, 'r', encoding='utf-8') as f:
-            text = f.read()
-
-        # Step 2: Highlight correct answers
-        await broadcast_log("▶ [2/4] Highlight (Bedrock)...")
-
-        def on_progress(msg):
+        def on_p1(msg):
             asyncio.run_coroutine_threadsafe(broadcast_log(f"  {msg}"), loop)
 
-        answers = await loop.run_in_executor(None, lambda: highlight_answers(text, on_progress=on_progress))
+        word_path = await loop.run_in_executor(None, lambda: step1_format(file_path, theme, subtheme, origin, on_progress=on_p1))
+        await broadcast_log(f"  ✓ {word_path}")
+
+        # Step 2: word/ → pdf/
+        await broadcast_log("▶ [2/5] CONVERT (word → pdf)")
+        pdf_path = await loop.run_in_executor(None, lambda: step2_convert_pdf(word_path, theme, subtheme, on_progress=on_p1))
+        await broadcast_log(f"  ✓ {pdf_path}")
+
+        # Step 3: highlight (Bedrock)
+        await broadcast_log("▶ [3/5] HIGHLIGHT (Bedrock → correct answers)")
+        answers = await loop.run_in_executor(None, lambda: step3_highlight(word_path, on_progress=on_p1))
         await broadcast_log(f"  ✓ {len(answers)} questions analysées")
 
-        # Step 3: Compact version
-        await broadcast_log("▶ [3/4] Compact...")
-        compact_path = await loop.run_in_executor(None, lambda: generate_compact(text, answers, name))
+        # Step 4: compact (markdown + pdf)
+        await broadcast_log("▶ [4/5] COMPACT (markdown + pdf)")
+        compact_path = await loop.run_in_executor(None, lambda: step4_compact(word_path, answers, theme, subtheme, on_progress=on_p1))
         await broadcast_log(f"  ✓ {compact_path}")
 
-        # Step 4: Anki cards
-        await broadcast_log("▶ [4/4] Anki cards...")
-        anki_path = await loop.run_in_executor(None, lambda: generate_anki(compact_path, name))
+        # Step 5: anki cards
+        await broadcast_log("▶ [5/5] ANKI (flashcards)")
+        anki_path = await loop.run_in_executor(None, lambda: step5_anki(compact_path, theme, subtheme, on_progress=on_p1))
         await broadcast_log(f"  ✓ {anki_path}")
 
         await broadcast_log(f"✓ Pipeline terminé: {name}")
