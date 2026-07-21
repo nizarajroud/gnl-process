@@ -386,8 +386,8 @@ async def _process_exam(theme, subtheme, filename):
         origin_path = origin_dir / filename
 
         if not origin_path.exists():
-            shutil.move(file_path, str(origin_path))
-            await broadcast_log(f"📂 Déplacé vers origin/{filename}")
+            shutil.copy2(file_path, str(origin_path))
+            await broadcast_log(f"📂 Copié vers origin/{filename}")
 
         # Step 1: origin/ → word/
         await broadcast_log(f"▶ [1/5] FORMAT (origin → word)")
