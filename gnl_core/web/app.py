@@ -441,7 +441,7 @@ async def _call_linkedin_mcp():
         async with stdio_client(server_params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
-                await session.call_tool('get_saved_posts', {'num_posts': 50})
+                await session.call_tool('get_saved_posts', {'num_posts': 50, 'full_content': True})
         return True
     except Exception as e:
         return False
