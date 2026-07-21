@@ -508,6 +508,17 @@ def _fetch_linkedin_from_cache():
                     ('linkedin', url, title, content, url, date_str, now)
                 )
                 added += 1
+                # Save original content to INBOX_FOLDER
+                from gnl_core.config import get_config
+                config = get_config()
+                inbox = config.get('INBOX_FOLDER', '')
+                raw_dir = os.path.join(inbox, 'saved-articles', 'linkedin')
+                os.makedirs(raw_dir, exist_ok=True)
+                safe = "".join(c if c.isalnum() or c in '-_ ' else '' for c in title)[:60]
+                raw_path = os.path.join(raw_dir, f"{safe}.txt")
+                if not os.path.exists(raw_path):
+                    with open(raw_path, 'w', encoding='utf-8') as f:
+                        f.write(content)
             except Exception:
                 pass
         conn.commit()
@@ -585,10 +596,10 @@ async def _generate_article(article_id: int):
 
         result = await loop.run_in_executor(None, _do)
 
-        # Save output
+        # Save output (tunisian explanation → PDF_PARTS_FOLDER)
         from gnl_core.config import get_config
         config = get_config()
-        output_dir = os.path.join(config.get('INBOX_FOLDER', ''), 'saved-articles', 'linkedin')
+        output_dir = os.path.join(config.get('PDF_PARTS_FOLDER', ''), 'saved-articles', 'linkedin')
         os.makedirs(output_dir, exist_ok=True)
         safe_title = "".join(c if c.isalnum() or c in '-_ ' else '' for c in (article_title or f'article-{article_id}'))[:60]
         output_path = os.path.join(output_dir, f"{safe_title}.txt")
