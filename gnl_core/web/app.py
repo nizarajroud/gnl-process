@@ -377,6 +377,318 @@ async def _launch_interactive(theme, subtheme, filename):
     await broadcast_log("__done__")
 
 
+@app.get("/saved-articles/{source}")
+async def get_saved_articles(source: str):
+    """List saved articles for a source (linkedin, medium, etc.)."""
+    from gnl_core.db import get_db
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, title, source_url, saved_date, processed, output_path FROM saved_articles WHERE source=? ORDER BY saved_date DESC, id ASC",
+            (source,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/saved-articles/fetch/{source}")
+async def fetch_saved_articles(source: str):
+    """Fetch saved items from source (linkedin, medium) via MCP."""
+    asyncio.create_task(_fetch_saved_articles(source))
+    return {"status": "started"}
+
+
+async def _fetch_saved_articles(source):
+    await broadcast_log(f"▶ Fetch saved articles ({source})...")
+
+    if source == 'linkedin':
+        loop = asyncio.get_event_loop()
+        # Step 1: Call LinkedIn MCP to refresh cache
+        await broadcast_log("🔄 Appel MCP LinkedIn (scraping)...")
+        refresh_ok = await _call_linkedin_mcp()
+        if refresh_ok:
+            await broadcast_log("✓ Cache LinkedIn mis à jour")
+        else:
+            await broadcast_log("⚠ Scraping échoué — utilisation du cache existant")
+
+        # Step 2: Import from cache to our DB
+        count = await loop.run_in_executor(None, _fetch_linkedin_from_cache)
+        if count >= 0:
+            await broadcast_log(f"✓ {count} nouveaux articles importés")
+        else:
+            await broadcast_log("⚠ Cache LinkedIn introuvable")
+    else:
+        await broadcast_log(f"⚠ Fetch {source}: pas encore implémenté")
+    await broadcast_log("__done__")
+
+
+async def _call_linkedin_mcp():
+    """Call LinkedIn MCP server to refresh saved posts cache."""
+    try:
+        from mcp import ClientSession, StdioServerParameters
+        from mcp.client.stdio import stdio_client
+        from pathlib import Path
+
+        # Delete old cache to get a fresh ordered scrape
+        cache_db = Path.home() / ".linkedin-mcp" / "saved_posts.db"
+        if cache_db.exists():
+            cache_db.unlink()
+
+        server_params = StdioServerParameters(
+            command='python3',
+            args=['-m', 'linkedin_mcp_server'],
+            env={**os.environ, 'PYTHONPATH': '/home/nizar/HomeWspce/linkedin-mcp-fork'}
+        )
+
+        async with stdio_client(server_params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                await session.call_tool('get_saved_posts', {'num_posts': 50})
+        return True
+    except Exception as e:
+        return False
+
+
+def _fetch_linkedin_from_cache():
+    """Read LinkedIn MCP cache and import into our saved_articles table."""
+    from gnl_core.db import get_db
+    from pathlib import Path
+    import sqlite3 as sqlite
+    from datetime import datetime, timedelta
+
+    cache_db = Path.home() / ".linkedin-mcp" / "saved_posts.db"
+    if not cache_db.exists():
+        return -1
+
+    # Read from LinkedIn cache (ordered by id ASC = top of page = most recent)
+    conn_cache = sqlite.connect(cache_db)
+    conn_cache.row_factory = sqlite.Row
+    rows = conn_cache.execute("SELECT author, content, url, scraped_at FROM saved_posts ORDER BY id ASC").fetchall()
+    conn_cache.close()
+
+    # Import into our DB with position (for ordering)
+    added = 0
+    now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    today = datetime.now()
+    with get_db() as conn:
+        for position, r in enumerate(rows):
+            url = r['url'] or ''
+            if not url or url.startswith('no-url'):
+                continue
+            content = r['content'] or ''
+            # Extract title: first substantial line (not author name/metadata)
+            lines = content.split('\n')
+            title = 'Sans titre'
+            for l in lines:
+                l = l.strip()
+                if len(l) > 40 and '•' not in l and 'abonnés' not in l and 'Architect' not in l and 'Engineer' not in l and 'Creator' not in l:
+                    title = l[:100]
+                    break
+            # Extract relative date from content (e.g. "• 1 j", "• 2 sem.", "• 3 h")
+            import re
+            date_str = ''
+            date_match = re.search(r'•\s*(\d+)\s*(j|h|sem|mois|min)', content)
+            if date_match:
+                num = int(date_match.group(1))
+                unit = date_match.group(2)
+                if unit == 'h' or unit == 'min':
+                    post_date = today
+                elif unit == 'j':
+                    post_date = today - timedelta(days=num)
+                elif unit == 'sem':
+                    post_date = today - timedelta(weeks=num)
+                elif unit == 'mois':
+                    post_date = today - timedelta(days=num * 30)
+                else:
+                    post_date = today
+                date_str = post_date.strftime('%Y-%m-%d')
+            else:
+                date_str = today.strftime('%Y-%m-%d')
+            try:
+                conn.execute(
+                    "INSERT OR IGNORE INTO saved_articles (source, source_id, title, content, source_url, saved_date, fetched_at, processed) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
+                    ('linkedin', url, title, content, url, date_str, now)
+                )
+                added += 1
+            except Exception:
+                pass
+        conn.commit()
+    return added
+
+
+@app.post("/saved-articles/generate/{article_id}")
+async def generate_article_explanation(article_id: int):
+    """Generate tunisian explanation for a saved article."""
+    asyncio.create_task(_generate_article(article_id))
+    return {"status": "started"}
+
+
+async def _generate_article(article_id: int):
+    from gnl_core.db import get_db
+    import boto3
+
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM saved_articles WHERE id=?", (article_id,)).fetchone()
+    if not row:
+        await broadcast_log(f"⚠ Article {article_id} non trouvé")
+        await broadcast_log("__done__")
+        return
+
+    await broadcast_log(f"▶ Génération explication tunisienne: {row['title'][:50]}...")
+    loop = asyncio.get_event_loop()
+
+    # Extract values before passing to thread (Row object not thread-safe)
+    article_title = row['title'] or ''
+    article_content = row['content'] or ''
+
+    try:
+        def _do():
+            from gnl_core.config import get_config
+            config = get_config()
+            model_id = config.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
+            region = config.get('AWS_REGION', 'ca-central-1')
+            profile = config.get('AWS_PROFILE', '')
+
+            session = boto3.Session(profile_name=profile, region_name=region)
+            from botocore.config import Config
+            client = session.client('bedrock-runtime', config=Config(read_timeout=600))
+
+            prompt = f"""أنت خبير تقني تشرح بالعربي الدارج التونسي.
+
+القواعد الصارمة:
+- اكتب بالحروف العربية فقط (مش بالحروف اللاتينية/الفرنسية)
+- المصطلحات التقنية بالإنجليزية كيما هي (API, cloud, container, deployment, agent, model...)
+- الأسلوب: نثر محادثة طبيعي، كأنك تشرح لزميلك التونسي شفاهياً
+- كل فقرة = جملة كاملة بالتونسي، والمصطلح الإنجليزي يتحط في وسط الجملة بشكل طبيعي
+- اشرح كل النقاط بالتفصيل (مش ملخص)
+- ما تترجمش المصطلحات التقنية — خليها بالإنجليزية
+- كل مفهوم، كل أداة، كل ممارسة لازم تتشرح
+
+❌ ممنوع:
+- الكتابة بالحروف اللاتينية/الفرنسية (مثلاً: "hedhi la phase elli...")
+- الفصحى الكلاسيكية
+- قوائم بنمط [مصطلح]: [شرح]
+- ترجمة المصطلحات التقنية
+
+✅ مثال صحيح:
+في الجزء متاع ال Monitoring، ما ضفناش alerting على ال FailedInvocations ولا على ال ApproximateAgeOfOldestMessage متاع ال bus. الفكرة أنو ال service هذي تخدم كـ proxy بين ال clients وال backend services.
+
+المقال باش تشرحو:
+
+العنوان: {article_title}
+المحتوى: {article_content}"""
+
+            response = client.converse(
+                modelId=model_id,
+                messages=[{"role": "user", "content": [{"text": prompt}]}],
+                inferenceConfig={"maxTokens": 4096}
+            )
+            return response['output']['message']['content'][0]['text']
+
+        result = await loop.run_in_executor(None, _do)
+
+        # Save output
+        from gnl_core.config import get_config
+        config = get_config()
+        output_dir = os.path.join(config.get('INBOX_FOLDER', ''), 'saved-articles', 'linkedin')
+        os.makedirs(output_dir, exist_ok=True)
+        safe_title = "".join(c if c.isalnum() or c in '-_ ' else '' for c in (article_title or f'article-{article_id}'))[:60]
+        output_path = os.path.join(output_dir, f"{safe_title}.txt")
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(result)
+
+        with get_db() as conn:
+            conn.execute("UPDATE saved_articles SET processed=1, output_path=? WHERE id=?", (output_path, article_id))
+            conn.commit()
+
+        await broadcast_log(f"✓ Texte généré: {output_path}")
+
+        # Step 2: Generate audio via Google TTS (Orus voice)
+        await broadcast_log("🔊 Génération audio (Google TTS - Orus)...")
+        audio_ok = await _generate_tts_audio(result, article_title, article_id)
+        if audio_ok:
+            await broadcast_log(f"✓ Audio généré")
+        else:
+            await broadcast_log("⚠ Audio échoué")
+
+    except Exception as e:
+        await broadcast_log(f"⚠ Erreur: {str(e)[:100]}")
+    await broadcast_log("__done__")
+
+
+async def _generate_tts_audio(text, title, article_id):
+    """Generate MP3 from text using Google Gemini TTS API directly (Orus voice)."""
+    try:
+        import requests
+        import base64
+        from gnl_core.config import get_config
+        from gnl_core.db import get_db
+
+        config = get_config()
+        audio_parts = config.get('AUDIO_PARTS_FOLDER', '')
+        audio_dir = os.path.join(audio_parts, 'articles', 'linkedin')
+        os.makedirs(audio_dir, exist_ok=True)
+
+        api_key = os.environ.get('GOOGLE_AI_API_KEY', '')
+        if not api_key:
+            # Try loading from .env
+            from dotenv import load_dotenv
+            load_dotenv()
+            api_key = os.environ.get('GOOGLE_AI_API_KEY', '')
+        if not api_key:
+            return False
+
+        url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={api_key}'
+
+        payload = {
+            'contents': [{'parts': [{'text': text}]}],
+            'generationConfig': {
+                'responseModalities': ['AUDIO'],
+                'speechConfig': {
+                    'voiceConfig': {
+                        'prebuiltVoiceConfig': {'voiceName': 'Orus'}
+                    }
+                }
+            }
+        }
+
+        loop = asyncio.get_event_loop()
+
+        def _call_tts():
+            resp = requests.post(url, json=payload, timeout=300)
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            audio_b64 = data['candidates'][0]['content']['parts'][0]['inlineData']['data']
+            return base64.b64decode(audio_b64)
+
+        audio_bytes = await loop.run_in_executor(None, _call_tts)
+        if not audio_bytes:
+            return False
+
+        safe_title = "".join(c if c.isalnum() or c in '-_ ' else '' for c in (title or f'article-{article_id}'))[:60]
+        audio_path = os.path.join(audio_dir, f"{safe_title}.mp3")
+
+        # Convert PCM (L16, 24kHz) to MP3 via ffmpeg
+        import subprocess
+        pcm_path = audio_path.replace('.mp3', '.pcm')
+        with open(pcm_path, 'wb') as f:
+            f.write(audio_bytes)
+        subprocess.run([
+            'ffmpeg', '-y', '-f', 's16le', '-ar', '24000', '-ac', '1',
+            '-i', pcm_path, audio_path
+        ], capture_output=True)
+        os.unlink(pcm_path)
+
+        with get_db() as conn:
+            conn.execute("UPDATE saved_articles SET audio_path=? WHERE id=?", (audio_path, article_id))
+            conn.commit()
+        return True
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 @app.post("/content/generate")
 async def generate_content(request: Request):
     """Generate source PDF from AWS content."""
