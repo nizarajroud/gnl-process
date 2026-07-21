@@ -347,7 +347,7 @@ async def list_content_files(theme: str, subtheme: str):
 
     files = []
     for f in sorted(os.listdir(folder)):
-        if f.lower().endswith('.pdf'):
+        if f.lower().endswith(('.pdf', '.docx')):
             name_no_ext = os.path.splitext(f)[0]
             files.append({'name': f, 'processed': name_no_ext in delivered})
     return files
