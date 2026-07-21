@@ -636,7 +636,7 @@ async def _generate_tts_audio(text, title, article_id):
 
         config = get_config()
         audio_parts = config.get('AUDIO_PARTS_FOLDER', '')
-        audio_dir = os.path.join(audio_parts, 'articles', 'linkedin')
+        audio_dir = os.path.join(audio_parts, 'saved-articles', 'linkedin')
         os.makedirs(audio_dir, exist_ok=True)
 
         api_key = os.environ.get('GOOGLE_AI_API_KEY', '')
