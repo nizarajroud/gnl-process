@@ -353,6 +353,65 @@ async def list_content_files(theme: str, subtheme: str):
     return files
 
 
+@app.post("/exams/process/{theme}/{subtheme}/{filename}")
+async def process_exam(theme: str, subtheme: str, filename: str):
+    """Run full exam pipeline: format → highlight → compact → anki."""
+    asyncio.create_task(_process_exam(theme, subtheme, filename))
+    return {"status": "started"}
+
+
+async def _process_exam(theme, subtheme, filename):
+    from gnl_core.config import get_config
+    config = get_config()
+    inbox = config.get('INBOX_FOLDER', '')
+    file_path = os.path.join(inbox, theme, subtheme, filename)
+
+    if not os.path.isfile(file_path):
+        await broadcast_log(f"⚠ Fichier introuvable: {file_path}")
+        await broadcast_log("__done__")
+        return
+
+    loop = asyncio.get_event_loop()
+    name = os.path.splitext(filename)[0]
+
+    try:
+        from gnl_core.exams import format_exam, highlight_answers, generate_compact, generate_anki
+
+        # Step 1: Format
+        await broadcast_log(f"▶ [1/4] Format: {filename}")
+        origin = 'dojo' if 'dojo' in filename.lower() else 'udemy'
+        formatted_path = await loop.run_in_executor(None, lambda: format_exam(file_path, origin))
+        await broadcast_log(f"  ✓ Formatté: {formatted_path}")
+
+        # Read formatted text
+        with open(formatted_path, 'r', encoding='utf-8') as f:
+            text = f.read()
+
+        # Step 2: Highlight correct answers
+        await broadcast_log("▶ [2/4] Highlight (Bedrock)...")
+
+        def on_progress(msg):
+            asyncio.run_coroutine_threadsafe(broadcast_log(f"  {msg}"), loop)
+
+        answers = await loop.run_in_executor(None, lambda: highlight_answers(text, on_progress=on_progress))
+        await broadcast_log(f"  ✓ {len(answers)} questions analysées")
+
+        # Step 3: Compact version
+        await broadcast_log("▶ [3/4] Compact...")
+        compact_path = await loop.run_in_executor(None, lambda: generate_compact(text, answers, name))
+        await broadcast_log(f"  ✓ {compact_path}")
+
+        # Step 4: Anki cards
+        await broadcast_log("▶ [4/4] Anki cards...")
+        anki_path = await loop.run_in_executor(None, lambda: generate_anki(compact_path, name))
+        await broadcast_log(f"  ✓ {anki_path}")
+
+        await broadcast_log(f"✓ Pipeline terminé: {name}")
+    except Exception as e:
+        await broadcast_log(f"⚠ Erreur: {str(e)[:100]}")
+    await broadcast_log("__done__")
+
+
 @app.post("/content/interactive")
 async def launch_interactive(request: Request):
     """Create a notebook with full PDF and generate audio in English for interactive mode."""

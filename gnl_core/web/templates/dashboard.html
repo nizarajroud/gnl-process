@@ -419,6 +419,10 @@
             fetch(`/saved-articles/batch/${source}`, {method: 'POST'});
         }
 
+        function processExam(theme, sub, filename) {
+            fetch(`/exams/process/${theme}/${sub}/${filename}`, {method: 'POST'});
+        }
+
         function loadSavedArticles(source) {
             fetch(`/saved-articles/${source}`).then(r=>r.json()).then(articles => {
                 const div = document.getElementById(`articles-${source}`);
@@ -438,7 +442,7 @@
                 const div = document.getElementById(`filelist-${theme}-${sub}`);
                 if (!files.length) { div.innerHTML = '<span class="text-gray-500">Aucun fichier PDF dans ce dossier.</span>'; return; }
                 div.innerHTML = '<table class="w-full text-xs"><thead><tr class="text-gray-400 border-b border-gray-700"><th class="text-left py-1">Fichier</th><th class="py-1">Statut</th><th class="text-right py-1">Action</th></tr></thead><tbody>' +
-                    files.map(f => `<tr class="border-b border-gray-800"><td class="py-1">${f.name}</td><td class="py-1">${f.processed ? '<span class="text-green-400">✅ Traité</span>' : `<button onclick="prepareFromInbox('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-orange-600 hover:bg-orange-500 rounded text-white">Traiter</button>`}</td><td class="text-right py-1"><button onclick="launchInteractive('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-purple-600 hover:bg-purple-500 rounded text-white">🎙️ Interactif</button></td></tr>`).join('') +
+                    files.map(f => `<tr class="border-b border-gray-800"><td class="py-1">${f.name}</td><td class="py-1">${f.processed ? '<span class="text-green-400">✅ Traité</span>' : `<button onclick="prepareFromInbox('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-orange-600 hover:bg-orange-500 rounded text-white">Traiter</button>`}</td><td class="text-right py-1">${theme === 'exams' ? `<button onclick="processExam('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-green-600 hover:bg-green-500 rounded text-white">🎴 Anki</button>` : ''}<button onclick="launchInteractive('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-purple-600 hover:bg-purple-500 rounded text-white ml-1">🎙️ Interactif</button></td></tr>`).join('') +
                     '</tbody></table>';
             });
         }
