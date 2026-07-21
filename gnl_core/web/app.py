@@ -435,13 +435,13 @@ async def _call_linkedin_mcp():
         server_params = StdioServerParameters(
             command='python3',
             args=['-m', 'linkedin_mcp_server'],
-            env={**os.environ, 'PYTHONPATH': '/home/nizar/HomeWspce/linkedin-mcp-fork'}
+            env={**os.environ, 'PYTHONPATH': os.environ.get('LINKEDIN_MCP_PATH', '/home/nizar/HomeWspce/linkedin-mcp-fork')}
         )
 
         async with stdio_client(server_params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
-                await session.call_tool('get_saved_posts', {'num_posts': 50, 'full_content': True})
+                await session.call_tool('get_saved_posts', {'num_posts': int(os.environ.get('LINKEDIN_SCRAPE_COUNT', '50')), 'full_content': True})
         return True
     except Exception as e:
         return False
@@ -538,9 +538,10 @@ async def _batch_generate(source):
     import subprocess
 
     with get_db() as conn:
+        batch_size = int(os.environ.get('LINKEDIN_BATCH_SIZE', '10'))
         rows = conn.execute(
-            "SELECT id, title, content FROM saved_articles WHERE source=? AND processed=0 ORDER BY saved_date ASC LIMIT 10",
-            (source,)
+            "SELECT id, title, content FROM saved_articles WHERE source=? AND processed=0 ORDER BY saved_date ASC LIMIT ?",
+            (source, batch_size)
         ).fetchall()
 
     if not rows:
@@ -601,7 +602,7 @@ async def _batch_generate(source):
                 response = client.converse(
                     modelId=model_id,
                     messages=[{"role": "user", "content": [{"text": prompt}]}],
-                    inferenceConfig={"maxTokens": 4096}
+                    inferenceConfig={"maxTokens": int(os.environ.get('BEDROCK_MAX_TOKENS', '4096'))}
                 )
                 return response['output']['message']['content'][0]['text']
 
@@ -631,14 +632,15 @@ async def _batch_generate(source):
                 load_dotenv()
                 api_key = os.environ.get('GOOGLE_AI_API_KEY', '')
 
-            url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={api_key}'
+            tts_model = os.environ.get('TTS_MODEL', 'gemini-2.5-flash-preview-tts')
+            url = f'https://generativelanguage.googleapis.com/v1beta/models/{tts_model}:generateContent?key={api_key}'
             payload = {
                 'contents': [{'parts': [{'text': text_result}]}],
                 'generationConfig': {
                     'responseModalities': ['AUDIO'],
                     'speechConfig': {
                         'voiceConfig': {
-                            'prebuiltVoiceConfig': {'voiceName': 'Orus'}
+                            'prebuiltVoiceConfig': {'voiceName': os.environ.get('TTS_VOICE', 'Orus')}
                         }
                     }
                 }
@@ -677,6 +679,11 @@ async def _batch_generate(source):
 
             await broadcast_log(f"  ✓ [{i+1}/{total}] OK")
             await broadcast_status()
+
+            # Rate limit delay between TTS calls
+            tts_delay = int(os.environ.get('TTS_DELAY_SECONDS', '15'))
+            if i < total - 1 and tts_delay > 0:
+                await asyncio.sleep(tts_delay)
 
         except Exception as e:
             await broadcast_log(f"  ⚠ Audio échoué: {str(e)[:60]}")
@@ -787,7 +794,7 @@ async def _generate_article(article_id: int):
             response = client.converse(
                 modelId=model_id,
                 messages=[{"role": "user", "content": [{"text": prompt}]}],
-                inferenceConfig={"maxTokens": 4096}
+                inferenceConfig={"maxTokens": int(os.environ.get('BEDROCK_MAX_TOKENS', '4096'))}
             )
             return response['output']['message']['content'][0]['text']
 
@@ -845,7 +852,8 @@ async def _generate_tts_audio(text, title, article_id):
         if not api_key:
             return False
 
-        url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={api_key}'
+        tts_model = os.environ.get('TTS_MODEL', 'gemini-2.5-flash-preview-tts')
+        url = f'https://generativelanguage.googleapis.com/v1beta/models/{tts_model}:generateContent?key={api_key}'
 
         payload = {
             'contents': [{'parts': [{'text': text}]}],
@@ -853,7 +861,7 @@ async def _generate_tts_audio(text, title, article_id):
                 'responseModalities': ['AUDIO'],
                 'speechConfig': {
                     'voiceConfig': {
-                        'prebuiltVoiceConfig': {'voiceName': 'Orus'}
+                        'prebuiltVoiceConfig': {'voiceName': os.environ.get('TTS_VOICE', 'Orus')}
                     }
                 }
             }

@@ -16,5 +16,12 @@
   "DELIVER_TIMEOUT": "48",
   "DELIVER_RETRY_DELAY": "180",
   "CONFIRM_TIMEOUT": "300",
-  "CONFIRM_POLL_INTERVAL": "10"
+  "CONFIRM_POLL_INTERVAL": "10",
+  "LINKEDIN_BATCH_SIZE": "10",
+  "LINKEDIN_SCRAPE_COUNT": "50",
+  "TTS_VOICE": "Orus",
+  "TTS_MODEL": "gemini-2.5-flash-preview-tts",
+  "TTS_DELAY_SECONDS": "15",
+  "BEDROCK_MAX_TOKENS": "4096",
+  "LINKEDIN_MCP_PATH": "/home/nizar/HomeWspce/linkedin-mcp-fork"
 }
