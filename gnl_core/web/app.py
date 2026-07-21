@@ -353,6 +353,59 @@ async def list_content_files(theme: str, subtheme: str):
     return files
 
 
+@app.post("/exams/clean/{theme}/{subtheme}/{filename}")
+async def clean_exam(theme: str, subtheme: str, filename: str):
+    """Remove exam file and all its generated variants."""
+    from gnl_core.config import get_config
+    from gnl_core.exams import get_exam_base
+
+    config = get_config()
+    inbox = config.get('INBOX_FOLDER', '')
+    name = os.path.splitext(filename)[0]
+    base = get_exam_base(theme, subtheme)
+
+    removed = 0
+    # Original in inbox
+    orig = os.path.join(inbox, theme, subtheme, filename)
+    if os.path.exists(orig):
+        os.unlink(orig)
+        removed += 1
+    # origin/
+    for ext in ['.docx', '.pdf']:
+        p = base / 'pdf-formatting' / 'origin' / f"{name}{ext}"
+        if p.exists():
+            p.unlink()
+            removed += 1
+    # word/
+    p = base / 'pdf-formatting' / 'word' / f"{name}.docx"
+    if p.exists():
+        p.unlink()
+        removed += 1
+    # pdf/
+    p = base / 'pdf-formatting' / 'pdf' / f"{name}.pdf"
+    if p.exists():
+        p.unlink()
+        removed += 1
+    # compact-exam-versions/
+    p = base / 'pdf-formatting' / 'compact-exam-versions' / f"{name}.pdf"
+    if p.exists():
+        p.unlink()
+        removed += 1
+    # markdown/
+    p = base / 'Anki-generation' / 'markdown' / f"{name}.md"
+    if p.exists():
+        p.unlink()
+        removed += 1
+    # anki/
+    p = base / 'Anki-generation' / 'anki' / f"{name}-anki.txt"
+    if p.exists():
+        p.unlink()
+        removed += 1
+
+    await broadcast_log(f"🗑 Nettoyé: {name} ({removed} fichiers supprimés)")
+    return {"status": "ok", "removed": removed}
+
+
 @app.post("/exams/process/{theme}/{subtheme}/{filename}")
 async def process_exam(theme: str, subtheme: str, filename: str):
     """Run full exam pipeline: format → highlight → compact → anki."""
