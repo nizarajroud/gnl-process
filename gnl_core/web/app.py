@@ -376,7 +376,18 @@ async def _process_exam(theme, subtheme, filename):
     origin = 'dojo' if 'dojo' in filename.lower() else 'udemy'
 
     try:
-        from gnl_core.exams import step1_format, step2_convert_pdf, step3_highlight, step4_compact, step5_anki
+        from gnl_core.exams import get_exam_base, step1_format, step2_convert_pdf, step3_highlight, step4_compact, step5_anki
+        import shutil
+
+        # Move file to assets/pdf-formatting/origin/
+        base = get_exam_base(theme, subtheme)
+        origin_dir = base / 'pdf-formatting' / 'origin'
+        origin_dir.mkdir(parents=True, exist_ok=True)
+        origin_path = origin_dir / filename
+
+        if not origin_path.exists():
+            shutil.move(file_path, str(origin_path))
+            await broadcast_log(f"📂 Déplacé vers origin/{filename}")
 
         # Step 1: origin/ → word/
         await broadcast_log(f"▶ [1/5] FORMAT (origin → word)")
@@ -384,7 +395,7 @@ async def _process_exam(theme, subtheme, filename):
         def on_p1(msg):
             asyncio.run_coroutine_threadsafe(broadcast_log(f"  {msg}"), loop)
 
-        word_path = await loop.run_in_executor(None, lambda: step1_format(file_path, theme, subtheme, origin, on_progress=on_p1))
+        word_path = await loop.run_in_executor(None, lambda: step1_format(str(origin_path), theme, subtheme, origin, on_progress=on_p1))
         await broadcast_log(f"  ✓ {word_path}")
 
         # Step 2: word/ → pdf/
