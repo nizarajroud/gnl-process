@@ -365,11 +365,7 @@ async def clean_exam(theme: str, subtheme: str, filename: str):
     base = get_exam_base(theme, subtheme)
 
     removed = 0
-    # Original in inbox
-    orig = os.path.join(inbox, theme, subtheme, filename)
-    if os.path.exists(orig):
-        os.unlink(orig)
-        removed += 1
+    # Only remove generated variants in assets/ — keep original in inbox
     # origin/
     for ext in ['.docx', '.pdf']:
         p = base / 'pdf-formatting' / 'origin' / f"{name}{ext}"
