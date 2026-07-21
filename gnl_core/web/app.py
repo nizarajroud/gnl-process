@@ -54,6 +54,22 @@ def _deliver_all_sync(loop=None):
             notify(f"▶ AUTO: CONVERT (parent {pid})")
             convert(pid)
             notify(f"✓ AUTO: Convert done (parent {pid})")
+
+
+def _scheduled_linkedin_fetch():
+    """Scheduled: fetch LinkedIn saved posts."""
+    import asyncio
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(_fetch_saved_articles('linkedin'))
+
+
+def _scheduled_linkedin_generate():
+    """Scheduled: batch generate for LinkedIn articles."""
+    import asyncio
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(_batch_generate('linkedin'))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Mount Google Drive if not available
@@ -65,6 +81,15 @@ async def lifespan(app: FastAPI):
     schedule_time = os.getenv('GNL_SCHEDULE_TIME', '08:00')
     hour, minute = schedule_time.split(':')
     scheduler.add_job(_deliver_all_sync, CronTrigger(hour=int(hour), minute=int(minute)), id='daily_deliver', replace_existing=True, args=[asyncio.get_event_loop()])
+
+    # LinkedIn: daily fetch at 2:00 AM and batch generate at 3:00 AM (America/Toronto)
+    linkedin_fetch_time = os.getenv('LINKEDIN_FETCH_TIME', '02:00')
+    linkedin_generate_time = os.getenv('LINKEDIN_GENERATE_TIME', '03:00')
+    lf_hour, lf_min = linkedin_fetch_time.split(':')
+    lg_hour, lg_min = linkedin_generate_time.split(':')
+    scheduler.add_job(_scheduled_linkedin_fetch, CronTrigger(hour=int(lf_hour), minute=int(lf_min), timezone='America/Toronto'), id='linkedin_fetch', replace_existing=True)
+    scheduler.add_job(_scheduled_linkedin_generate, CronTrigger(hour=int(lg_hour), minute=int(lg_min), timezone='America/Toronto'), id='linkedin_generate', replace_existing=True)
+
     scheduler.start()
 
     # Auto-deliver at startup disabled — use scheduled time or manual button instead
