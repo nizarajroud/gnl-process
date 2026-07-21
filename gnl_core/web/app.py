@@ -540,7 +540,7 @@ async def _batch_generate(source):
     with get_db() as conn:
         batch_size = int(os.environ.get('LINKEDIN_BATCH_SIZE', '10'))
         rows = conn.execute(
-            "SELECT id, title, content FROM saved_articles WHERE source=? AND processed=0 ORDER BY saved_date ASC LIMIT ?",
+            "SELECT id, title, content FROM saved_articles WHERE source=? AND processed=0 ORDER BY saved_date DESC LIMIT ?",
             (source, batch_size)
         ).fetchall()
 

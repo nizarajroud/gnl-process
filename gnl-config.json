@@ -17,7 +17,7 @@
   "DELIVER_RETRY_DELAY": "180",
   "CONFIRM_TIMEOUT": "300",
   "CONFIRM_POLL_INTERVAL": "10",
-  "LINKEDIN_BATCH_SIZE": "10",
+  "LINKEDIN_BATCH_SIZE": "5",
   "LINKEDIN_SCRAPE_COUNT": "50",
   "TTS_VOICE": "Orus",
   "TTS_MODEL": "gemini-2.5-flash-preview-tts",
