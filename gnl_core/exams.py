@@ -343,7 +343,7 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
             # Front: question + all options as bullet list (left-aligned)
             options_html = "".join(f"<li>{o.replace('✓ ', '').replace('○ ', '')}</li>" for o in options)
             front = f"{question_text}<br><ul>{options_html}</ul>"
-            # Back: all options with correct one in bold
+            # Back: question + all options with correct one in bold
             back_items = []
             for o in options:
                 opt_text = o.replace('✓ ', '').replace('○ ', '')
@@ -351,7 +351,7 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
                     back_items.append(f"<li><b>{opt_text}</b></li>")
                 else:
                     back_items.append(f"<li>{opt_text}</li>")
-            back = f"<ul>{(''.join(back_items))}</ul>"
+            back = f"{question_text}<br><ul>{(''.join(back_items))}</ul>"
             anki_cards.append(f"{front}\t{back}")
 
     anki_dir = base / 'Anki-generation' / 'anki'
