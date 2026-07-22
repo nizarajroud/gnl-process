@@ -54,6 +54,28 @@ def _deliver_all_sync(loop=None):
             notify(f"▶ AUTO: CONVERT (parent {pid})")
             convert(pid)
             notify(f"✓ AUTO: Convert done (parent {pid})")
+
+
+def _scheduled_linkedin_fetch():
+    """Scheduled: fetch LinkedIn saved posts."""
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+        asyncio.run_coroutine_threadsafe(_fetch_saved_articles('linkedin'), loop)
+    except Exception:
+        pass
+
+
+def _scheduled_linkedin_generate():
+    """Scheduled: batch generate for LinkedIn articles."""
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+        asyncio.run_coroutine_threadsafe(_batch_generate('linkedin'), loop)
+    except Exception:
+        pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Mount Google Drive if not available
@@ -65,6 +87,15 @@ async def lifespan(app: FastAPI):
     schedule_time = os.getenv('GNL_SCHEDULE_TIME', '08:00')
     hour, minute = schedule_time.split(':')
     scheduler.add_job(_deliver_all_sync, CronTrigger(hour=int(hour), minute=int(minute)), id='daily_deliver', replace_existing=True, args=[asyncio.get_event_loop()])
+
+    # LinkedIn: daily fetch at 2:00 AM and batch generate at 3:00 AM (America/Toronto)
+    linkedin_fetch_time = os.getenv('LINKEDIN_FETCH_TIME', '02:00')
+    linkedin_generate_time = os.getenv('LINKEDIN_GENERATE_TIME', '03:00')
+    lf_hour, lf_min = linkedin_fetch_time.split(':')
+    lg_hour, lg_min = linkedin_generate_time.split(':')
+    scheduler.add_job(_scheduled_linkedin_fetch, CronTrigger(hour=int(lf_hour), minute=int(lf_min), timezone='America/Toronto'), id='linkedin_fetch', replace_existing=True, misfire_grace_time=3600)
+    scheduler.add_job(_scheduled_linkedin_generate, CronTrigger(hour=int(lg_hour), minute=int(lg_min), timezone='America/Toronto'), id='linkedin_generate', replace_existing=True, misfire_grace_time=3600)
+
     scheduler.start()
 
     # Auto-deliver at startup disabled — use scheduled time or manual button instead
@@ -322,10 +353,130 @@ async def list_content_files(theme: str, subtheme: str):
 
     files = []
     for f in sorted(os.listdir(folder)):
-        if f.lower().endswith('.pdf'):
+        if f.lower().endswith(('.pdf', '.docx')):
             name_no_ext = os.path.splitext(f)[0]
             files.append({'name': f, 'processed': name_no_ext in delivered})
     return files
+
+
+@app.post("/exams/clean/{theme}/{subtheme}/{filename}")
+async def clean_exam(theme: str, subtheme: str, filename: str):
+    """Remove exam file and all its generated variants."""
+    from gnl_core.config import get_config
+    from gnl_core.exams import get_exam_base
+
+    config = get_config()
+    inbox = config.get('INBOX_FOLDER', '')
+    name = os.path.splitext(filename)[0]
+    base = get_exam_base(theme, subtheme)
+
+    removed = 0
+    # Only remove generated variants in assets/ — keep original in inbox
+    # origin/
+    for ext in ['.docx', '.pdf']:
+        p = base / 'pdf-formatting' / 'origin' / f"{name}{ext}"
+        if p.exists():
+            p.unlink()
+            removed += 1
+    # word/
+    p = base / 'pdf-formatting' / 'word' / f"{name}.docx"
+    if p.exists():
+        p.unlink()
+        removed += 1
+    # pdf/
+    p = base / 'pdf-formatting' / 'pdf' / f"{name}.pdf"
+    if p.exists():
+        p.unlink()
+        removed += 1
+    # compact-exam-versions/
+    p = base / 'pdf-formatting' / 'compact-exam-versions' / f"{name}.pdf"
+    if p.exists():
+        p.unlink()
+        removed += 1
+    # markdown/
+    p = base / 'Anki-generation' / 'markdown' / f"{name}.md"
+    if p.exists():
+        p.unlink()
+        removed += 1
+    # anki/
+    p = base / 'Anki-generation' / 'anki' / f"{name}-anki.txt"
+    if p.exists():
+        p.unlink()
+        removed += 1
+
+    await broadcast_log(f"🗑 Nettoyé: {name} ({removed} fichiers supprimés)")
+    return {"status": "ok", "removed": removed}
+
+
+@app.post("/exams/process/{theme}/{subtheme}/{filename}")
+async def process_exam(theme: str, subtheme: str, filename: str):
+    """Run full exam pipeline: format → highlight → compact → anki."""
+    asyncio.create_task(_process_exam(theme, subtheme, filename))
+    return {"status": "started"}
+
+
+async def _process_exam(theme, subtheme, filename):
+    from gnl_core.config import get_config
+    config = get_config()
+    inbox = config.get('INBOX_FOLDER', '')
+    file_path = os.path.join(inbox, theme, subtheme, filename)
+
+    if not os.path.isfile(file_path):
+        await broadcast_log(f"⚠ Fichier introuvable: {file_path}")
+        await broadcast_log("__done__")
+        return
+
+    loop = asyncio.get_event_loop()
+    name = os.path.splitext(filename)[0]
+    origin = 'dojo' if 'dojo' in filename.lower() else 'udemy'
+
+    try:
+        from gnl_core.exams import get_exam_base, step1_format, step2_convert_pdf, step3_highlight, step4_compact, step5_anki
+        import shutil
+
+        # Move file to assets/pdf-formatting/origin/
+        base = get_exam_base(theme, subtheme)
+        origin_dir = base / 'pdf-formatting' / 'origin'
+        origin_dir.mkdir(parents=True, exist_ok=True)
+        origin_path = origin_dir / filename
+
+        if not origin_path.exists():
+            shutil.copy2(file_path, str(origin_path))
+            await broadcast_log(f"📂 Copié vers origin/{filename}")
+
+        # Step 1: origin/ → word/
+        await broadcast_log(f"▶ [1/5] FORMAT (origin → word)")
+
+        def on_p1(msg):
+            asyncio.run_coroutine_threadsafe(broadcast_log(f"  {msg}"), loop)
+
+        word_path = await loop.run_in_executor(None, lambda: step1_format(str(origin_path), theme, subtheme, origin, on_progress=on_p1))
+        await broadcast_log(f"  ✓ {word_path}")
+
+        # Step 2: word/ → pdf/
+        await broadcast_log("▶ [2/5] CONVERT (word → pdf)")
+        pdf_path = await loop.run_in_executor(None, lambda: step2_convert_pdf(word_path, theme, subtheme, on_progress=on_p1))
+        await broadcast_log(f"  ✓ {pdf_path}")
+
+        # Step 3: highlight (Bedrock)
+        await broadcast_log("▶ [3/5] HIGHLIGHT (Bedrock → correct answers)")
+        answers = await loop.run_in_executor(None, lambda: step3_highlight(word_path, on_progress=on_p1))
+        await broadcast_log(f"  ✓ {len(answers)} questions analysées")
+
+        # Step 4: compact (markdown + pdf)
+        await broadcast_log("▶ [4/5] COMPACT (markdown + pdf)")
+        compact_path = await loop.run_in_executor(None, lambda: step4_compact(word_path, answers, theme, subtheme, on_progress=on_p1))
+        await broadcast_log(f"  ✓ {compact_path}")
+
+        # Step 5: anki cards
+        await broadcast_log("▶ [5/5] ANKI (flashcards)")
+        anki_path = await loop.run_in_executor(None, lambda: step5_anki(compact_path, theme, subtheme, on_progress=on_p1))
+        await broadcast_log(f"  ✓ {anki_path}")
+
+        await broadcast_log(f"✓ Pipeline terminé: {name}")
+    except Exception as e:
+        await broadcast_log(f"⚠ Erreur: {str(e)[:100]}")
+    await broadcast_log("__done__")
 
 
 @app.post("/content/interactive")
@@ -435,13 +586,13 @@ async def _call_linkedin_mcp():
         server_params = StdioServerParameters(
             command='python3',
             args=['-m', 'linkedin_mcp_server'],
-            env={**os.environ, 'PYTHONPATH': '/home/nizar/HomeWspce/linkedin-mcp-fork'}
+            env={**os.environ, 'PYTHONPATH': os.environ.get('LINKEDIN_MCP_PATH', '/home/nizar/HomeWspce/linkedin-mcp-fork')}
         )
 
         async with stdio_client(server_params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
-                await session.call_tool('get_saved_posts', {'num_posts': 50, 'full_content': True})
+                await session.call_tool('get_saved_posts', {'num_posts': int(os.environ.get('LINKEDIN_SCRAPE_COUNT', '50')), 'full_content': True})
         return True
     except Exception as e:
         return False
@@ -525,6 +676,210 @@ def _fetch_linkedin_from_cache():
     return added
 
 
+@app.post("/saved-articles/batch/{source}")
+async def batch_generate_articles(source: str):
+    """Generate text + audio for next 10 unprocessed articles, then combine."""
+    asyncio.create_task(_batch_generate(source))
+    return {"status": "started"}
+
+
+async def _batch_generate(source):
+    from gnl_core.db import get_db
+    from gnl_core.config import get_config
+    import subprocess
+
+    with get_db() as conn:
+        batch_size = int(os.environ.get('LINKEDIN_BATCH_SIZE', '10'))
+        rows = conn.execute(
+            "SELECT id, title, content FROM saved_articles WHERE source=? AND processed=0 ORDER BY saved_date DESC LIMIT ?",
+            (source, batch_size)
+        ).fetchall()
+
+    if not rows:
+        await broadcast_log("⚠ Aucun article à traiter")
+        await broadcast_log("__done__")
+        return
+
+    total = len(rows)
+    await broadcast_log(f"▶ Batch: {total} articles à traiter")
+
+    generated_audio_paths = []
+
+    for i, row in enumerate(rows):
+        article_id = row['id']
+        article_title = row['title'] or ''
+        article_content = row['content'] or ''
+
+        await broadcast_log(f"▶ [{i+1}/{total}] {article_title[:50]}...")
+
+        # Step 1: Generate tunisian explanation
+        loop = asyncio.get_event_loop()
+        try:
+            import boto3
+            from botocore.config import Config as BotoConfig
+
+            def _gen_text():
+                from gnl_core.config import get_config
+                config = get_config()
+                model_id = config.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
+                region = config.get('AWS_REGION', 'ca-central-1')
+                profile = config.get('AWS_PROFILE', '')
+
+                session = boto3.Session(profile_name=profile, region_name=region)
+                client = session.client('bedrock-runtime', config=BotoConfig(read_timeout=600))
+
+                prompt = f"""أنت خبير تقني تشرح بالعربي الدارج التونسي.
+
+القواعد الصارمة:
+- اكتب بالحروف العربية فقط (مش بالحروف اللاتينية/الفرنسية)
+- المصطلحات التقنية بالإنجليزية كيما هي (API, cloud, container, deployment, agent, model...)
+- الأسلوب: نثر محادثة طبيعي، كأنك تشرح لزميلك التونسي شفاهياً
+- كل فقرة = جملة كاملة بالتونسي، والمصطلح الإنجليزي يتحط في وسط الجملة بشكل طبيعي
+- اشرح كل النقاط بالتفصيل (مش ملخص)
+- ما تترجمش المصطلحات التقنية — خليها بالإنجليزية
+- كل مفهوم، كل أداة، كل ممارسة لازم تتشرح
+
+❌ ممنوع:
+- الكتابة بالحروف اللاتينية/الفرنسية
+- الفصحى الكلاسيكية
+- قوائم بنمط [مصطلح]: [شرح]
+- ترجمة المصطلحات التقنية
+
+المقال باش تشرحو:
+
+العنوان: {article_title}
+المحتوى: {article_content}"""
+
+                response = client.converse(
+                    modelId=model_id,
+                    messages=[{"role": "user", "content": [{"text": prompt}]}],
+                    inferenceConfig={"maxTokens": int(os.environ.get('BEDROCK_MAX_TOKENS', '4096'))}
+                )
+                return response['output']['message']['content'][0]['text']
+
+            text_result = await loop.run_in_executor(None, _gen_text)
+
+            # Save explanation to PDF_PARTS_FOLDER
+            config = get_config()
+            text_dir = os.path.join(config.get('PDF_PARTS_FOLDER', ''), 'saved-articles', source)
+            os.makedirs(text_dir, exist_ok=True)
+            safe_title = "".join(c if c.isalnum() or c in '-_ ' else '' for c in article_title)[:60]
+            text_path = os.path.join(text_dir, f"{safe_title}.txt")
+            with open(text_path, 'w', encoding='utf-8') as f:
+                f.write(text_result)
+
+        except Exception as e:
+            await broadcast_log(f"  ⚠ Texte échoué: {str(e)[:60]}")
+            continue
+
+        # Step 2: TTS
+        try:
+            import requests
+            import base64
+
+            api_key = os.environ.get('GOOGLE_AI_API_KEY', '')
+            if not api_key:
+                from dotenv import load_dotenv
+                load_dotenv()
+                api_key = os.environ.get('GOOGLE_AI_API_KEY', '')
+
+            tts_model = os.environ.get('TTS_MODEL', 'gemini-2.5-flash-preview-tts')
+            url = f'https://generativelanguage.googleapis.com/v1beta/models/{tts_model}:generateContent?key={api_key}'
+            payload = {
+                'contents': [{'parts': [{'text': text_result}]}],
+                'generationConfig': {
+                    'responseModalities': ['AUDIO'],
+                    'speechConfig': {
+                        'voiceConfig': {
+                            'prebuiltVoiceConfig': {'voiceName': os.environ.get('TTS_VOICE', 'Orus')}
+                        }
+                    }
+                }
+            }
+
+            def _call_tts():
+                resp = requests.post(url, json=payload, timeout=300)
+                if resp.status_code != 200:
+                    return None
+                data = resp.json()
+                audio_b64 = data['candidates'][0]['content']['parts'][0]['inlineData']['data']
+                return base64.b64decode(audio_b64)
+
+            audio_bytes = await loop.run_in_executor(None, _call_tts)
+            if not audio_bytes:
+                await broadcast_log(f"  ⚠ Audio échoué")
+                continue
+
+            # Save MP3
+            audio_dir = os.path.join(config.get('AUDIO_PARTS_FOLDER', ''), 'saved-articles', source)
+            os.makedirs(audio_dir, exist_ok=True)
+            audio_path = os.path.join(audio_dir, f"{safe_title}.mp3")
+
+            pcm_path = audio_path.replace('.mp3', '.pcm')
+            with open(pcm_path, 'wb') as f:
+                f.write(audio_bytes)
+            subprocess.run(['ffmpeg', '-y', '-f', 's16le', '-ar', '24000', '-ac', '1', '-i', pcm_path, audio_path], capture_output=True)
+            os.unlink(pcm_path)
+
+            generated_audio_paths.append(audio_path)
+
+            # Mark processed
+            with get_db() as conn:
+                conn.execute("UPDATE saved_articles SET processed=1, output_path=?, audio_path=? WHERE id=?", (text_path, audio_path, article_id))
+                conn.commit()
+
+            await broadcast_log(f"  ✓ [{i+1}/{total}] OK")
+            await broadcast_status()
+
+            # Rate limit delay between TTS calls
+            tts_delay = int(os.environ.get('TTS_DELAY_SECONDS', '15'))
+            if i < total - 1 and tts_delay > 0:
+                await asyncio.sleep(tts_delay)
+
+        except Exception as e:
+            await broadcast_log(f"  ⚠ Audio échoué: {str(e)[:60]}")
+            continue
+
+    # Step 3: Combine all generated MP3s into one batch file
+    if generated_audio_paths:
+        await broadcast_log(f"▶ COMBINE ({len(generated_audio_paths)} articles)")
+        try:
+            config = get_config()
+            backlog_dir = os.path.join(config.get('GNL_BACKLOG', ''), 'saved-articles', source)
+            os.makedirs(backlog_dir, exist_ok=True)
+
+            from datetime import datetime
+            date_str = datetime.now().strftime('%Y-%m-%d')
+            output_file = os.path.join(backlog_dir, f"batch-{date_str}.mp3")
+
+            # Check if batch already exists today
+            counter = 1
+            while os.path.exists(output_file):
+                counter += 1
+                output_file = os.path.join(backlog_dir, f"batch-{date_str}-{counter}.mp3")
+
+            # Create ffmpeg concat file (with silence separator between articles)
+            import tempfile
+            silence_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'assets', 'silence-3s.mp3')
+            concat_path = os.path.join(tempfile.gettempdir(), 'batch_concat.txt')
+            with open(concat_path, 'w') as f:
+                for idx, p in enumerate(generated_audio_paths):
+                    f.write(f"file '{p}'\n")
+                    if idx < len(generated_audio_paths) - 1:
+                        f.write(f"file '{silence_file}'\n")
+
+            subprocess.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', concat_path, '-c', 'copy', output_file], capture_output=True)
+            os.unlink(concat_path)
+
+            await broadcast_log(f"✓ Batch combiné: {output_file}")
+        except Exception as e:
+            await broadcast_log(f"⚠ Combine échoué: {str(e)[:80]}")
+    else:
+        await broadcast_log("⚠ Aucun audio généré pour le batch")
+
+    await broadcast_log("__done__")
+
+
 @app.post("/saved-articles/generate/{article_id}")
 async def generate_article_explanation(article_id: int):
     """Generate tunisian explanation for a saved article."""
@@ -590,7 +945,7 @@ async def _generate_article(article_id: int):
             response = client.converse(
                 modelId=model_id,
                 messages=[{"role": "user", "content": [{"text": prompt}]}],
-                inferenceConfig={"maxTokens": 4096}
+                inferenceConfig={"maxTokens": int(os.environ.get('BEDROCK_MAX_TOKENS', '4096'))}
             )
             return response['output']['message']['content'][0]['text']
 
@@ -648,7 +1003,8 @@ async def _generate_tts_audio(text, title, article_id):
         if not api_key:
             return False
 
-        url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={api_key}'
+        tts_model = os.environ.get('TTS_MODEL', 'gemini-2.5-flash-preview-tts')
+        url = f'https://generativelanguage.googleapis.com/v1beta/models/{tts_model}:generateContent?key={api_key}'
 
         payload = {
             'contents': [{'parts': [{'text': text}]}],
@@ -656,7 +1012,7 @@ async def _generate_tts_audio(text, title, article_id):
                 'responseModalities': ['AUDIO'],
                 'speechConfig': {
                     'voiceConfig': {
-                        'prebuiltVoiceConfig': {'voiceName': 'Orus'}
+                        'prebuiltVoiceConfig': {'voiceName': os.environ.get('TTS_VOICE', 'Orus')}
                     }
                 }
             }
@@ -1000,9 +1356,15 @@ async def preview_prepare(theme: str, subtheme: str, filename: str):
     pdf_path = os.path.join(inbox, theme, subtheme, filename)
     if not os.path.isfile(pdf_path):
         return {"error": "File not found"}
-    total_pages = len(PdfReader(pdf_path).pages)
-    suggested_pages = math.ceil(total_pages / 20)
     name = os.path.splitext(filename)[0]
+    if filename.lower().endswith('.docx'):
+        # DOCX: count paragraphs as rough page estimate
+        from docx import Document
+        doc = Document(pdf_path)
+        total_pages = max(1, len(doc.paragraphs) // 30)
+    else:
+        total_pages = len(PdfReader(pdf_path).pages)
+    suggested_pages = math.ceil(total_pages / 20)
     return {"name": name, "total_pages": total_pages, "suggested_pages": suggested_pages}
 
 

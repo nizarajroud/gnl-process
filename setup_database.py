@@ -168,6 +168,7 @@ def _apply_v6(cursor):
     ''')
     cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('saved-articles', 'linkedin', '', 'fetch')")
     cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('saved-articles', 'medium', '', 'fetch')")
+    cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('exams', 'sap-c02', '', 'manual')")
     cursor.execute("INSERT INTO schema_version (version) VALUES (6)")
 
 
