@@ -298,9 +298,61 @@
                     <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('span').textContent=this.nextElementSibling.classList.contains('hidden')?'▶':'▼'" class="flex items-center gap-2 font-semibold w-full text-left">
                         <span class="text-xs">▶</span> ⏰ Scheduler
                     </button>
-                    <div class="hidden mt-4">
-                        <label class="text-xs text-gray-400">Exécution quotidienne à</label>
-                        <input type="time" name="GNL_SCHEDULE_TIME" value="{{ config.GNL_SCHEDULE_TIME }}" class="bg-gray-700 rounded px-3 py-2 text-sm">
+                    <div class="hidden mt-4 space-y-4">
+                        <!-- GNL Deliver -->
+                        <div class="border border-gray-700 rounded p-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm">📻 GNL Deliver (Production)</span>
+                                <div class="flex items-center gap-2">
+                                    <input type="time" name="SCHEDULER_gnl_deliver_time" value="{{ config.SCHEDULER.gnl_deliver.time if config.SCHEDULER else '08:00' }}" class="bg-gray-700 rounded px-2 py-1 text-xs">
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" name="SCHEDULER_gnl_deliver_enabled" class="sr-only peer" {{ 'checked' if config.SCHEDULER and config.SCHEDULER.gnl_deliver and config.SCHEDULER.gnl_deliver.enabled else '' }}>
+                                        <div class="w-9 h-5 bg-gray-600 peer-checked:bg-green-600 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                                    </label>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Auto-deliver éditions actives</p>
+                        </div>
+                        <!-- Saved Articles -->
+                        <div class="border border-gray-700 rounded p-3">
+                            <span class="text-sm font-medium">📄 Saved Articles</span>
+                            <div class="mt-2 space-y-2 ml-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-gray-400">🔄 Récupération</span>
+                                    <div class="flex items-center gap-2">
+                                        <input type="time" name="SCHEDULER_saved_articles_fetch_time" value="{{ config.SCHEDULER.saved_articles_fetch.time if config.SCHEDULER else '02:00' }}" class="bg-gray-700 rounded px-2 py-1 text-xs">
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" name="SCHEDULER_saved_articles_fetch_enabled" class="sr-only peer" {{ 'checked' if config.SCHEDULER and config.SCHEDULER.saved_articles_fetch and config.SCHEDULER.saved_articles_fetch.enabled else '' }}>
+                                            <div class="w-9 h-5 bg-gray-600 peer-checked:bg-green-600 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-gray-400">🚀 Génération</span>
+                                    <div class="flex items-center gap-2">
+                                        <input type="time" name="SCHEDULER_saved_articles_generate_time" value="{{ config.SCHEDULER.saved_articles_generate.time if config.SCHEDULER else '03:00' }}" class="bg-gray-700 rounded px-2 py-1 text-xs">
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" name="SCHEDULER_saved_articles_generate_enabled" class="sr-only peer" {{ 'checked' if config.SCHEDULER and config.SCHEDULER.saved_articles_generate and config.SCHEDULER.saved_articles_generate.enabled else '' }}>
+                                            <div class="w-9 h-5 bg-gray-600 peer-checked:bg-green-600 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Exams -->
+                        <div class="border border-gray-700 rounded p-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm">🎴 Exams — Anki</span>
+                                <div class="flex items-center gap-2">
+                                    <input type="time" name="SCHEDULER_exams_anki_time" value="{{ config.SCHEDULER.exams_anki.time if config.SCHEDULER else '04:00' }}" class="bg-gray-700 rounded px-2 py-1 text-xs">
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" name="SCHEDULER_exams_anki_enabled" class="sr-only peer" {{ 'checked' if config.SCHEDULER and config.SCHEDULER.exams_anki and config.SCHEDULER.exams_anki.enabled else '' }}>
+                                        <div class="w-9 h-5 bg-gray-600 peer-checked:bg-green-600 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                                    </label>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Auto-generate Anki pour nouveaux examens</p>
+                        </div>
                     </div>
                 </div>
 

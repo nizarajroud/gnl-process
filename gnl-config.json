@@ -6,7 +6,6 @@
   "DEFAULT_SPEED": "1.37",
   "MCP_DOWNLOAD_TIMEOUT": "10800",
   "MAX_GENERATION_RETRIES": "3",
-  "GNL_SCHEDULE_TIME": "08:00",
   "TEST_MODE": "0",
   "TEST_GENERATION_DELAY": "5",
   "BEDROCK_MODEL_ID": "us.anthropic.claude-sonnet-4-6",
@@ -24,9 +23,29 @@
   "TTS_DELAY_SECONDS": "15",
   "BEDROCK_MAX_TOKENS": "4096",
   "LINKEDIN_MCP_PATH": "/home/nizar/HomeWspce/linkedin-mcp-fork",
-  "LINKEDIN_FETCH_TIME": "02:00",
-  "LINKEDIN_GENERATE_TIME": "03:00",
   "ANKI_FONT_SIZE": "16",
   "EXAM_PARALLEL_BATCHES": "3",
-  "EXAM_BATCH_SIZE": "5"
+  "EXAM_BATCH_SIZE": "5",
+  "SCHEDULER": {
+    "gnl_deliver": {
+      "enabled": false,
+      "time": "08:00",
+      "description": "Auto-deliver \u00e9ditions actives (Production)"
+    },
+    "saved_articles_fetch": {
+      "enabled": true,
+      "time": "02:00",
+      "description": "R\u00e9cup\u00e9rer saved posts"
+    },
+    "saved_articles_generate": {
+      "enabled": true,
+      "time": "03:00",
+      "description": "Batch generate (texte + audio)"
+    },
+    "exams_anki": {
+      "enabled": false,
+      "time": "04:00",
+      "description": "Auto-generate Anki pour nouveaux examens"
+    }
+  }
 }
