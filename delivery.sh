@@ -96,11 +96,13 @@ case "$CHOICE" in
   # Installer les dépendances dans le venv prod
   echo "Installation des dépendances (venv prod)..."
   $PROD_PIP install -e . --quiet 2>/dev/null
-  $PROD_PYTHON setup_database.py
 
   # Copier .env et config depuis dev
   cp "$DEV_DIR/.env" .env 2>/dev/null || true
   cp "$DEV_DIR/gnl-config.json" gnl-config.json 2>/dev/null || true
+
+  # Shared DB: prod uses dev's database
+  grep -q "^GNL_DB_PATH" .env || echo "GNL_DB_PATH=${DEV_DIR}/gnl.db" >> .env
 
   # Arrêter le service
   echo "Arrêt du service..."
