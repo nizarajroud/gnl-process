@@ -356,7 +356,7 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
         if question_text and options:
             # Front: question number + question + all options as bullet list
             options_html = "".join(f"<li>{opt_text}</li>" for _, opt_text in options)
-            front = f"<b>{q_header}</b><br>{question_text}<br><ul>{options_html}</ul>"
+            front = f"<div style='text-align:left'><b>{q_header}</b><br>{question_text}<br><ul>{options_html}</ul></div>"
             # Back: question number + question + all options with correct one in bold
             back_items = []
             for status, opt_text in options:
@@ -364,13 +364,15 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
                     back_items.append(f"<li><b>{opt_text}</b></li>")
                 else:
                     back_items.append(f"<li>{opt_text}</li>")
-            back = f"<b>{q_header}</b><br>{question_text}<br><ul>{(''.join(back_items))}</ul>"
+            back = f"<div style='text-align:left'><b>{q_header}</b><br>{question_text}<br><ul>{(''.join(back_items))}</ul></div>"
             anki_cards.append(f"{front}\t{back}")
 
     anki_dir = base / 'Anki-generation' / 'anki'
     anki_dir.mkdir(parents=True, exist_ok=True)
     anki_path = anki_dir / f"{name}-anki.txt"
     with open(anki_path, 'w', encoding='utf-8') as f:
+        # Anki deck tag
+        f.write(f"#deck:{name}\n")
         f.write('\n'.join(anki_cards))
 
     if on_progress:
