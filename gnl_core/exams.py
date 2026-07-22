@@ -371,8 +371,6 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
     anki_dir.mkdir(parents=True, exist_ok=True)
     anki_path = anki_dir / f"{name}-anki.txt"
     with open(anki_path, 'w', encoding='utf-8') as f:
-        # Anki deck tag
-        f.write(f"#deck:{name}\n")
         f.write('\n'.join(anki_cards))
 
     if on_progress:
