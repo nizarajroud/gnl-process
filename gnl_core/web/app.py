@@ -1156,7 +1156,7 @@ async def admin_save(request: Request):
     
     config_keys = ['AUDIO_PARTS_FOLDER', 'GNL_BACKLOG', 'PDF_PARTS_FOLDER', 
                    'NOTEBOOKLM_LANGUAGE', 'DEFAULT_SPEED', 'MCP_DOWNLOAD_TIMEOUT',
-                   'MAX_GENERATION_RETRIES', 'GNL_SCHEDULE_TIME', 'TEST_MODE', 'TEST_GENERATION_DELAY',
+                   'MAX_GENERATION_RETRIES', 'TEST_MODE', 'TEST_GENERATION_DELAY',
                    'BEDROCK_MODEL_ID', 'AWS_REGION', 'AWS_PROFILE']
     
     data = {key: form.get(key, '') for key in config_keys}
@@ -1184,8 +1184,6 @@ async def admin_save(request: Request):
             errors.append("MAX_GENERATION_RETRIES: minimum 1")
     except ValueError:
         errors.append("MAX_GENERATION_RETRIES: nombre invalide")
-    if not data['GNL_SCHEDULE_TIME'] or ':' not in data['GNL_SCHEDULE_TIME']:
-        errors.append("GNL_SCHEDULE_TIME: format HH:MM requis")
 
     if errors:
         await broadcast_log(f"⚠ Validation: {'; '.join(errors)}")
@@ -1193,11 +1191,19 @@ async def admin_save(request: Request):
 
     save_config(data)
     
-    # Reschedule if time changed
-    new_time = data.get('GNL_SCHEDULE_TIME', '08:00')
-    hour, minute = new_time.split(':')
-    scheduler.reschedule_job('daily_deliver', trigger=CronTrigger(hour=int(hour), minute=int(minute)))
-    
+    # Handle SCHEDULER fields from form
+    from gnl_core.config import get_config
+    config = get_config()
+    sched = config.get('SCHEDULER', {})
+    for job_key in sched:
+        time_field = f"SCHEDULER_{job_key}_time"
+        enabled_field = f"SCHEDULER_{job_key}_enabled"
+        if time_field in form.keys():
+            sched[job_key]['time'] = form.get(time_field)
+        sched[job_key]['enabled'] = enabled_field in form.keys()
+    data['SCHEDULER'] = sched
+    save_config(data)
+
     await broadcast_log("✓ Configuration sauvegardée")
     return {"status": "ok"}
 
