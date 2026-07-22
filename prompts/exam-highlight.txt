@@ -1,0 +1,12 @@
+Extract the correct answer(s) for each question below.
+
+{questions}
+
+For each question, find the correct answer by looking for:
+- "Hence, the correct answer is: ..."
+- "Hence, the correct answers are:" followed by "–" lines
+- Bold/highlighted options
+- "Correct option:" pattern
+
+Return as JSON: {"1": ["answer1"], "2": ["answer1", "answer2"], ...}
+Only return the JSON, nothing else.

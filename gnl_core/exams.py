@@ -196,18 +196,13 @@ def step3_highlight(word_path, on_progress=None):
 
         batch_text = "\n\n".join([content for _, content in batch])
 
-        prompt = f"""Extract the correct answer(s) for each question below.
-
-{batch_text}
-
-For each question, find the correct answer by looking for:
-- "Hence, the correct answer is: ..."
-- "Hence, the correct answers are:" followed by "–" lines
-- Bold/highlighted options
-- "Correct option:" pattern
-
-Return as JSON: {{"1": ["answer1"], "2": ["answer1", "answer2"], ...}}
-Only return the JSON, nothing else."""
+        # Load prompt from external file
+        prompt_file = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / 'prompts' / 'exam-highlight.txt'
+        if prompt_file.exists():
+            prompt_template = prompt_file.read_text(encoding='utf-8')
+        else:
+            prompt_template = "Extract the correct answer(s) for each question below.\n\n{questions}\n\nReturn as JSON: {\"1\": [\"answer1\"], \"2\": [\"answer1\", \"answer2\"], ...}\nOnly return the JSON, nothing else."
+        prompt = prompt_template.replace('{questions}', batch_text)
 
         try:
             response = client.converse(
