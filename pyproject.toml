@@ -21,6 +21,7 @@ dependencies = [
     "beautifulsoup4>=4.12",
     "requests>=2.31",
     "weasyprint>=60.0",
+    "genanki>=0.13",
 ]
 
 [project.scripts]
