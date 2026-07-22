@@ -282,7 +282,7 @@ def step4_compact(word_path, answers, theme, subtheme, on_progress=None):
                     for ans in correct
                 ) if correct else False
                 marker = "✓" if is_correct else "○"
-                compact_lines.append(f"  {marker} {opt}")
+                compact_lines.append(f"- {marker} {opt}")
 
     # Save markdown
     md_dir = base / 'Anki-generation' / 'markdown'
@@ -333,21 +333,21 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
 
         for line in lines[1:]:
             line = line.strip()
-            if line.startswith('✓ '):
-                correct.append(line[2:])
+            if line.startswith('- ✓ '):
+                correct.append(line[4:])
                 options.append(line)
-            elif line.startswith('○ '):
+            elif line.startswith('- ○ '):
                 options.append(line)
 
         if question_text and options:
             # Front: question + all options as bullet list (left-aligned)
-            options_html = "".join(f"<li>{o.replace('✓ ', '').replace('○ ', '')}</li>" for o in options)
+            options_html = "".join(f"<li>{o.replace('- ✓ ', '').replace('- ○ ', '')}</li>" for o in options)
             front = f"{question_text}<br><ul>{options_html}</ul>"
             # Back: question + all options with correct one in bold
             back_items = []
             for o in options:
-                opt_text = o.replace('✓ ', '').replace('○ ', '')
-                if o.startswith('✓ '):
+                opt_text = o.replace('- ✓ ', '').replace('- ○ ', '')
+                if o.startswith('- ✓ '):
                     back_items.append(f"<li><b>{opt_text}</b></li>")
                 else:
                     back_items.append(f"<li>{opt_text}</li>")
