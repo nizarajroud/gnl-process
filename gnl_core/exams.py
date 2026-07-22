@@ -273,7 +273,9 @@ def step4_compact(word_path, answers, theme, subtheme, on_progress=None):
                         question_text.append(line.strip())
 
             compact_lines.append(f"\n**Question {num}:**")
+            compact_lines.append("")
             compact_lines.append(' '.join(question_text[:3]))  # First 3 lines as question
+            compact_lines.append("")
 
             correct = answers.get(num, [])
             for opt in options:
@@ -321,19 +323,27 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
     with open(compact_md_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    questions = re.split(r'\*\*Question\s+\d+:\*\*', content)
+    questions = re.split(r'(\*\*Question\s+\d+:\*\*)', content)
     anki_cards = []
 
-    for q in questions[1:]:
-        lines = q.strip().split('\n')
+    for i in range(1, len(questions), 2):
+        q_header = questions[i].replace('**', '')  # "Question N:"
+        q_body = questions[i + 1].strip() if i + 1 < len(questions) else ''
+        lines = q_body.split('\n')
         if not lines:
             continue
 
-        question_text = lines[0].strip()
+        # Skip empty lines to get question text
+        question_text = ''
+        for l in lines:
+            if l.strip():
+                question_text = l.strip()
+                break
+
         options = []
         correct = []
 
-        for line in lines[1:]:
+        for line in lines:
             line = line.strip()
             if line.startswith('- **') and line.endswith('**'):
                 opt_text = line[4:-2]  # Remove "- **" and "**"
@@ -344,17 +354,17 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
                 options.append(('wrong', opt_text))
 
         if question_text and options:
-            # Front: question + all options as bullet list (left-aligned)
+            # Front: question number + question + all options as bullet list
             options_html = "".join(f"<li>{opt_text}</li>" for _, opt_text in options)
-            front = f"{question_text}<br><ul>{options_html}</ul>"
-            # Back: question + all options with correct one in bold
+            front = f"<b>{q_header}</b><br>{question_text}<br><ul>{options_html}</ul>"
+            # Back: question number + question + all options with correct one in bold
             back_items = []
             for status, opt_text in options:
                 if status == 'correct':
                     back_items.append(f"<li><b>{opt_text}</b></li>")
                 else:
                     back_items.append(f"<li>{opt_text}</li>")
-            back = f"{question_text}<br><ul>{(''.join(back_items))}</ul>"
+            back = f"<b>{q_header}</b><br>{question_text}<br><ul>{(''.join(back_items))}</ul>"
             anki_cards.append(f"{front}\t{back}")
 
     anki_dir = base / 'Anki-generation' / 'anki'
