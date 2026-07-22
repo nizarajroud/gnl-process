@@ -281,8 +281,10 @@ def step4_compact(word_path, answers, theme, subtheme, on_progress=None):
                     opt.lower().strip()[:50] in ans.lower() or ans.lower()[:50] in opt.lower()
                     for ans in correct
                 ) if correct else False
-                marker = "✓" if is_correct else "○"
-                compact_lines.append(f"- {marker} {opt}")
+                if is_correct:
+                    compact_lines.append(f"- **{opt}**")
+                else:
+                    compact_lines.append(f"- {opt}")
 
     # Save markdown
     md_dir = base / 'Anki-generation' / 'markdown'
@@ -333,21 +335,22 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
 
         for line in lines[1:]:
             line = line.strip()
-            if line.startswith('- ✓ '):
-                correct.append(line[4:])
-                options.append(line)
-            elif line.startswith('- ○ '):
-                options.append(line)
+            if line.startswith('- **') and line.endswith('**'):
+                opt_text = line[4:-2]  # Remove "- **" and "**"
+                correct.append(opt_text)
+                options.append(('correct', opt_text))
+            elif line.startswith('- '):
+                opt_text = line[2:]
+                options.append(('wrong', opt_text))
 
         if question_text and options:
             # Front: question + all options as bullet list (left-aligned)
-            options_html = "".join(f"<li>{o.replace('- ✓ ', '').replace('- ○ ', '')}</li>" for o in options)
+            options_html = "".join(f"<li>{opt_text}</li>" for _, opt_text in options)
             front = f"{question_text}<br><ul>{options_html}</ul>"
             # Back: question + all options with correct one in bold
             back_items = []
-            for o in options:
-                opt_text = o.replace('- ✓ ', '').replace('- ○ ', '')
-                if o.startswith('- ✓ '):
+            for status, opt_text in options:
+                if status == 'correct':
                     back_items.append(f"<li><b>{opt_text}</b></li>")
                 else:
                     back_items.append(f"<li>{opt_text}</li>")
