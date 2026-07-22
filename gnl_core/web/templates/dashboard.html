@@ -523,11 +523,11 @@
                 document.getElementById('prep-dialog').dataset.file = filename;
 
                 if (theme === 'exams') {
-                    // Simplified dialog for exams
+                    // Simplified dialog for exams — no total count
                     document.getElementById('prep-dialog-mode-row').classList.add('hidden');
                     document.getElementById('prep-dialog-pages-label').textContent = 'Questions par épisode';
-                    document.getElementById('prep-dialog-pages').value = info.suggested_pages || 5;
-                    document.getElementById('prep-dialog-info').textContent = `${info.total_pages} questions — suggestion: ${info.suggested_pages} questions/épisode`;
+                    document.getElementById('prep-dialog-pages').value = 5;
+                    document.getElementById('prep-dialog-info').textContent = '';
                 } else {
                     document.getElementById('prep-dialog-mode-row').classList.remove('hidden');
                     document.getElementById('prep-dialog-pages-label').textContent = 'Pages par épisode';
