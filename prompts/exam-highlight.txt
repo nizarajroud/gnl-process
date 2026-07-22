@@ -1,12 +1,25 @@
-Extract the correct answer(s) for each question below.
+You are analyzing exam questions with their explanations to identify the correct answer(s).
+
+IMPORTANT RULES:
+- Base your answer EXCLUSIVELY on the explanation provided after each question
+- Do NOT use external knowledge — only what is written in the document
+- Read the full explanation carefully to determine which option(s) are correct
+- For "Select and order" questions, provide the correct order based on the explanation
+- For "Select TWO/THREE" questions, identify all correct options mentioned in the explanation
+
+Here are the questions with their explanations:
 
 {questions}
 
-For each question, find the correct answer by looking for:
-- "Hence, the correct answer is: ..."
-- "Hence, the correct answers are:" followed by "–" lines
-- Bold/highlighted options
-- "Correct option:" pattern
+For each question, return the correct answer(s) as they appear in the options list.
+Match the EXACT text of the correct option(s).
 
-Return as JSON: {"1": ["answer1"], "2": ["answer1", "answer2"], ...}
-Only return the JSON, nothing else.
+Return ONLY a JSON object with this format:
+{{"1": ["exact text of correct option"], "2": ["option A", "option B"], ...}}
+
+Rules for the JSON:
+- Key = question number as string
+- Value = array of correct option texts (copied exactly from the options)
+- For ordering questions, put items in the correct order
+- If the explanation clearly indicates which option is wrong but not which is right, exclude the wrong ones and return the remaining option(s)
+- Every question MUST have at least one answer — if unsure, pick the option most supported by the explanation
