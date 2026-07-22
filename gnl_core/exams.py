@@ -274,8 +274,10 @@ def step4_compact(word_path, answers, theme, subtheme, on_progress=None):
 
             correct = answers.get(num, [])
             for opt in options:
+                # Normalize unicode (non-breaking spaces etc.) before matching
+                opt_norm = opt.lower().strip().replace('\u00a0', ' ')
                 is_correct = any(
-                    opt.lower().strip()[:50] in ans.lower() or ans.lower()[:50] in opt.lower()
+                    opt_norm[:50] in ans.lower().replace('\u00a0', ' ') or ans.lower().replace('\u00a0', ' ')[:50] in opt_norm
                     for ans in correct
                 ) if correct else False
                 if is_correct:
