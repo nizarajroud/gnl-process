@@ -194,17 +194,12 @@ def step3_highlight(word_path, on_progress=None):
     else:
         prompt_template = "Extract correct answers.\n\n{questions}\n\nReturn JSON."
 
-    for batch_start in range(0, len(question_blocks), 10):
-        batch_end = min(batch_start + 10, len(question_blocks))
-        batch = question_blocks[batch_start:batch_end]
-
-        if on_progress:
-            on_progress(f"Questions {batch_start + 1}-{batch_end}...")
-
+    def _process_batch(batch, batch_start):
+        """Process a single batch — called in parallel."""
+        import json
         batch_text = "\n\n".join([content for _, content in batch])
         prompt = prompt_template.replace('{questions}', batch_text)
 
-        # Retry up to 2 times on JSON parse failure
         for attempt in range(3):
             try:
                 response = client.converse(
@@ -213,37 +208,52 @@ def step3_highlight(word_path, on_progress=None):
                     inferenceConfig={"maxTokens": max_tokens}
                 )
                 result_text = response['output']['message']['content'][0]['text']
-                import json
                 json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
                 if json_match:
                     raw_json = json_match.group()
                     try:
-                        batch_answers = json.loads(raw_json)
+                        return json.loads(raw_json)
                     except json.JSONDecodeError:
-                        # Try to fix common JSON issues
                         fixed = raw_json.replace('\n', ' ').replace('\r', '')
-                        # Fix trailing commas
                         fixed = re.sub(r',\s*}', '}', fixed)
                         fixed = re.sub(r',\s*]', ']', fixed)
-                        # Fix unescaped quotes in values
                         try:
-                            batch_answers = json.loads(fixed)
+                            return json.loads(fixed)
                         except json.JSONDecodeError:
                             if attempt < 2:
-                                if on_progress:
-                                    on_progress(f"  ⚠ JSON invalide, retry {attempt + 1}...")
                                 continue
-                            else:
-                                raise
-                    all_answers.update(batch_answers)
-                    break  # Success
-            except json.JSONDecodeError as e:
-                if attempt == 2 and on_progress:
-                    on_progress(f"⚠ Erreur batch {batch_start}: {str(e)[:50]}")
-            except Exception as e:
-                if on_progress:
-                    on_progress(f"⚠ Erreur batch {batch_start}: {str(e)[:50]}")
-                break  # Non-JSON errors don't retry
+                            return {}
+            except json.JSONDecodeError:
+                if attempt == 2:
+                    return {}
+            except Exception:
+                return {}
+        return {}
+
+    # Build batches
+    batches = []
+    for batch_start in range(0, len(question_blocks), 10):
+        batch_end = min(batch_start + 10, len(question_blocks))
+        batches.append((question_blocks[batch_start:batch_end], batch_start))
+
+    # Process in parallel
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    parallel = int(os.environ.get('EXAM_PARALLEL_BATCHES', '3'))
+
+    with ThreadPoolExecutor(max_workers=parallel) as executor:
+        futures = {}
+        for batch, batch_start in batches:
+            future = executor.submit(_process_batch, batch, batch_start)
+            futures[future] = batch_start
+
+        for future in as_completed(futures):
+            batch_start = futures[future]
+            batch_end = min(batch_start + 10, len(question_blocks))
+            if on_progress:
+                on_progress(f"Questions {batch_start + 1}-{batch_end} ✓")
+            result = future.result()
+            if result:
+                all_answers.update(result)
 
     return all_answers
 
