@@ -499,3 +499,88 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
 def _get_config():
     from gnl_core.config import get_config
     return get_config()
+
+
+def split_exam_by_questions(word_path, questions_per_chunk=5, name=None, theme='exams', subtheme='sap-c02'):
+    """Split a formatted DOCX exam by questions (not pages).
+    
+    Args:
+        word_path: Path to the formatted DOCX (from assets/pdf-formatting/word/)
+        questions_per_chunk: Number of questions per split
+        name: Edition name
+        theme, subtheme: For path resolution
+    Returns:
+        Split result dict compatible with collect()
+    """
+    from docx import Document
+    import subprocess
+    import tempfile
+
+    doc = Document(word_path)
+    text = "\n".join([para.text for para in doc.paragraphs])
+    
+    if not name:
+        name = Path(word_path).stem
+
+    # Split by "Question N:"
+    parts = re.split(r'(Question\s+\d+:)', text)
+    
+    # Rebuild question blocks
+    question_blocks = []
+    for i in range(1, len(parts), 2):
+        if i + 1 < len(parts):
+            question_blocks.append(parts[i] + parts[i + 1])
+
+    # Group into chunks
+    chunks = []
+    for i in range(0, len(question_blocks), questions_per_chunk):
+        chunk = question_blocks[i:i + questions_per_chunk]
+        chunks.append("\n\n".join(chunk))
+
+    # Output directory
+    pdf_parts = os.environ.get('PDF_PARTS_FOLDER', '')
+    output_dir = Path(pdf_parts) / theme / subtheme / name
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write each chunk as DOCX then convert to PDF
+    files_list = []
+    temp_dir = tempfile.mkdtemp()
+
+    for idx, chunk_text in enumerate(chunks, 1):
+        # Create temp DOCX
+        chunk_doc = Document()
+        for line in chunk_text.split('\n'):
+            para = chunk_doc.add_paragraph()
+            if re.match(r'^Question\s+\d+:', line.strip()):
+                para.add_run(line).bold = True
+            else:
+                para.add_run(line)
+        
+        docx_path = os.path.join(temp_dir, f"p{idx}.docx")
+        chunk_doc.save(docx_path)
+
+        # Convert to PDF
+        subprocess.run([
+            "libreoffice", "--headless", "--convert-to", "pdf",
+            "--outdir", str(output_dir), docx_path
+        ], capture_output=True)
+
+        pdf_path = output_dir / f"p{idx}.pdf"
+        if pdf_path.exists():
+            files_list.append({
+                'fullPath': str(pdf_path),
+                'parentDir': name,
+                'fileName': f'p{idx}.pdf',
+                'sourceType': 'LocalStorage',
+                'podcastTheme': theme,
+                'podcastSubfolder': subtheme,
+            })
+
+    # Cleanup temp DOCX files
+    import shutil
+    shutil.rmtree(temp_dir, ignore_errors=True)
+
+    return {
+        'splitConfiguration': f'{len(chunks)}ck-{questions_per_chunk}q',
+        'files': files_list
+    }

@@ -355,7 +355,20 @@ async def list_content_files(theme: str, subtheme: str):
     for f in sorted(os.listdir(folder)):
         if f.lower().endswith(('.pdf', '.docx')) and not f.startswith('~$'):
             name_no_ext = os.path.splitext(f)[0]
-            files.append({'name': f, 'processed': name_no_ext in delivered})
+            item = {'name': f, 'processed': name_no_ext in delivered}
+            
+            if theme == 'exams':
+                # Check if Anki was generated
+                from gnl_core.exams import get_exam_base
+                base = get_exam_base(theme, subtheme)
+                anki_path = base / 'Anki-generation' / 'anki' / f"{name_no_ext}.apkg"
+                item['anki'] = anki_path.exists()
+                # Check if in production (exists in parent_configuration)
+                with get_db() as conn:
+                    in_prod = conn.execute("SELECT id FROM parent_configuration WHERE parent_file=? AND podcast_subtheme=?", (name_no_ext, subtheme)).fetchone()
+                item['in_production'] = in_prod is not None
+            
+            files.append(item)
     return files
 
 
@@ -1358,8 +1371,23 @@ async def preview_prepare(theme: str, subtheme: str, filename: str):
     if not os.path.isfile(pdf_path):
         return {"error": "File not found"}
     name = os.path.splitext(filename)[0]
+
+    if theme == 'exams':
+        # For exams: count questions in the formatted word file
+        from gnl_core.exams import get_exam_base
+        base = get_exam_base(theme, subtheme)
+        word_path = base / 'pdf-formatting' / 'word' / (name + '.docx')
+        if word_path.exists():
+            from docx import Document
+            doc = Document(str(word_path))
+            text = "\n".join([p.text for p in doc.paragraphs])
+            import re
+            total_questions = len(re.findall(r'Question\s+\d+:', text))
+            return {"name": name, "total_pages": total_questions, "suggested_pages": 5}
+        else:
+            return {"name": name, "total_pages": 0, "suggested_pages": 5, "error": "Fichier word introuvable. Lancez d'abord 🎴 Anki."}
+
     if filename.lower().endswith('.docx'):
-        # DOCX: count paragraphs as rough page estimate
         from docx import Document
         doc = Document(pdf_path)
         total_pages = max(1, len(doc.paragraphs) // 30)
@@ -1390,6 +1418,36 @@ async def prepare_from_inbox(request: Request):
 
     name = custom_name or os.path.splitext(filename)[0]
 
+    # Exam-specific: split by questions from the formatted word file
+    if theme == 'exams':
+        from gnl_core.exams import get_exam_base, split_exam_by_questions
+        base = get_exam_base(theme, subtheme)
+        word_path = base / 'pdf-formatting' / 'word' / filename
+        # If word file doesn't exist with same name, try .docx
+        if not word_path.exists():
+            word_path = base / 'pdf-formatting' / 'word' / (name + '.docx')
+        if not word_path.exists():
+            return {"status": "error", "error": f"Fichier word formatté introuvable. Lancez d'abord 🎴 Anki."}
+
+        questions_per_chunk = pages_per_episode if pages_per_episode > 0 else 5
+        await broadcast_log(f"▶ Preparing exam {name} ({questions_per_chunk} questions/épisode)")
+
+        try:
+            from gnl_core.collect import collect
+            from gnl_core.titles import generate_titles
+
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, lambda: split_exam_by_questions(str(word_path), questions_per_chunk, name, theme, subtheme))
+            parent_id = collect(result)
+            count = generate_titles(parent_id)
+            await broadcast_log(f"✓ Prepared: {len(result['files'])} chunks, parent_id={parent_id}, {count} titles")
+            await broadcast_status()
+            return {"status": "ok", "parent_id": parent_id}
+        except Exception as e:
+            await broadcast_log(f"⚠ Prepare failed: {str(e)[:100]}")
+            return {"status": "error", "error": str(e)}
+
+    # Standard flow for non-exam files
     # Calculate pages per episode if not provided
     if pages_per_episode <= 0:
         import math

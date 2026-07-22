@@ -449,7 +449,7 @@
                 const div = document.getElementById(`filelist-${theme}-${sub}`);
                 if (!files.length) { div.innerHTML = '<span class="text-gray-500">Aucun fichier PDF dans ce dossier.</span>'; return; }
                 div.innerHTML = '<table class="w-full text-xs"><thead><tr class="text-gray-400 border-b border-gray-700"><th class="text-left py-1">Fichier</th><th class="py-1">Statut</th><th class="text-right py-1">Action</th></tr></thead><tbody>' +
-                    files.map(f => `<tr class="border-b border-gray-800"><td class="py-1">${f.name}</td><td class="py-1">${f.processed ? '<span class="text-green-400">✅ Traité</span>' : `<button onclick="prepareFromInbox('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-orange-600 hover:bg-orange-500 rounded text-white">Traiter</button>`}</td><td class="text-right py-1">${theme === 'exams' ? `<button onclick="processExam('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-green-600 hover:bg-green-500 rounded text-white">🎴 Anki</button><button onclick="cleanExam('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-red-600 hover:bg-red-500 rounded text-white ml-1">🗑</button>` : `<button onclick="launchInteractive('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-purple-600 hover:bg-purple-500 rounded text-white">🎙️ Interactif</button>`}</td></tr>`).join('') +
+                    files.map(f => `<tr class="border-b border-gray-800"><td class="py-1">${f.name} ${f.anki ? '🎴' : ''} ${f.in_production ? '📻' : ''}</td><td class="py-1">${f.processed ? '<span class="text-green-400">✅ Traité</span>' : `<button onclick="prepareFromInbox('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-orange-600 hover:bg-orange-500 rounded text-white">Traiter</button>`}</td><td class="text-right py-1">${theme === 'exams' ? `<button onclick="processExam('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-green-600 hover:bg-green-500 rounded text-white">🎴 Anki</button><button onclick="cleanExam('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-red-600 hover:bg-red-500 rounded text-white ml-1">🗑</button>` : `<button onclick="launchInteractive('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-purple-600 hover:bg-purple-500 rounded text-white">🎙️ Interactif</button>`}</td></tr>`).join('') +
                     '</tbody></table>';
             });
         }
@@ -466,11 +466,23 @@
             fetch(`/content/preview/${theme}/${sub}/${filename}`).then(r=>r.json()).then(info => {
                 document.getElementById('prep-dialog-filename').textContent = filename;
                 document.getElementById('prep-dialog-name').value = info.name;
-                document.getElementById('prep-dialog-pages').value = info.suggested_pages;
-                document.getElementById('prep-dialog-info').textContent = `${info.total_pages} pages — suggestion: ${info.suggested_pages} pages/épisode (${Math.ceil(info.total_pages/info.suggested_pages)} épisodes)`;
                 document.getElementById('prep-dialog').dataset.theme = theme;
                 document.getElementById('prep-dialog').dataset.sub = sub;
                 document.getElementById('prep-dialog').dataset.file = filename;
+
+                if (theme === 'exams') {
+                    // Simplified dialog for exams
+                    document.getElementById('prep-dialog-mode-row').classList.add('hidden');
+                    document.getElementById('prep-dialog-pages-label').textContent = 'Questions par épisode';
+                    document.getElementById('prep-dialog-pages').value = info.suggested_pages || 5;
+                    document.getElementById('prep-dialog-info').textContent = `${info.total_pages} questions — suggestion: ${info.suggested_pages} questions/épisode`;
+                } else {
+                    document.getElementById('prep-dialog-mode-row').classList.remove('hidden');
+                    document.getElementById('prep-dialog-pages-label').textContent = 'Pages par épisode';
+                    document.getElementById('prep-dialog-pages').value = info.suggested_pages;
+                    document.getElementById('prep-dialog-info').textContent = `${info.total_pages} pages — suggestion: ${info.suggested_pages} pages/épisode (${Math.ceil(info.total_pages/info.suggested_pages)} épisodes)`;
+                }
+
                 document.getElementById('prep-dialog').classList.remove('hidden');
             });
         }
@@ -794,7 +806,7 @@
             <h3 class="font-semibold mb-1">Traiter: <span id="prep-dialog-filename" class="text-blue-400"></span></h3>
             <p id="prep-dialog-info" class="text-xs text-gray-400 mb-4"></p>
             <div class="space-y-3">
-                <div>
+                <div id="prep-dialog-mode-row">
                     <label class="text-xs text-gray-400">Mode</label>
                     <select id="prep-dialog-mode" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
                         <option value="pages">Pages</option>
@@ -802,7 +814,7 @@
                     </select>
                 </div>
                 <div>
-                    <label class="text-xs text-gray-400">Pages par épisode</label>
+                    <label id="prep-dialog-pages-label" class="text-xs text-gray-400">Pages par épisode</label>
                     <input type="number" id="prep-dialog-pages" min="1" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
                 </div>
                 <div>

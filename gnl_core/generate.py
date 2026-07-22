@@ -54,7 +54,7 @@ def generate(parent_id, db_path=None, prompt_dir=None, language=None, max_count=
 
     # Load prompt from DB (series_catalog) or fallback to file
     from .db import resolve_parent, get_db
-    _, _, _, subfolder = resolve_parent(parent_id, db_path)
+    _, _, theme, subfolder = resolve_parent(parent_id, db_path)
     audio_prompt = ""
     with get_db(db_path) as conn:
         row = conn.execute("SELECT prompt FROM series_catalog WHERE subtheme=?", (subfolder,)).fetchone()
@@ -62,6 +62,9 @@ def generate(parent_id, db_path=None, prompt_dir=None, language=None, max_count=
             audio_prompt = row['prompt']
     if not audio_prompt:
         prompt_file = os.path.join(prompt_dir, f"{subfolder}.txt")
+        if not os.path.exists(prompt_file):
+            # Try theme-level default (e.g. exams-default.txt)
+            prompt_file = os.path.join(prompt_dir, f"{theme}-default.txt")
         if not os.path.exists(prompt_file):
             prompt_file = os.path.join(prompt_dir, "default.txt")
         with open(prompt_file) as f:
