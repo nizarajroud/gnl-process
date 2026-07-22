@@ -1189,9 +1189,7 @@ async def admin_save(request: Request):
         await broadcast_log(f"⚠ Validation: {'; '.join(errors)}")
         return {"status": "error", "errors": errors}
 
-    save_config(data)
-    
-    # Handle SCHEDULER fields from form
+    # Handle SCHEDULER fields from form before saving
     from gnl_core.config import get_config
     config = get_config()
     sched = config.get('SCHEDULER', {})
