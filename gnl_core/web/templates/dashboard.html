@@ -830,6 +830,14 @@
                             if (source) loadSavedArticles(source);
                         }
                     });
+                    // Reload file lists to refresh icons
+                    Object.keys(catalog).forEach(theme => {
+                        (catalog[theme] || []).forEach(entry => {
+                            const sub = entry.subtheme || entry;
+                            const mode = entry.mode || 'manual';
+                            if (mode === 'manual' || mode === 'generate') loadFileList(theme, sub);
+                        });
+                    });
                     return;
                 }
             } else if (data.type === 'status_update') {
