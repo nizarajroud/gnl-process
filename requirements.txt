@@ -3,6 +3,7 @@ Jinja2==3.1.6
 Markdown==3.10.2
 PyPDF2==3.0.1
 beautifulsoup4==4.14.3
+boto3==1.40.61
 click==8.1.8
 fastapi==0.118.0
 genanki==0.13.1
