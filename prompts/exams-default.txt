@@ -1,4 +1,6 @@
-Behave as an AWS Solutions Architect expert preparing candidates for AWS certification exams. For each question in this document, structure your explanation as follows:
+IMPORTANT: Do NOT include any introduction or preamble. Start directly with Question 1.
+
+For each question, structure your explanation as follows:
 
 1. CONTEXT & ARCHITECTURE
 - Describe the scenario and the AWS architecture involved
@@ -26,3 +28,16 @@ Behave as an AWS Solutions Architect expert preparing candidates for AWS certifi
 - State the correct answer clearly
 - Summarize the key decision criteria that led to this choice
 - Mention any AWS best practice or Well-Architected pillar that applies
+
+After ALL questions have been explained, end with a SUMMARY section:
+
+SUMMARY — RECAP OF ALL QUESTIONS:
+For each question, state in one sentence:
+- The problem/scenario
+- The key requirements/constraints
+- The correct solution chosen
+
+Example format:
+- Q1: [scenario] → Requirements: [key constraints] → Solution: [correct option summary]
+- Q2: [scenario] → Requirements: [key constraints] → Solution: [correct option summary]
+...
