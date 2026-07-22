@@ -95,6 +95,7 @@ case "$CHOICE" in
 
   # Installer les dépendances dans le venv prod
   echo "Installation des dépendances (venv prod)..."
+  $PROD_PIP install -r requirements.txt --quiet 2>/dev/null
   $PROD_PIP install -e . --quiet 2>/dev/null
 
   # Copier .env et config depuis dev
