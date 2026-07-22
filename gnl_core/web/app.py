@@ -355,7 +355,20 @@ async def list_content_files(theme: str, subtheme: str):
     for f in sorted(os.listdir(folder)):
         if f.lower().endswith(('.pdf', '.docx')) and not f.startswith('~$'):
             name_no_ext = os.path.splitext(f)[0]
-            files.append({'name': f, 'processed': name_no_ext in delivered})
+            item = {'name': f, 'processed': name_no_ext in delivered}
+            
+            if theme == 'exams':
+                # Check if Anki was generated
+                from gnl_core.exams import get_exam_base
+                base = get_exam_base(theme, subtheme)
+                anki_path = base / 'Anki-generation' / 'anki' / f"{name_no_ext}.apkg"
+                item['anki'] = anki_path.exists()
+                # Check if in production (exists in parent_configuration)
+                with get_db() as conn:
+                    in_prod = conn.execute("SELECT id FROM parent_configuration WHERE parent_file=? AND podcast_subtheme=?", (name_no_ext, subtheme)).fetchone()
+                item['in_production'] = in_prod is not None
+            
+            files.append(item)
     return files
 
 
