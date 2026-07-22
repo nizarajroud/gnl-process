@@ -431,7 +431,34 @@ async def clean_exam(theme: str, subtheme: str, filename: str):
             p.unlink()
             removed += 1
 
-    await broadcast_log(f"🗑 Nettoyé: {name} ({removed} fichiers supprimés)")
+    # PDF_PARTS_FOLDER/{theme}/{subtheme}/{name}/
+    import shutil
+    pdf_parts = config.get('PDF_PARTS_FOLDER', '')
+    if pdf_parts:
+        pdf_dir = os.path.join(pdf_parts, theme, subtheme, name)
+        if os.path.isdir(pdf_dir):
+            shutil.rmtree(pdf_dir)
+            removed += 1
+
+    # AUDIO_PARTS_FOLDER/{theme}/{subtheme}/{name}/
+    audio_parts = config.get('AUDIO_PARTS_FOLDER', '')
+    if audio_parts:
+        audio_dir = os.path.join(audio_parts, theme, subtheme, name)
+        if os.path.isdir(audio_dir):
+            shutil.rmtree(audio_dir)
+            removed += 1
+
+    # Remove from DB (parent_configuration + podcast_download)
+    from gnl_core.db import get_db
+    with get_db() as conn:
+        row = conn.execute("SELECT id FROM parent_configuration WHERE parent_file=? AND podcast_subtheme=?", (name, subtheme)).fetchone()
+        if row:
+            conn.execute("DELETE FROM podcast_download WHERE parent_configuration_id=?", (row['id'],))
+            conn.execute("DELETE FROM parent_configuration WHERE id=?", (row['id'],))
+            conn.commit()
+            removed += 1
+
+    await broadcast_log(f"🗑 Nettoyé: {name} ({removed} fichiers/dossiers supprimés)")
     return {"status": "ok", "removed": removed}
 
 
