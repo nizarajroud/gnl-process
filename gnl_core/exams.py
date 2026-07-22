@@ -380,7 +380,7 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
 
         if question_text and options:
             options_html = "".join(f"<li>{opt_text}</li>" for _, opt_text in options)
-            front = f"<b>{q_header}</b><br>{question_text}<br><ul>{options_html}</ul>"
+            front = f"<b>{q_header}</b><br><br>{question_text}<br><br><ul>{options_html}</ul>"
 
             back_items = []
             for status, opt_text in options:
@@ -388,7 +388,7 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
                     back_items.append(f"<li><b>{opt_text}</b></li>")
                 else:
                     back_items.append(f"<li>{opt_text}</li>")
-            back = f"<b>{q_header}</b><br>{question_text}<br><ul>{''.join(back_items)}</ul>"
+            back = f"<b>{q_header}</b><br><br>{question_text}<br><br><ul>{''.join(back_items)}</ul>"
 
             note = genanki.Note(model=model, fields=[front, back])
             deck.add_note(note)
