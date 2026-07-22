@@ -231,9 +231,10 @@ def step3_highlight(word_path, on_progress=None):
         return {}
 
     # Build batches
+    batch_size = int(os.environ.get('EXAM_BATCH_SIZE', '5'))
     batches = []
-    for batch_start in range(0, len(question_blocks), 10):
-        batch_end = min(batch_start + 10, len(question_blocks))
+    for batch_start in range(0, len(question_blocks), batch_size):
+        batch_end = min(batch_start + batch_size, len(question_blocks))
         batches.append((question_blocks[batch_start:batch_end], batch_start))
 
     # Process in parallel
@@ -248,7 +249,7 @@ def step3_highlight(word_path, on_progress=None):
 
         for future in as_completed(futures):
             batch_start = futures[future]
-            batch_end = min(batch_start + 10, len(question_blocks))
+            batch_end = min(batch_start + batch_size, len(question_blocks))
             if on_progress:
                 on_progress(f"Questions {batch_start + 1}-{batch_end} ✓")
             result = future.result()
