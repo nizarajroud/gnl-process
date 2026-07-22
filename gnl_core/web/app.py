@@ -83,18 +83,31 @@ async def lifespan(app: FastAPI):
     if not os.path.ismount('/mnt/g'):
         subprocess.run(['sudo', 'mount', '-t', 'drvfs', 'G:', '/mnt/g'], capture_output=True)
 
-    # Daily deliver scheduler (disabled — manual only)
-    # schedule_time = os.getenv('GNL_SCHEDULE_TIME', '08:00')
-    # hour, minute = schedule_time.split(':')
-    # scheduler.add_job(_deliver_all_sync, CronTrigger(hour=int(hour), minute=int(minute)), id='daily_deliver', replace_existing=True, misfire_grace_time=3600, args=[asyncio.get_event_loop()])
+    # Load scheduler config
+    from gnl_core.config import get_config
+    config = get_config()
+    sched_config = config.get('SCHEDULER', {})
+    if isinstance(sched_config, str):
+        import json as _json
+        sched_config = _json.loads(sched_config) if sched_config else {}
 
-    # LinkedIn: daily fetch at 2:00 AM and batch generate at 3:00 AM (America/Toronto)
-    linkedin_fetch_time = os.getenv('LINKEDIN_FETCH_TIME', '02:00')
-    linkedin_generate_time = os.getenv('LINKEDIN_GENERATE_TIME', '03:00')
-    lf_hour, lf_min = linkedin_fetch_time.split(':')
-    lg_hour, lg_min = linkedin_generate_time.split(':')
-    scheduler.add_job(_scheduled_linkedin_fetch, CronTrigger(hour=int(lf_hour), minute=int(lf_min), timezone='America/Toronto'), id='linkedin_fetch', replace_existing=True, misfire_grace_time=3600)
-    scheduler.add_job(_scheduled_linkedin_generate, CronTrigger(hour=int(lg_hour), minute=int(lg_min), timezone='America/Toronto'), id='linkedin_generate', replace_existing=True, misfire_grace_time=3600)
+    # GNL Deliver
+    gnl_job = sched_config.get('gnl_deliver', {})
+    if gnl_job.get('enabled'):
+        h, m = gnl_job.get('time', '08:00').split(':')
+        scheduler.add_job(_deliver_all_sync, CronTrigger(hour=int(h), minute=int(m), timezone='America/Toronto'), id='gnl_deliver', replace_existing=True, misfire_grace_time=3600, args=[asyncio.get_event_loop()])
+
+    # Saved Articles — Fetch
+    fetch_job = sched_config.get('saved_articles_fetch', {})
+    if fetch_job.get('enabled'):
+        h, m = fetch_job.get('time', '02:00').split(':')
+        scheduler.add_job(_scheduled_linkedin_fetch, CronTrigger(hour=int(h), minute=int(m), timezone='America/Toronto'), id='saved_articles_fetch', replace_existing=True, misfire_grace_time=3600)
+
+    # Saved Articles — Generate
+    gen_job = sched_config.get('saved_articles_generate', {})
+    if gen_job.get('enabled'):
+        h, m = gen_job.get('time', '03:00').split(':')
+        scheduler.add_job(_scheduled_linkedin_generate, CronTrigger(hour=int(h), minute=int(m), timezone='America/Toronto'), id='saved_articles_generate', replace_existing=True, misfire_grace_time=3600)
 
     scheduler.start()
 
