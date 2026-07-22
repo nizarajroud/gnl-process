@@ -327,6 +327,7 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
         content = f.read()
 
     # Model for exam cards
+    font_size = os.environ.get('ANKI_FONT_SIZE', '14')
     model_id = random.randrange(1 << 30, 1 << 31)
     model = genanki.Model(
         model_id,
@@ -340,11 +341,11 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
             'qfmt': '{{Front}}',
             'afmt': '{{Back}}',
         }],
-        css="""
-            .card { text-align: left; font-family: Arial; font-size: 14px; padding: 10px; }
-            ul { padding-left: 20px; }
-            li { margin-bottom: 5px; }
-            b { color: #28a745; }
+        css=f"""
+            .card {{ text-align: left; font-family: Arial; font-size: {font_size}px; padding: 10px; }}
+            ul {{ padding-left: 20px; }}
+            li {{ margin-bottom: 5px; }}
+            b {{ color: #28a745; }}
         """
     )
 
