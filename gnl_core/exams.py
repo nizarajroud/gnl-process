@@ -345,7 +345,8 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
             .card {{ text-align: left; font-family: Arial; font-size: {font_size}px; padding: 10px; }}
             ul {{ padding-left: 20px; }}
             li {{ margin-bottom: 5px; }}
-            b {{ color: #28a745; }}
+            .correct {{ color: #28a745; font-weight: bold; }}
+            b {{ color: #0073bb; }}
         """
     )
 
@@ -385,7 +386,7 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
             back_items = []
             for status, opt_text in options:
                 if status == 'correct':
-                    back_items.append(f"<li><b>{opt_text}</b></li>")
+                    back_items.append(f"<li><span class='correct'>{opt_text}</span></li>")
                 else:
                     back_items.append(f"<li>{opt_text}</li>")
             back = f"<b>{q_header}</b><br><br>{question_text}<br><br><ul>{''.join(back_items)}</ul>"
