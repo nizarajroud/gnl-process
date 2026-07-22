@@ -41,11 +41,6 @@
       "enabled": true,
       "time": "03:00",
       "description": "Batch generate (texte + audio)"
-    },
-    "exams_anki": {
-      "enabled": false,
-      "time": "04:00",
-      "description": "Auto-generate Anki pour nouveaux examens"
     }
   }
 }

@@ -352,20 +352,7 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- Exams -->
-                        <div class="border border-gray-700 rounded p-3">
-                            <div class="flex items-center justify-between">
-                                <span class="text-sm">🎴 Exams — Anki</span>
-                                <div class="flex items-center gap-2">
-                                    <input type="time" name="SCHEDULER_exams_anki_time" value="{{ config.SCHEDULER.exams_anki.time if config.SCHEDULER else '04:00' }}" class="bg-gray-700 rounded px-2 py-1 text-xs">
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" name="SCHEDULER_exams_anki_enabled" class="sr-only peer" {{ 'checked' if config.SCHEDULER and config.SCHEDULER.exams_anki and config.SCHEDULER.exams_anki.enabled else '' }}>
-                                        <div class="w-9 h-5 bg-gray-600 peer-checked:bg-green-600 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
-                                    </label>
-                                </div>
-                            </div>
-                            <p class="text-xs text-gray-500 mt-1">Auto-generate Anki pour nouveaux examens</p>
-                        </div>
+                        <!-- Exams removed — uses GNL Deliver scheduler -->
                     </div>
                 </div>
 
