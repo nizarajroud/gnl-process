@@ -344,7 +344,7 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
             .card { text-align: left; font-family: Arial; font-size: 14px; padding: 10px; }
             ul { padding-left: 20px; }
             li { margin-bottom: 5px; }
-            b { color: #0073bb; }
+            b { color: #28a745; }
         """
     )
 
