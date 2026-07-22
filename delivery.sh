@@ -69,7 +69,7 @@ case "$CHOICE" in
   fi
 
   cd "$PROD_DIR"
-  git fetch --tags --quiet
+  git fetch --prune origin "+refs/tags/*:refs/tags/*" --quiet
 
   LATEST_TAG=$(git tag -l --sort=-v:refname | head -1)
 
