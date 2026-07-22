@@ -299,6 +299,19 @@
                         <span class="text-xs">▶</span> ⏰ Scheduler
                     </button>
                     <div class="hidden mt-4 space-y-4">
+                        <div class="flex justify-end text-xs text-gray-500">
+                            <span id="scheduler-clock"></span>
+                        </div>
+                        <script>
+                            function updateSchedulerClock() {
+                                const now = new Date();
+                                const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                                const time = now.toLocaleTimeString('fr-CA', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+                                document.getElementById('scheduler-clock').textContent = `🕐 ${time} (${tz})`;
+                            }
+                            updateSchedulerClock();
+                            setInterval(updateSchedulerClock, 1000);
+                        </script>
                         <!-- GNL Deliver -->
                         <div class="border border-gray-700 rounded p-3">
                             <div class="flex items-center justify-between">
