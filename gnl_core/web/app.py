@@ -742,25 +742,6 @@ async def _batch_generate(source):
     from gnl_core.config import get_config
     import subprocess
 
-    # Sync: mark articles as processed if audio already exists on disk
-    config = get_config()
-    audio_parts = config.get('AUDIO_PARTS_FOLDER', '')
-    audio_dir = os.path.join(audio_parts, 'saved-articles', source)
-    if os.path.isdir(audio_dir):
-        existing_audio = {os.path.splitext(f)[0] for f in os.listdir(audio_dir) if f.endswith('.mp3')}
-        if existing_audio:
-            with get_db() as conn:
-                unprocessed = conn.execute("SELECT id, title FROM saved_articles WHERE source=? AND processed=0", (source,)).fetchall()
-                synced = 0
-                for row in unprocessed:
-                    safe_title = "".join(c if c.isalnum() or c in '-_ ' else '' for c in (row['title'] or ''))[:60]
-                    if safe_title in existing_audio:
-                        conn.execute("UPDATE saved_articles SET processed=1 WHERE id=?", (row['id'],))
-                        synced += 1
-                if synced:
-                    conn.commit()
-                    await broadcast_log(f"🔄 Sync: {synced} articles déjà traités (audio existant)")
-
     with get_db() as conn:
         batch_size = int(os.environ.get('LINKEDIN_BATCH_SIZE', '10'))
         rows = conn.execute(
