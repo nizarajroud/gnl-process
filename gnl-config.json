@@ -25,5 +25,6 @@
   "BEDROCK_MAX_TOKENS": "4096",
   "LINKEDIN_MCP_PATH": "/home/nizar/HomeWspce/linkedin-mcp-fork",
   "LINKEDIN_FETCH_TIME": "02:00",
-  "LINKEDIN_GENERATE_TIME": "03:00"
+  "LINKEDIN_GENERATE_TIME": "03:00",
+  "ANKI_FONT_SIZE": "16"
 }

@@ -196,18 +196,13 @@ def step3_highlight(word_path, on_progress=None):
 
         batch_text = "\n\n".join([content for _, content in batch])
 
-        prompt = f"""Extract the correct answer(s) for each question below.
-
-{batch_text}
-
-For each question, find the correct answer by looking for:
-- "Hence, the correct answer is: ..."
-- "Hence, the correct answers are:" followed by "–" lines
-- Bold/highlighted options
-- "Correct option:" pattern
-
-Return as JSON: {{"1": ["answer1"], "2": ["answer1", "answer2"], ...}}
-Only return the JSON, nothing else."""
+        # Load prompt from external file
+        prompt_file = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / 'prompts' / 'exam-highlight.txt'
+        if prompt_file.exists():
+            prompt_template = prompt_file.read_text(encoding='utf-8')
+        else:
+            prompt_template = "Extract the correct answer(s) for each question below.\n\n{questions}\n\nReturn as JSON: {\"1\": [\"answer1\"], \"2\": [\"answer1\", \"answer2\"], ...}\nOnly return the JSON, nothing else."
+        prompt = prompt_template.replace('{questions}', batch_text)
 
         try:
             response = client.converse(
@@ -312,28 +307,57 @@ def step4_compact(word_path, answers, theme, subtheme, on_progress=None):
 
 
 def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
-    """Step 5: Generate Anki flashcard file from compact markdown.
+    """Step 5: Generate Anki .apkg package from compact markdown.
     
     Returns:
-        Path to Anki file
+        Path to .apkg file
     """
+    import genanki
+    import random
+
     base = get_exam_base(theme, subtheme)
     name = Path(compact_md_path).stem
 
     with open(compact_md_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    questions = re.split(r'(\*\*Question\s+\d+:\*\*)', content)
-    anki_cards = []
+    # Model for exam cards
+    font_size = os.environ.get('ANKI_FONT_SIZE', '14')
+    model_id = random.randrange(1 << 30, 1 << 31)
+    model = genanki.Model(
+        model_id,
+        f'{name} Model',
+        fields=[
+            {'name': 'Front'},
+            {'name': 'Back'},
+        ],
+        templates=[{
+            'name': 'Card 1',
+            'qfmt': '{{Front}}',
+            'afmt': '{{Back}}',
+        }],
+        css=f"""
+            .card {{ text-align: left; font-family: Arial; font-size: {font_size}px; padding: 10px; }}
+            ul {{ padding-left: 20px; }}
+            li {{ margin-bottom: 5px; }}
+            .correct {{ color: #28a745; font-weight: bold; }}
+            b {{ color: #0073bb; }}
+        """
+    )
 
+    # Deck with exam name
+    deck_id = random.randrange(1 << 30, 1 << 31)
+    deck = genanki.Deck(deck_id, name)
+
+    # Parse questions
+    questions = re.split(r'(\*\*Question\s+\d+:\*\*)', content)
+
+    cards_count = 0
     for i in range(1, len(questions), 2):
-        q_header = questions[i].replace('**', '')  # "Question N:"
+        q_header = questions[i].replace('**', '')
         q_body = questions[i + 1].strip() if i + 1 < len(questions) else ''
         lines = q_body.split('\n')
-        if not lines:
-            continue
 
-        # Skip empty lines to get question text
         question_text = ''
         for l in lines:
             if l.strip():
@@ -341,42 +365,41 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
                 break
 
         options = []
-        correct = []
-
         for line in lines:
             line = line.strip()
             if line.startswith('- **') and line.endswith('**'):
-                opt_text = line[4:-2]  # Remove "- **" and "**"
-                correct.append(opt_text)
+                opt_text = line[4:-2]
                 options.append(('correct', opt_text))
             elif line.startswith('- '):
                 opt_text = line[2:]
                 options.append(('wrong', opt_text))
 
         if question_text and options:
-            # Front: question number + question + all options as bullet list
             options_html = "".join(f"<li>{opt_text}</li>" for _, opt_text in options)
-            front = f"<div style='text-align:left'><b>{q_header}</b><br>{question_text}<br><ul>{options_html}</ul></div>"
-            # Back: question number + question + all options with correct one in bold
+            front = f"<b>{q_header}</b><br><br>{question_text}<br><br><ul>{options_html}</ul>"
+
             back_items = []
             for status, opt_text in options:
                 if status == 'correct':
-                    back_items.append(f"<li><b>{opt_text}</b></li>")
+                    back_items.append(f"<li><span class='correct'>{opt_text}</span></li>")
                 else:
                     back_items.append(f"<li>{opt_text}</li>")
-            back = f"<div style='text-align:left'><b>{q_header}</b><br>{question_text}<br><ul>{(''.join(back_items))}</ul></div>"
-            anki_cards.append(f"{front}\t{back}")
+            back = f"<b>{q_header}</b><br><br>{question_text}<br><br><ul>{''.join(back_items)}</ul>"
 
+            note = genanki.Note(model=model, fields=[front, back])
+            deck.add_note(note)
+            cards_count += 1
+
+    # Save .apkg
     anki_dir = base / 'Anki-generation' / 'anki'
     anki_dir.mkdir(parents=True, exist_ok=True)
-    anki_path = anki_dir / f"{name}-anki.txt"
-    with open(anki_path, 'w', encoding='utf-8') as f:
-        f.write('\n'.join(anki_cards))
+    apkg_path = anki_dir / f"{name}.apkg"
+    genanki.Package(deck).write_to_file(str(apkg_path))
 
     if on_progress:
-        on_progress(f"anki → {anki_path.name} ({len(anki_cards)} cards)")
+        on_progress(f"anki → {apkg_path.name} ({cards_count} cards)")
 
-    return str(anki_path)
+    return str(apkg_path)
 
 
 def _get_config():
