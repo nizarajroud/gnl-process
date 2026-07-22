@@ -166,9 +166,14 @@ def _apply_v6(cursor):
             audio_path TEXT
         )
     ''')
+    cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('aws', 'aws-whats-new', '', 'generate')")
+    cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('aws', 'aws-papers', '', 'manual')")
+    cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('aws', 'aws-solutions-lib', '', 'manual')")
+    cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('aws', 'aws-whitepapers', '', 'manual')")
+    cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('aws', 'ai-use-cases', '', 'manual')")
+    cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('exams', 'sap-c02', '', 'manual')")
     cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('saved-articles', 'linkedin', '', 'fetch')")
     cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('saved-articles', 'medium', '', 'fetch')")
-    cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('exams', 'sap-c02', '', 'manual')")
     cursor.execute("INSERT INTO schema_version (version) VALUES (6)")
 
 

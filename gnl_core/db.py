@@ -7,7 +7,7 @@ from .config import load_config
 
 load_config()
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'gnl.db')
+DB_PATH = os.environ.get('GNL_DB_PATH', os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'gnl.db'))
 
 
 @contextmanager

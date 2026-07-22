@@ -96,11 +96,30 @@ case "$CHOICE" in
   # Installer les dépendances dans le venv prod
   echo "Installation des dépendances (venv prod)..."
   $PROD_PIP install -e . --quiet 2>/dev/null
-  $PROD_PYTHON setup_database.py
 
   # Copier .env et config depuis dev
   cp "$DEV_DIR/.env" .env 2>/dev/null || true
   cp "$DEV_DIR/gnl-config.json" gnl-config.json 2>/dev/null || true
+
+  # Database mode selection
+  DB_MODE=$(echo -e "db_commune (même DB que dev)\ndb_fresh (nouvelle DB vide)" | fzf --prompt="Base de données > " --height=5 --reverse)
+
+  case "$DB_MODE" in
+    "db_commune"*)
+      grep -q "^GNL_DB_PATH" .env && sed -i "s|^GNL_DB_PATH=.*|GNL_DB_PATH=${DEV_DIR}/gnl.db|" .env || echo "GNL_DB_PATH=${DEV_DIR}/gnl.db" >> .env
+      echo "  DB: commune (${DEV_DIR}/gnl.db)"
+      ;;
+    "db_fresh"*)
+      sed -i '/^GNL_DB_PATH/d' .env
+      rm -f "${PROD_DIR}/gnl.db"
+      $PROD_PYTHON setup_database.py
+      echo "  DB: fresh (${PROD_DIR}/gnl.db)"
+      ;;
+    *)
+      echo "  DB: commune par défaut"
+      grep -q "^GNL_DB_PATH" .env || echo "GNL_DB_PATH=${DEV_DIR}/gnl.db" >> .env
+      ;;
+  esac
 
   # Arrêter le service
   echo "Arrêt du service..."
