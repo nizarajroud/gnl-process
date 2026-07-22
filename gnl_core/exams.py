@@ -187,6 +187,13 @@ def step3_highlight(word_path, on_progress=None):
     all_answers = {}
     max_tokens = int(os.environ.get('BEDROCK_MAX_TOKENS', '4096'))
 
+    # Load prompt template
+    prompt_file = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / 'prompts' / 'exam-highlight.txt'
+    if prompt_file.exists():
+        prompt_template = prompt_file.read_text(encoding='utf-8')
+    else:
+        prompt_template = "Extract correct answers.\n\n{questions}\n\nReturn JSON."
+
     for batch_start in range(0, len(question_blocks), 10):
         batch_end = min(batch_start + 10, len(question_blocks))
         batch = question_blocks[batch_start:batch_end]
@@ -195,30 +202,48 @@ def step3_highlight(word_path, on_progress=None):
             on_progress(f"Questions {batch_start + 1}-{batch_end}...")
 
         batch_text = "\n\n".join([content for _, content in batch])
-
-        # Load prompt from external file
-        prompt_file = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / 'prompts' / 'exam-highlight.txt'
-        if prompt_file.exists():
-            prompt_template = prompt_file.read_text(encoding='utf-8')
-        else:
-            prompt_template = "Extract the correct answer(s) for each question below.\n\n{questions}\n\nReturn as JSON: {\"1\": [\"answer1\"], \"2\": [\"answer1\", \"answer2\"], ...}\nOnly return the JSON, nothing else."
         prompt = prompt_template.replace('{questions}', batch_text)
 
-        try:
-            response = client.converse(
-                modelId=model_id,
-                messages=[{"role": "user", "content": [{"text": prompt}]}],
-                inferenceConfig={"maxTokens": max_tokens}
-            )
-            result_text = response['output']['message']['content'][0]['text']
-            import json
-            json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
-            if json_match:
-                batch_answers = json.loads(json_match.group())
-                all_answers.update(batch_answers)
-        except Exception as e:
-            if on_progress:
-                on_progress(f"⚠ Erreur batch {batch_start}: {str(e)[:50]}")
+        # Retry up to 2 times on JSON parse failure
+        for attempt in range(3):
+            try:
+                response = client.converse(
+                    modelId=model_id,
+                    messages=[{"role": "user", "content": [{"text": prompt}]}],
+                    inferenceConfig={"maxTokens": max_tokens}
+                )
+                result_text = response['output']['message']['content'][0]['text']
+                import json
+                json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+                if json_match:
+                    raw_json = json_match.group()
+                    try:
+                        batch_answers = json.loads(raw_json)
+                    except json.JSONDecodeError:
+                        # Try to fix common JSON issues
+                        fixed = raw_json.replace('\n', ' ').replace('\r', '')
+                        # Fix trailing commas
+                        fixed = re.sub(r',\s*}', '}', fixed)
+                        fixed = re.sub(r',\s*]', ']', fixed)
+                        # Fix unescaped quotes in values
+                        try:
+                            batch_answers = json.loads(fixed)
+                        except json.JSONDecodeError:
+                            if attempt < 2:
+                                if on_progress:
+                                    on_progress(f"  ⚠ JSON invalide, retry {attempt + 1}...")
+                                continue
+                            else:
+                                raise
+                    all_answers.update(batch_answers)
+                    break  # Success
+            except json.JSONDecodeError as e:
+                if attempt == 2 and on_progress:
+                    on_progress(f"⚠ Erreur batch {batch_start}: {str(e)[:50]}")
+            except Exception as e:
+                if on_progress:
+                    on_progress(f"⚠ Erreur batch {batch_start}: {str(e)[:50]}")
+                break  # Non-JSON errors don't retry
 
     return all_answers
 
