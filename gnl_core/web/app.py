@@ -83,10 +83,10 @@ async def lifespan(app: FastAPI):
     if not os.path.ismount('/mnt/g'):
         subprocess.run(['sudo', 'mount', '-t', 'drvfs', 'G:', '/mnt/g'], capture_output=True)
 
-    # Start scheduler with configured time
-    schedule_time = os.getenv('GNL_SCHEDULE_TIME', '08:00')
-    hour, minute = schedule_time.split(':')
-    scheduler.add_job(_deliver_all_sync, CronTrigger(hour=int(hour), minute=int(minute)), id='daily_deliver', replace_existing=True, misfire_grace_time=3600, args=[asyncio.get_event_loop()])
+    # Daily deliver scheduler (disabled — manual only)
+    # schedule_time = os.getenv('GNL_SCHEDULE_TIME', '08:00')
+    # hour, minute = schedule_time.split(':')
+    # scheduler.add_job(_deliver_all_sync, CronTrigger(hour=int(hour), minute=int(minute)), id='daily_deliver', replace_existing=True, misfire_grace_time=3600, args=[asyncio.get_event_loop()])
 
     # LinkedIn: daily fetch at 2:00 AM and batch generate at 3:00 AM (America/Toronto)
     linkedin_fetch_time = os.getenv('LINKEDIN_FETCH_TIME', '02:00')
