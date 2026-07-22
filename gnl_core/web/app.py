@@ -399,10 +399,11 @@ async def clean_exam(theme: str, subtheme: str, filename: str):
         p.unlink()
         removed += 1
     # anki/
-    p = base / 'Anki-generation' / 'anki' / f"{name}-anki.txt"
-    if p.exists():
-        p.unlink()
-        removed += 1
+    for ext in ['-anki.txt', '.apkg']:
+        p = base / 'Anki-generation' / 'anki' / f"{name}{ext}"
+        if p.exists():
+            p.unlink()
+            removed += 1
 
     await broadcast_log(f"🗑 Nettoyé: {name} ({removed} fichiers supprimés)")
     return {"status": "ok", "removed": removed}
