@@ -157,7 +157,7 @@ def step3_highlight(word_path, on_progress=None):
     """Step 3: Identify correct answers using Bedrock/Claude.
     
     Returns:
-        Dict {question_number: [correct_answers]}
+        Dict {question_number: {"type": str, "options": list, "correct": list}}
     """
     import boto3
     from botocore.config import Config
@@ -225,6 +225,7 @@ def step3_highlight(word_path, on_progress=None):
 
 def step4_compact(word_path, answers, theme, subtheme, on_progress=None):
     """Step 4: Generate compact version (Markdown + PDF).
+    Uses structured answers from step3 (type, options, correct).
     
     Returns:
         Path to compact markdown
@@ -236,50 +237,70 @@ def step4_compact(word_path, answers, theme, subtheme, on_progress=None):
     base = get_exam_base(theme, subtheme)
     name = Path(word_path).stem
 
-    # Read formatted text
+    # Read formatted text for question text extraction
     doc = Document(word_path)
     text = "\n".join([para.text for para in doc.paragraphs])
 
-    # Parse and generate compact
+    # Extract question texts
     questions = re.split(r'(Question\s+\d+:)', text)
-    compact_lines = [f"# {name} — Compact Version\n"]
-
+    question_texts = {}
     for i in range(1, len(questions), 2):
         if i + 1 < len(questions):
-            q_header = questions[i].strip()
-            q_content = questions[i + 1].strip()
-            q_num = re.search(r'\d+', q_header)
-            if not q_num:
-                continue
-            num = q_num.group()
-
-            # Get question text and options
-            lines = q_content.split('\n')
-            question_text = []
-            options = []
-
-            for line in lines:
-                if line.strip().startswith('- '):
-                    options.append(line.strip()[2:])
-                elif 'Explanation' in line or 'Hence,' in line:
-                    break
-                elif not options:
+            q_num = re.search(r'\d+', questions[i])
+            if q_num:
+                num = q_num.group()
+                lines = questions[i + 1].strip().split('\n')
+                # Get question text (before options/explanation)
+                q_text_lines = []
+                for line in lines:
+                    if line.strip().startswith('- ') or 'Explanation' in line or 'Hence,' in line or line.strip() == 'Incorrect':
+                        break
                     if line.strip():
-                        question_text.append(line.strip())
+                        q_text_lines.append(line.strip())
+                question_texts[num] = ' '.join(q_text_lines[:3])
 
+    compact_lines = [f"# {name} — Compact Version\n"]
+
+    for num in sorted(answers.keys(), key=lambda x: int(x)):
+        entry = answers[num]
+        
+        # Handle both old format (list) and new format (dict)
+        if isinstance(entry, list):
+            # Old format: just a list of correct answers
+            q_text = question_texts.get(num, '')
             compact_lines.append(f"\n**Question {num}:**")
             compact_lines.append("")
-            compact_lines.append(' '.join(question_text[:3]))  # First 3 lines as question
+            compact_lines.append(q_text)
             compact_lines.append("")
+            for ans in entry:
+                compact_lines.append(f"- **{ans}**")
+            continue
 
-            correct = answers.get(num, [])
+        # New structured format
+        q_type = entry.get('type', 'single')
+        options = entry.get('options', [])
+        correct = entry.get('correct', [])
+        q_text = question_texts.get(num, '')
+
+        compact_lines.append(f"\n**Question {num}:** [{q_type}]")
+        compact_lines.append("")
+        compact_lines.append(q_text)
+        compact_lines.append("")
+
+        if q_type == 'order':
+            # Show all options, then show correct order
             for opt in options:
-                # Normalize unicode (non-breaking spaces etc.) before matching
-                opt_norm = opt.lower().strip().replace('\u00a0', ' ')
-                is_correct = any(
-                    opt_norm[:50] in ans.lower().replace('\u00a0', ' ') or ans.lower().replace('\u00a0', ' ')[:50] in opt_norm
-                    for ans in correct
-                ) if correct else False
+                compact_lines.append(f"- {opt}")
+            compact_lines.append("")
+            compact_lines.append("**Correct order:**")
+            for idx, item in enumerate(correct, 1):
+                compact_lines.append(f"{idx}. **{item}**")
+        else:
+            # single, multiple, match — mark correct in bold
+            correct_norm = [c.lower().replace('\u00a0', ' ')[:50] for c in correct]
+            for opt in options:
+                opt_norm = opt.lower().replace('\u00a0', ' ')[:50]
+                is_correct = any(opt_norm in cn or cn in opt_norm for cn in correct_norm)
                 if is_correct:
                     compact_lines.append(f"- **{opt}**")
                 else:
@@ -299,7 +320,7 @@ def step4_compact(word_path, answers, theme, subtheme, on_progress=None):
     html_full = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
     <style>body{{font-family:Arial;font-size:11px;margin:30px;}}
     h1{{color:#232f3e;border-bottom:2px solid #ff9900;}}
-    strong{{color:#0073bb;}}</style></head><body>{html_content}</body></html>"""
+    strong{{color:#28a745;}}</style></head><body>{html_content}</body></html>"""
     HTML(string=html_full).write_pdf(str(compact_pdf_dir / f"{name}.pdf"))
 
     if on_progress:
@@ -310,6 +331,7 @@ def step4_compact(word_path, answers, theme, subtheme, on_progress=None):
 
 def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
     """Step 5: Generate Anki .apkg package from compact markdown.
+    Handles all question types: single, multiple, order, match.
     
     Returns:
         Path to .apkg file
@@ -324,7 +346,7 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
         content = f.read()
 
     # Model for exam cards
-    font_size = os.environ.get('ANKI_FONT_SIZE', '14')
+    font_size = os.environ.get('ANKI_FONT_SIZE', '16')
     model_id = random.randrange(1 << 30, 1 << 31)
     model = genanki.Model(
         model_id,
@@ -341,6 +363,7 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
         css=f"""
             .card {{ text-align: left; font-family: Arial; font-size: {font_size}px; padding: 10px; }}
             ul {{ padding-left: 20px; }}
+            ol {{ padding-left: 20px; }}
             li {{ margin-bottom: 5px; }}
             .correct {{ color: #28a745; font-weight: bold; }}
             b {{ color: #0073bb; }}
@@ -351,46 +374,79 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
     deck_id = random.randrange(1 << 30, 1 << 31)
     deck = genanki.Deck(deck_id, name)
 
-    # Parse questions
-    questions = re.split(r'(\*\*Question\s+\d+:\*\*)', content)
+    # Parse questions from markdown
+    questions = re.split(r'(\*\*Question\s+\d+:\*\*(?:\s*\[[a-z]+\])?)', content)
 
     cards_count = 0
     for i in range(1, len(questions), 2):
-        q_header = questions[i].replace('**', '')
+        q_header_raw = questions[i]
+        q_header = re.sub(r'\*\*', '', q_header_raw).strip()
+        q_type_match = re.search(r'\[(\w+)\]', q_header)
+        q_type = q_type_match.group(1) if q_type_match else 'single'
+        q_header_clean = re.sub(r'\s*\[\w+\]', '', q_header)
+
         q_body = questions[i + 1].strip() if i + 1 < len(questions) else ''
         lines = q_body.split('\n')
 
+        # Get question text (first non-empty line)
         question_text = ''
         for l in lines:
-            if l.strip():
+            if l.strip() and not l.strip().startswith('- ') and not l.strip().startswith('**Correct') and 'correct order' not in l.lower():
                 question_text = l.strip()
                 break
 
-        options = []
-        for line in lines:
-            line = line.strip()
-            if line.startswith('- **') and line.endswith('**'):
-                opt_text = line[4:-2]
-                options.append(('correct', opt_text))
-            elif line.startswith('- '):
-                opt_text = line[2:]
-                options.append(('wrong', opt_text))
+        if q_type == 'order':
+            # Options = regular list items, Correct order = numbered bold items
+            options = []
+            correct_order = []
+            in_correct = False
+            for line in lines:
+                line = line.strip()
+                if 'correct order' in line.lower():
+                    in_correct = True
+                elif in_correct and re.match(r'^\d+\.', line):
+                    item = re.sub(r'^\d+\.\s*\*\*(.+)\*\*$', r'\1', line)
+                    correct_order.append(item)
+                elif line.startswith('- '):
+                    options.append(line[2:])
 
-        if question_text and options:
-            options_html = "".join(f"<li>{opt_text}</li>" for _, opt_text in options)
-            front = f"<b>{q_header}</b><br><br>{question_text}<br><br><ul>{options_html}</ul>"
+            if question_text and options:
+                options_html = "".join(f"<li>{o}</li>" for o in options)
+                front = f"<b>{q_header_clean}</b><br><br>{question_text}<br><br><ul>{options_html}</ul>"
 
-            back_items = []
-            for status, opt_text in options:
-                if status == 'correct':
-                    back_items.append(f"<li><span class='correct'>{opt_text}</span></li>")
-                else:
-                    back_items.append(f"<li>{opt_text}</li>")
-            back = f"<b>{q_header}</b><br><br>{question_text}<br><br><ul>{''.join(back_items)}</ul>"
+                order_html = "".join(f"<li><span class='correct'>{o}</span></li>" for o in correct_order)
+                back = f"<b>{q_header_clean}</b><br><br>{question_text}<br><br><b>Correct order:</b><ol>{order_html}</ol>"
 
-            note = genanki.Note(model=model, fields=[front, back])
-            deck.add_note(note)
-            cards_count += 1
+                note = genanki.Note(model=model, fields=[front, back])
+                deck.add_note(note)
+                cards_count += 1
+        else:
+            # single, multiple, match
+            options = []
+            for line in lines:
+                line = line.strip()
+                if line.startswith('- **') and line.endswith('**'):
+                    opt_text = line[4:-2]
+                    options.append(('correct', opt_text))
+                elif line.startswith('- '):
+                    opt_text = line[2:]
+                    options.append(('wrong', opt_text))
+
+            if question_text and options:
+                options_html = "".join(f"<li>{opt_text}</li>" for _, opt_text in options)
+                front = f"<b>{q_header_clean}</b><br><br>{question_text}<br><br><ul>{options_html}</ul>"
+
+                back_items = []
+                for status, opt_text in options:
+                    if status == 'correct':
+                        back_items.append(f"<li><span class='correct'>{opt_text}</span></li>")
+                    else:
+                        back_items.append(f"<li>{opt_text}</li>")
+                back = f"<b>{q_header_clean}</b><br><br>{question_text}<br><br><ul>{''.join(back_items)}</ul>"
+
+                note = genanki.Note(model=model, fields=[front, back])
+                deck.add_note(note)
+                cards_count += 1
 
     # Save .apkg
     anki_dir = base / 'Anki-generation' / 'anki'

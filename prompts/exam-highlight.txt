@@ -1,25 +1,47 @@
-You are analyzing exam questions with their explanations to identify the correct answer(s).
-
-IMPORTANT RULES:
-- Base your answer EXCLUSIVELY on the explanation provided after each question
-- Do NOT use external knowledge — only what is written in the document
-- Read the full explanation carefully to determine which option(s) are correct
-- For "Select and order" questions, provide the correct order based on the explanation
-- For "Select TWO/THREE" questions, identify all correct options mentioned in the explanation
+You are analyzing exam questions to extract their structure and identify correct answers.
+Base your answers EXCLUSIVELY on the explanation provided after each question.
+Do NOT use external knowledge — only what is written in the document.
 
 Here are the questions with their explanations:
 
 {questions}
 
-For each question, return the correct answer(s) as they appear in the options list.
-Match the EXACT text of the correct option(s).
+For each question, return a structured JSON with:
+1. The question TYPE: "single" (one correct answer), "multiple" (2+ correct answers), "order" (select and arrange in sequence), or "match" (associate items)
+2. ALL OPTIONS exactly as they appear in the text
+3. The CORRECT answer(s) — copied exactly from the options
 
-Return ONLY a JSON object with this format:
-{{"1": ["exact text of correct option"], "2": ["option A", "option B"], ...}}
+Return ONLY a JSON object:
+{{
+  "1": {{
+    "type": "single",
+    "options": ["exact option A text", "exact option B text", "exact option C text", "exact option D text"],
+    "correct": ["exact text of the correct option"]
+  }},
+  "2": {{
+    "type": "multiple",
+    "options": ["opt A", "opt B", "opt C", "opt D", "opt E"],
+    "correct": ["opt B", "opt D"]
+  }},
+  "5": {{
+    "type": "order",
+    "options": ["step A", "step B", "step C", "step D", "step E", "step F", "step G"],
+    "correct": ["step C", "step A", "step F", "step B", "step E"]
+  }},
+  "6": {{
+    "type": "match",
+    "options": ["mechanism A", "mechanism B", "mechanism C", "mechanism D"],
+    "correct": ["mechanism A", "mechanism C", "mechanism D"]
+  }}
+}}
 
-Rules for the JSON:
-- Key = question number as string
-- Value = array of correct option texts (copied exactly from the options)
-- For ordering questions, put items in the correct order
-- If the explanation clearly indicates which option is wrong but not which is right, exclude the wrong ones and return the remaining option(s)
-- Every question MUST have at least one answer — if unsure, pick the option most supported by the explanation
+RULES:
+- "type" is determined by the question phrasing:
+  - Contains "Select and order" → "order"
+  - Contains "Select TWO" or "Select THREE" or "Match each" → "multiple" or "match"
+  - Otherwise → "single"
+- "options" must contain ALL choices presented to the candidate (copy exact text)
+- "correct" must be copied EXACTLY from the options array (same text)
+- For "order" type: "correct" items must be in the sequence described in the explanation
+- Every question MUST have options and at least one correct answer
+- Return ONLY valid JSON, nothing else
