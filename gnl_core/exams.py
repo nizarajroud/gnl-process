@@ -338,7 +338,7 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
         templates=[{
             'name': 'Card 1',
             'qfmt': '{{Front}}',
-            'afmt': '{{FrontSide}}<hr id="answer">{{Back}}',
+            'afmt': '{{Back}}',
         }],
         css="""
             .card { text-align: left; font-family: Arial; font-size: 14px; padding: 10px; }
