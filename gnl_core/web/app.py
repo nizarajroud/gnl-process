@@ -1413,7 +1413,7 @@ async def preview_prepare(theme: str, subtheme: str, filename: str):
     name = os.path.splitext(filename)[0]
 
     if theme == 'exams':
-        # For exams: count questions in the formatted word file
+        # For exams: estimate questions from original file or formatted word
         from gnl_core.exams import get_exam_base
         base = get_exam_base(theme, subtheme)
         word_path = base / 'pdf-formatting' / 'word' / (name + '.docx')
@@ -1423,9 +1423,19 @@ async def preview_prepare(theme: str, subtheme: str, filename: str):
             text = "\n".join([p.text for p in doc.paragraphs])
             import re
             total_questions = len(re.findall(r'Question\s+\d+:', text))
-            return {"name": name, "total_pages": total_questions, "suggested_pages": 5}
         else:
-            return {"name": name, "total_pages": 0, "suggested_pages": 5, "error": "Fichier word introuvable. Lancez d'abord 🎴 Anki."}
+            # Estimate from original file
+            if filename.lower().endswith('.docx'):
+                from docx import Document
+                doc = Document(pdf_path)
+                text = "\n".join([p.text for p in doc.paragraphs])
+                import re
+                total_questions = len(re.findall(r'Question\s+\d+:?', text))
+                if total_questions == 0:
+                    total_questions = max(1, len(doc.paragraphs) // 20)
+            else:
+                total_questions = 50  # rough estimate
+        return {"name": name, "total_pages": total_questions, "suggested_pages": 5}
 
     if filename.lower().endswith('.docx'):
         from docx import Document
@@ -1458,33 +1468,64 @@ async def prepare_from_inbox(request: Request):
 
     name = custom_name or os.path.splitext(filename)[0]
 
-    # Exam-specific: split by questions from the formatted word file
+    # Exam-specific: full pipeline (Anki + split by questions)
     if theme == 'exams':
-        from gnl_core.exams import get_exam_base, split_exam_by_questions
-        base = get_exam_base(theme, subtheme)
-        word_path = base / 'pdf-formatting' / 'word' / filename
-        # If word file doesn't exist with same name, try .docx
-        if not word_path.exists():
-            word_path = base / 'pdf-formatting' / 'word' / (name + '.docx')
-        if not word_path.exists():
-            return {"status": "error", "error": f"Fichier word formatté introuvable. Lancez d'abord 🎴 Anki."}
+        from gnl_core.exams import get_exam_base, step1_format, step2_convert_pdf, step3_highlight, step4_compact, step5_anki, split_exam_by_questions
+        import shutil
 
+        base = get_exam_base(theme, subtheme)
+        loop = asyncio.get_event_loop()
+        origin = 'dojo' if 'dojo' in filename.lower() else 'udemy'
         questions_per_chunk = pages_per_episode if pages_per_episode > 0 else 5
-        await broadcast_log(f"▶ Preparing exam {name} ({questions_per_chunk} questions/épisode)")
+
+        def on_p(msg):
+            asyncio.run_coroutine_threadsafe(broadcast_log(f"  {msg}"), loop)
 
         try:
+            # Step 1: Copy to origin + format
+            origin_dir = base / 'pdf-formatting' / 'origin'
+            origin_dir.mkdir(parents=True, exist_ok=True)
+            origin_path = origin_dir / filename
+            if not origin_path.exists():
+                shutil.copy2(pdf_path, str(origin_path))
+
+            await broadcast_log("▶ [1/7] FORMAT (origin → word)")
+            word_path = await loop.run_in_executor(None, lambda: step1_format(str(origin_path), theme, subtheme, origin, on_progress=on_p))
+
+            # Step 2: Convert to PDF
+            await broadcast_log("▶ [2/7] CONVERT (word → pdf)")
+            await loop.run_in_executor(None, lambda: step2_convert_pdf(word_path, theme, subtheme, on_progress=on_p))
+
+            # Step 3: Highlight
+            await broadcast_log("▶ [3/7] HIGHLIGHT (Bedrock)")
+            answers = await loop.run_in_executor(None, lambda: step3_highlight(word_path, on_progress=on_p))
+            await broadcast_log(f"  ✓ {len(answers)} questions")
+
+            # Step 4: Compact
+            await broadcast_log("▶ [4/7] COMPACT (markdown + pdf)")
+            compact_path = await loop.run_in_executor(None, lambda: step4_compact(word_path, answers, theme, subtheme, on_progress=on_p))
+
+            # Step 5: Anki
+            await broadcast_log("▶ [5/7] ANKI (.apkg)")
+            anki_path = await loop.run_in_executor(None, lambda: step5_anki(compact_path, theme, subtheme, on_progress=on_p))
+            await broadcast_log(f"  ✓ {anki_path}")
+
+            # Step 6: Split by questions
+            await broadcast_log(f"▶ [6/7] SPLIT ({questions_per_chunk} questions/épisode)")
+            result = await loop.run_in_executor(None, lambda: split_exam_by_questions(word_path, questions_per_chunk, name, theme, subtheme))
+            await broadcast_log(f"  ✓ {len(result['files'])} morceaux")
+
+            # Step 7: Insert DB
+            await broadcast_log("▶ [7/7] INSERT DB → Production")
             from gnl_core.collect import collect
             from gnl_core.titles import generate_titles
-
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(None, lambda: split_exam_by_questions(str(word_path), questions_per_chunk, name, theme, subtheme))
             parent_id = collect(result)
             count = generate_titles(parent_id)
-            await broadcast_log(f"✓ Prepared: {len(result['files'])} chunks, parent_id={parent_id}, {count} titles")
+            await broadcast_log(f"✓ Pipeline terminé: {name} (Anki + {len(result['files'])} épisodes)")
             await broadcast_status()
             return {"status": "ok", "parent_id": parent_id}
         except Exception as e:
-            await broadcast_log(f"⚠ Prepare failed: {str(e)[:100]}")
+            await broadcast_log(f"⚠ Erreur: {str(e)[:100]}")
             return {"status": "error", "error": str(e)}
 
     # Standard flow for non-exam files
