@@ -59,15 +59,21 @@ def _deliver_all_sync(loop=None):
 def _scheduled_linkedin_fetch():
     """Scheduled: fetch LinkedIn saved posts."""
     import asyncio
-    loop = asyncio.new_event_loop()
-    loop.run_until_complete(_fetch_saved_articles('linkedin'))
+    try:
+        loop = asyncio.get_event_loop()
+        asyncio.run_coroutine_threadsafe(_fetch_saved_articles('linkedin'), loop)
+    except Exception:
+        pass
 
 
 def _scheduled_linkedin_generate():
     """Scheduled: batch generate for LinkedIn articles."""
     import asyncio
-    loop = asyncio.new_event_loop()
-    loop.run_until_complete(_batch_generate('linkedin'))
+    try:
+        loop = asyncio.get_event_loop()
+        asyncio.run_coroutine_threadsafe(_batch_generate('linkedin'), loop)
+    except Exception:
+        pass
 
 
 @asynccontextmanager
@@ -87,8 +93,8 @@ async def lifespan(app: FastAPI):
     linkedin_generate_time = os.getenv('LINKEDIN_GENERATE_TIME', '03:00')
     lf_hour, lf_min = linkedin_fetch_time.split(':')
     lg_hour, lg_min = linkedin_generate_time.split(':')
-    scheduler.add_job(_scheduled_linkedin_fetch, CronTrigger(hour=int(lf_hour), minute=int(lf_min), timezone='America/Toronto'), id='linkedin_fetch', replace_existing=True)
-    scheduler.add_job(_scheduled_linkedin_generate, CronTrigger(hour=int(lg_hour), minute=int(lg_min), timezone='America/Toronto'), id='linkedin_generate', replace_existing=True)
+    scheduler.add_job(_scheduled_linkedin_fetch, CronTrigger(hour=int(lf_hour), minute=int(lf_min), timezone='America/Toronto'), id='linkedin_fetch', replace_existing=True, misfire_grace_time=3600)
+    scheduler.add_job(_scheduled_linkedin_generate, CronTrigger(hour=int(lg_hour), minute=int(lg_min), timezone='America/Toronto'), id='linkedin_generate', replace_existing=True, misfire_grace_time=3600)
 
     scheduler.start()
 
