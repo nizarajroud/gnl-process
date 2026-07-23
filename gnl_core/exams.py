@@ -246,7 +246,7 @@ def step3_highlight(source_path, on_progress=None):
     else:
         prompt_template = "Extract correct answers.\n\n{questions}\n\nReturn JSON."
 
-    batch_size = int(config_data.get('EXAM_NLM_BATCH_SIZE', '3'))
+    batch_size = int(config_data.get('EXAM_NLM_BATCH_SIZE', '1'))
     all_answers = {}
 
     # === TIER 1: NotebookLM ===
@@ -335,23 +335,27 @@ def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size
 
     # Query by batch — notebook already has the full content as source
     # No need to send question text, just ask by number range
-    nlm_query_template = '''For Questions {start} to {end}, return ONLY a JSON object with this exact format:
+    nlm_query_single = '''For Question {num}, based EXCLUSIVELY on the explanation provided in the document, return ONLY a JSON object:
 {{
-  "{start}": {{"type": "single", "options": ["exact option text", ...], "correct": ["exact correct option"]}},
-  ...
+  "{num}": {{"type": "single or multiple or order", "options": ["exact option text as in document", ...], "correct": ["exact correct option(s)"]}}
 }}
 Rules:
-- type: "single" (1 answer), "multiple" (2+ answers), "order" (select and arrange in sequence)
-- options: ALL options exactly as written in the source document
-- correct: copied EXACTLY from the options array
-- Base answers EXCLUSIVELY on the explanations provided in the document
+- type: "single" (1 answer), "multiple" (2+ answers), "order" (select and arrange)
+- options: ALL options exactly as written in the source
+- correct: copied EXACTLY from options, based on what the explanation says is correct
 - Return ONLY valid JSON, nothing else'''
 
     for batch_start in range(0, len(question_blocks), batch_size):
         batch = question_blocks[batch_start:batch_start + batch_size]
-        q_start = int(batch[0][0])
-        q_end = int(batch[-1][0])
-        query_text = nlm_query_template.format(start=q_start, end=q_end)
+        if batch_size == 1:
+            q_num = batch[0][0]
+            query_text = nlm_query_single.format(num=q_num)
+            q_label = f"Q{q_num}"
+        else:
+            q_start = int(batch[0][0])
+            q_end = int(batch[-1][0])
+            query_text = nlm_query_single.replace('Question {num}', f'Questions {q_start} to {q_end}').replace('{num}', str(q_start))
+            q_label = f"Q{q_start}-{q_end}"
 
         # Retry up to 3 times
         answer_text = ''
@@ -387,7 +391,7 @@ Rules:
                     pass
 
         if on_progress:
-            on_progress(f"NLM Q{q_start}-{q_end} ✓ ({len(all_answers)} total)")
+            on_progress(f"NLM {q_label} ✓ ({len(all_answers)} total)")
 
     return all_answers
 
