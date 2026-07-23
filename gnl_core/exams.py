@@ -330,15 +330,7 @@ def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size
 
     # Query by batch — notebook already has the full content as source
     # No need to send question text, just ask by number range
-    nlm_query_single = '''For Question {num}, based EXCLUSIVELY on the explanation provided in the document, return ONLY a JSON object:
-{{
-  "{num}": {{"type": "single or multiple or order", "options": ["exact option text as in document", ...], "correct": ["exact correct option(s)"]}}
-}}
-Rules:
-- type: "single" (1 answer), "multiple" (2+ answers), "order" (select and arrange)
-- options: ALL options exactly as written in the source
-- correct: copied EXACTLY from options, based on what the explanation says is correct
-- Return ONLY valid JSON, nothing else'''
+    nlm_query_single = '''Question {num}: Which option(s) is/are correct and why? List all the options, then tell me which one(s) is/are the correct answer.'''
 
     for batch_start in range(0, len(question_blocks), batch_size):
         batch = question_blocks[batch_start:batch_start + batch_size]
@@ -368,19 +360,17 @@ Rules:
                 else:
                     raise
 
-        # Parse JSON from response
-        json_match = re.search(r'\{.*\}', answer_text, re.DOTALL)
-        if json_match:
-            try:
-                parsed = json.loads(json_match.group())
-                all_answers.update(parsed)
-            except json.JSONDecodeError:
-                # Try fixing common issues
-                fixed = json_match.group().replace('\n', ' ')
-                fixed = re.sub(r',\s*}', '}', fixed)
-                fixed = re.sub(r',\s*]', ']', fixed)
+        # Parse natural language response to extract correct answers
+        if answer_text and batch_size == 1:
+            parsed = _parse_nlm_natural_response(q_num, answer_text, batch[0][1])
+            if parsed:
+                all_answers[q_num] = parsed
+        elif answer_text:
+            # Try JSON parsing for batch mode
+            json_match = re.search(r'\{.*\}', answer_text, re.DOTALL)
+            if json_match:
                 try:
-                    parsed = json.loads(fixed)
+                    parsed = json.loads(json_match.group())
                     all_answers.update(parsed)
                 except json.JSONDecodeError:
                     pass
@@ -389,6 +379,53 @@ Rules:
             on_progress(f"NLM {q_label} ✓ ({len(all_answers)} total)")
 
     return all_answers
+
+
+def _parse_nlm_natural_response(q_num, answer_text, question_content):
+    """Parse a natural language NLM response to extract structured answer data."""
+    # Extract all options from the original question content
+    options = re.findall(r'^[-•]\s*(.+?)$', question_content, re.MULTILINE)
+    if not options:
+        options = re.findall(r'^([A-F][).]\s*.+?)$', question_content, re.MULTILINE)
+
+    # Detect correct answer(s) from NLM response
+    correct = []
+    answer_lower = answer_text.lower()
+
+    for opt in options:
+        opt_clean = opt.strip()
+        # Check if this option (or significant part) is mentioned as correct
+        opt_short = opt_clean[:60].lower()
+        if opt_short in answer_lower:
+            # Check if it's marked as correct (not incorrect)
+            # Find the position of this option mention
+            pos = answer_lower.find(opt_short)
+            surrounding = answer_lower[max(0, pos-50):pos+len(opt_short)+100]
+            if 'correct' in surrounding and 'incorrect' not in surrounding:
+                correct.append(opt_clean)
+            elif 'is the correct' in surrounding or 'is correct' in surrounding:
+                correct.append(opt_clean)
+
+    # Fallback: look for "correct answer is" pattern
+    if not correct:
+        # Look for bold or emphasized options
+        correct_match = re.findall(r'(?:correct answer|correct option)[s]?\s*(?:is|are)[:\s]*(.+?)(?:\.|$)', answer_text, re.IGNORECASE)
+        if correct_match:
+            for match in correct_match:
+                for opt in options:
+                    if opt.strip()[:40].lower() in match.lower() or match.strip()[:40].lower() in opt.lower():
+                        correct.append(opt.strip())
+
+    # Determine type
+    q_type = "single"
+    if len(correct) > 1:
+        q_type = "multiple"
+    if re.search(r'(?i)select\s+and\s+order|arrange|sequence', question_content):
+        q_type = "order"
+
+    if correct:
+        return {"type": q_type, "options": [o.strip() for o in options], "correct": correct}
+    return None
 
 
 def _highlight_via_bedrock(question_blocks, prompt_template, batch_size, config_data, on_progress=None):
