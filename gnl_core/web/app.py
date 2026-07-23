@@ -494,7 +494,7 @@ async def _process_exam(theme, subtheme, filename):
     origin = 'dojo' if 'dojo' in filename.lower() else 'udemy'
 
     try:
-        from gnl_core.exams import get_exam_base, step1_format, step2b_full_markdown, step3_highlight, step4_compact, step5_anki
+        from gnl_core.exams import get_exam_base, step1_format, step2b_full_markdown, step3_highlight, step5_anki
         import shutil
 
         # Move file to assets/pdf-formatting/origin/
@@ -526,14 +526,9 @@ async def _process_exam(theme, subtheme, filename):
         answers = await loop.run_in_executor(None, lambda: step3_highlight(md_path, on_progress=on_p1))
         await broadcast_log(f"  ✓ {len(answers)} questions analysées")
 
-        # Step 4: compact (markdown + pdf)
-        await broadcast_log("▶ [4/5] COMPACT (markdown + pdf)")
-        compact_path = await loop.run_in_executor(None, lambda: step4_compact(md_path, answers, theme, subtheme, on_progress=on_p1))
-        await broadcast_log(f"  ✓ {compact_path}")
-
-        # Step 5: anki cards
-        await broadcast_log("▶ [5/5] ANKI (flashcards)")
-        anki_path = await loop.run_in_executor(None, lambda: step5_anki(compact_path, theme, subtheme, on_progress=on_p1))
+        # Step 4: anki cards (directly from answers)
+        await broadcast_log("▶ [4/4] ANKI (flashcards)")
+        anki_path = await loop.run_in_executor(None, lambda: step5_anki(answers, md_path, theme, subtheme, on_progress=on_p1))
         await broadcast_log(f"  ✓ {anki_path}")
 
         await broadcast_log(f"✓ Pipeline terminé: {name}")
@@ -1484,7 +1479,7 @@ async def prepare_from_inbox(request: Request):
 
     # Exam-specific: branched pipeline (trunk + anki/generate/both)
     if theme == 'exams':
-        from gnl_core.exams import get_exam_base, step1_format, step2b_full_markdown, step3_highlight, step4_compact, step5_anki, split_exam_by_questions
+        from gnl_core.exams import get_exam_base, step1_format, step2b_full_markdown, step3_highlight, step5_anki, split_exam_by_questions
         import shutil
 
         base = get_exam_base(theme, subtheme)
@@ -1519,11 +1514,8 @@ async def prepare_from_inbox(request: Request):
                 answers = await loop.run_in_executor(None, lambda: step3_highlight(md_path, on_progress=on_p))
                 await broadcast_log(f"  ✓ {len(answers)} questions")
 
-                await broadcast_log("▶ [COMPACT] Markdown structuré")
-                compact_path = await loop.run_in_executor(None, lambda: step4_compact(md_path, answers, theme, subtheme, on_progress=on_p))
-
                 await broadcast_log("▶ [ANKI] Génération .apkg")
-                anki_path = await loop.run_in_executor(None, lambda: step5_anki(compact_path, theme, subtheme, on_progress=on_p))
+                anki_path = await loop.run_in_executor(None, lambda: step5_anki(answers, md_path, theme, subtheme, on_progress=on_p))
                 await broadcast_log(f"  ✓ {anki_path}")
 
             # === BRANCHE GÉNÉRATION ===

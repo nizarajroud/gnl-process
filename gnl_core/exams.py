@@ -674,10 +674,13 @@ def step4_compact(source_path, answers, theme, subtheme, on_progress=None):
     return str(md_path)
 
 
-def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
-    """Step 5: Generate Anki .apkg package from compact markdown.
-    Handles all question types: single, multiple, order, match.
+def step5_anki(answers, source_path, theme, subtheme, on_progress=None):
+    """Step 5: Generate Anki .apkg package directly from answers dict.
     
+    Args:
+        answers: Dict from step3_highlight {num: {type, options, correct}}
+        source_path: Path to full markdown (for question text extraction)
+        theme, subtheme: For path resolution
     Returns:
         Path to .apkg file
     """
@@ -685,10 +688,25 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
     import random
 
     base = get_exam_base(theme, subtheme)
-    name = Path(compact_md_path).stem
+    name = Path(source_path).stem
 
-    with open(compact_md_path, 'r', encoding='utf-8') as f:
-        content = f.read()
+    # Extract question texts from full markdown
+    md_content = Path(source_path).read_text(encoding='utf-8')
+    parts = re.split(r'## Question\s+\d+:', md_content)
+    question_texts = {}
+    q_headers = re.findall(r'## (Question\s+(\d+):)', md_content)
+    for idx, (_, num) in enumerate(q_headers):
+        if idx + 1 < len(parts):
+            block = parts[idx + 1]
+            # Get question text (lines before first option "- ")
+            lines = block.strip().split('\n')
+            q_lines = []
+            for line in lines:
+                if line.strip().startswith('- '):
+                    break
+                if line.strip():
+                    q_lines.append(line.strip())
+            question_texts[num] = ' '.join(q_lines[:5])
 
     # Model for exam cards
     font_size = os.environ.get('ANKI_FONT_SIZE', '16')
@@ -719,85 +737,50 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
     deck_id = random.randrange(1 << 30, 1 << 31)
     deck = genanki.Deck(deck_id, name)
 
-    # Parse questions from markdown
-    questions = re.split(r'(\*\*Question\s+\d+:\*\*(?:\s*\[[a-z]+\])?)', content)
-
     cards_count = 0
-    for i in range(1, len(questions), 2):
-        q_header_raw = questions[i]
-        q_header = re.sub(r'\*\*', '', q_header_raw).strip()
-        q_type_match = re.search(r'\[(\w+)\]', q_header)
-        q_type = q_type_match.group(1) if q_type_match else 'single'
-        q_header_clean = re.sub(r'\s*\[\w+\]', '', q_header)
+    for num in sorted(answers.keys(), key=lambda x: int(x)):
+        entry = answers[num]
+        q_type = entry.get('type', 'single')
+        options = entry.get('options', [])
+        correct = entry.get('correct', [])
+        q_text = question_texts.get(num, f'Question {num}')
 
-        q_body = questions[i + 1].strip() if i + 1 < len(questions) else ''
-        lines = q_body.split('\n')
-
-        # Get question text (first non-empty line)
-        question_text = ''
-        for l in lines:
-            if l.strip() and not l.strip().startswith('- ') and not l.strip().startswith('**Correct') and 'correct order' not in l.lower():
-                question_text = l.strip()
-                break
+        # Normalize correct answers for matching
+        correct_norm = [c.lower().strip() for c in correct]
 
         if q_type == 'order':
-            # Options = regular list items, Correct order = numbered bold items
-            options = []
-            correct_order = []
-            in_correct = False
-            for line in lines:
-                line = line.strip()
-                if 'correct order' in line.lower():
-                    in_correct = True
-                elif in_correct and re.match(r'^\d+\.', line):
-                    item = re.sub(r'^\d+\.\s*\*\*(.+)\*\*$', r'\1', line)
-                    correct_order.append(item)
-                elif line.startswith('- '):
-                    options.append(line[2:])
-
-            if question_text and options:
-                options_html = "".join(f"<li>{o}</li>" for o in options)
-                front = f"<b>{q_header_clean}</b><br><br>{question_text}<br><br><ul>{options_html}</ul>"
-
-                order_html = "".join(f"<li><span class='correct'>{o}</span></li>" for o in correct_order)
-                back = f"<b>{q_header_clean}</b><br><br>{question_text}<br><br><b>Correct order:</b><ol>{order_html}</ol>"
-
-                note = genanki.Note(model=model, fields=[front, back])
-                deck.add_note(note)
-                cards_count += 1
+            options_html = "".join(f"<li>{o}</li>" for o in options)
+            front = f"<b>Question {num}:</b><br><br>{q_text}<br><br><ul>{options_html}</ul>"
+            order_html = "".join(f"<li><span class='correct'>{o}</span></li>" for o in correct)
+            back = f"<b>Question {num}:</b><br><br>{q_text}<br><br><b>Correct order:</b><ol>{order_html}</ol>"
         else:
-            # single, multiple, match
-            options = []
-            for line in lines:
-                line = line.strip()
-                if line.startswith('- **') and line.endswith('**'):
-                    opt_text = line[4:-2]
-                    options.append(('correct', opt_text))
-                elif line.startswith('- '):
-                    opt_text = line[2:]
-                    options.append(('wrong', opt_text))
+            options_html = "".join(f"<li>{o}</li>" for o in options)
+            front = f"<b>Question {num}:</b><br><br>{q_text}<br><br><ul>{options_html}</ul>"
 
-            if question_text and options:
-                options_html = "".join(f"<li>{opt_text}</li>" for _, opt_text in options)
-                front = f"<b>{q_header_clean}</b><br><br>{question_text}<br><br><ul>{options_html}</ul>"
+            back_items = []
+            for opt in options:
+                opt_norm = opt.lower().strip()
+                is_correct = any(opt_norm == cn or (len(cn) > 20 and cn in opt_norm) or (len(opt_norm) > 20 and opt_norm in cn) for cn in correct_norm)
+                if is_correct:
+                    back_items.append(f"<li><span class='correct'>{opt}</span></li>")
+                else:
+                    back_items.append(f"<li>{opt}</li>")
+            back = f"<b>Question {num}:</b><br><br>{q_text}<br><br><ul>{''.join(back_items)}</ul>"
 
-                back_items = []
-                for status, opt_text in options:
-                    if status == 'correct':
-                        back_items.append(f"<li><span class='correct'>{opt_text}</span></li>")
-                    else:
-                        back_items.append(f"<li>{opt_text}</li>")
-                back = f"<b>{q_header_clean}</b><br><br>{question_text}<br><br><ul>{''.join(back_items)}</ul>"
-
-                note = genanki.Note(model=model, fields=[front, back])
-                deck.add_note(note)
-                cards_count += 1
+        note = genanki.Note(model=model, fields=[front, back])
+        deck.add_note(note)
+        cards_count += 1
 
     # Save .apkg
     anki_dir = base / 'Anki-generation' / 'anki'
     anki_dir.mkdir(parents=True, exist_ok=True)
     apkg_path = anki_dir / f"{name}.apkg"
     genanki.Package(deck).write_to_file(str(apkg_path))
+
+    if on_progress:
+        on_progress(f"anki → {name}.apkg ({cards_count} cards)")
+
+    return str(apkg_path)
 
     if on_progress:
         on_progress(f"anki → {apkg_path.name} ({cards_count} cards)")
