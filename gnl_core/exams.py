@@ -191,19 +191,26 @@ def step2b_full_markdown(word_path, theme, subtheme, on_progress=None):
     return str(md_path)
 
 
-def step3_highlight(word_path, on_progress=None):
+def step3_highlight(source_path, on_progress=None):
     """Step 3: Identify correct answers using Bedrock/Claude.
     
+    Args:
+        source_path: Path to formatted DOCX or full Markdown file
     Returns:
         Dict {question_number: {"type": str, "options": list, "correct": list}}
     """
     import boto3
     from botocore.config import Config
-    from docx import Document
 
-    # Read text from cleaned DOCX
-    doc = Document(word_path)
-    text = "\n".join([para.text for para in doc.paragraphs])
+    # Read text from DOCX or Markdown
+    if source_path.endswith('.md'):
+        text = Path(source_path).read_text(encoding='utf-8')
+        # Remove markdown formatting for Bedrock processing
+        text = text.replace('## ', '').replace('- **', '').replace('**)', ')')
+    else:
+        from docx import Document
+        doc = Document(source_path)
+        text = "\n".join([para.text for para in doc.paragraphs])
 
     config_data = _get_config()
     model_id = config_data.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
@@ -297,23 +304,29 @@ def step3_highlight(word_path, on_progress=None):
     return all_answers
 
 
-def step4_compact(word_path, answers, theme, subtheme, on_progress=None):
+def step4_compact(source_path, answers, theme, subtheme, on_progress=None):
     """Step 4: Generate compact version (Markdown + PDF).
     Uses structured answers from step3 (type, options, correct).
     
+    Args:
+        source_path: Path to formatted DOCX or full Markdown
     Returns:
         Path to compact markdown
     """
-    from docx import Document
     import markdown
     from weasyprint import HTML
 
     base = get_exam_base(theme, subtheme)
-    name = Path(word_path).stem
+    name = Path(source_path).stem
 
-    # Read formatted text for question text extraction
-    doc = Document(word_path)
-    text = "\n".join([para.text for para in doc.paragraphs])
+    # Read text from DOCX or Markdown
+    if source_path.endswith('.md'):
+        text = Path(source_path).read_text(encoding='utf-8')
+        text = text.replace('## ', '').replace('- **', '').replace('**)', ')')
+    else:
+        from docx import Document
+        doc = Document(source_path)
+        text = "\n".join([para.text for para in doc.paragraphs])
 
     # Extract question texts
     questions = re.split(r'(Question\s+\d+:)', text)
@@ -539,29 +552,25 @@ def _get_config():
     return get_config()
 
 
-def split_exam_by_questions(word_path, questions_per_chunk=5, name=None, theme='exams', subtheme='sap-c02'):
-    """Split a formatted DOCX exam by questions (not pages).
+def split_exam_by_questions(md_path, questions_per_chunk=5, name=None, theme='exams', subtheme='sap-c02'):
+    """Split a full Markdown exam by questions into .md chunks.
     
     Args:
-        word_path: Path to the formatted DOCX (from assets/pdf-formatting/word/)
+        md_path: Path to the full Markdown (from assets/pdf-formatting/full-markdown/)
         questions_per_chunk: Number of questions per split
         name: Edition name
         theme, subtheme: For path resolution
     Returns:
         Split result dict compatible with collect()
     """
-    from docx import Document
-    import subprocess
-    import tempfile
 
-    doc = Document(word_path)
-    text = "\n".join([para.text for para in doc.paragraphs])
+    md_content = Path(md_path).read_text(encoding='utf-8')
     
     if not name:
-        name = Path(word_path).stem
+        name = Path(md_path).stem
 
-    # Split by "Question N:"
-    parts = re.split(r'(Question\s+\d+:)', text)
+    # Split by "## Question N:" headers
+    parts = re.split(r'(## Question\s+\d+:)', md_content)
     
     # Rebuild question blocks
     question_blocks = []
@@ -580,43 +589,20 @@ def split_exam_by_questions(word_path, questions_per_chunk=5, name=None, theme='
     output_dir = Path(pdf_parts) / theme / subtheme / name
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Write each chunk as DOCX then convert to PDF
+    # Write each chunk as .md
     files_list = []
-    temp_dir = tempfile.mkdtemp()
-
     for idx, chunk_text in enumerate(chunks, 1):
-        # Create temp DOCX
-        chunk_doc = Document()
-        for line in chunk_text.split('\n'):
-            para = chunk_doc.add_paragraph()
-            if re.match(r'^Question\s+\d+:', line.strip()):
-                para.add_run(line).bold = True
-            else:
-                para.add_run(line)
-        
-        docx_path = os.path.join(temp_dir, f"p{idx}.docx")
-        chunk_doc.save(docx_path)
+        chunk_path = output_dir / f"p{idx}.md"
+        chunk_path.write_text(chunk_text.strip(), encoding='utf-8')
 
-        # Convert to PDF
-        subprocess.run([
-            "libreoffice", "--headless", "--convert-to", "pdf",
-            "--outdir", str(output_dir), docx_path
-        ], capture_output=True)
-
-        pdf_path = output_dir / f"p{idx}.pdf"
-        if pdf_path.exists():
-            files_list.append({
-                'fullPath': str(pdf_path),
-                'parentDir': name,
-                'fileName': f'p{idx}.pdf',
-                'sourceType': 'LocalStorage',
-                'podcastTheme': theme,
-                'podcastSubfolder': subtheme,
-            })
-
-    # Cleanup temp DOCX files
-    import shutil
-    shutil.rmtree(temp_dir, ignore_errors=True)
+        files_list.append({
+            'fullPath': str(chunk_path),
+            'parentDir': name,
+            'fileName': f'p{idx}.md',
+            'sourceType': 'LocalStorage',
+            'podcastTheme': theme,
+            'podcastSubfolder': subtheme,
+        })
 
     return {
         'splitConfiguration': f'{len(chunks)}ck-{questions_per_chunk}q',

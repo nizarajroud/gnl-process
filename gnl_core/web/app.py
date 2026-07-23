@@ -485,7 +485,7 @@ async def _process_exam(theme, subtheme, filename):
     origin = 'dojo' if 'dojo' in filename.lower() else 'udemy'
 
     try:
-        from gnl_core.exams import get_exam_base, step1_format, step2_convert_pdf, step3_highlight, step4_compact, step5_anki
+        from gnl_core.exams import get_exam_base, step1_format, step2_convert_pdf, step2b_full_markdown, step3_highlight, step4_compact, step5_anki
         import shutil
 
         # Move file to assets/pdf-formatting/origin/
@@ -512,14 +512,17 @@ async def _process_exam(theme, subtheme, filename):
         pdf_path = await loop.run_in_executor(None, lambda: step2_convert_pdf(word_path, theme, subtheme, on_progress=on_p1))
         await broadcast_log(f"  ✓ {pdf_path}")
 
+        # Step 2b: word/ → markdown/
+        md_path = await loop.run_in_executor(None, lambda: step2b_full_markdown(word_path, theme, subtheme, on_progress=on_p1))
+
         # Step 3: highlight (Bedrock)
         await broadcast_log("▶ [3/5] HIGHLIGHT (Bedrock → correct answers)")
-        answers = await loop.run_in_executor(None, lambda: step3_highlight(word_path, on_progress=on_p1))
+        answers = await loop.run_in_executor(None, lambda: step3_highlight(md_path, on_progress=on_p1))
         await broadcast_log(f"  ✓ {len(answers)} questions analysées")
 
         # Step 4: compact (markdown + pdf)
         await broadcast_log("▶ [4/5] COMPACT (markdown + pdf)")
-        compact_path = await loop.run_in_executor(None, lambda: step4_compact(word_path, answers, theme, subtheme, on_progress=on_p1))
+        compact_path = await loop.run_in_executor(None, lambda: step4_compact(md_path, answers, theme, subtheme, on_progress=on_p1))
         await broadcast_log(f"  ✓ {compact_path}")
 
         # Step 5: anki cards
@@ -1510,11 +1513,11 @@ async def prepare_from_inbox(request: Request):
             # === BRANCHE ANKI ===
             if do_anki:
                 await broadcast_log("▶ [HIGHLIGHT] Identification des réponses (Bedrock)")
-                answers = await loop.run_in_executor(None, lambda: step3_highlight(word_path, on_progress=on_p))
+                answers = await loop.run_in_executor(None, lambda: step3_highlight(md_path, on_progress=on_p))
                 await broadcast_log(f"  ✓ {len(answers)} questions")
 
                 await broadcast_log("▶ [COMPACT] Markdown structuré")
-                compact_path = await loop.run_in_executor(None, lambda: step4_compact(word_path, answers, theme, subtheme, on_progress=on_p))
+                compact_path = await loop.run_in_executor(None, lambda: step4_compact(md_path, answers, theme, subtheme, on_progress=on_p))
 
                 await broadcast_log("▶ [ANKI] Génération .apkg")
                 anki_path = await loop.run_in_executor(None, lambda: step5_anki(compact_path, theme, subtheme, on_progress=on_p))
@@ -1523,7 +1526,7 @@ async def prepare_from_inbox(request: Request):
             # === BRANCHE GÉNÉRATION ===
             if do_generate:
                 await broadcast_log(f"▶ [SPLIT] Découpage ({questions_per_chunk} questions/épisode)")
-                result = await loop.run_in_executor(None, lambda: split_exam_by_questions(word_path, questions_per_chunk, name, theme, subtheme))
+                result = await loop.run_in_executor(None, lambda: split_exam_by_questions(md_path, questions_per_chunk, name, theme, subtheme))
                 await broadcast_log(f"  ✓ {len(result['files'])} morceaux")
 
                 await broadcast_log("▶ [PRODUCTION] Insertion DB")
