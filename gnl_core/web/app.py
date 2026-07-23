@@ -1461,6 +1461,7 @@ async def prepare_from_inbox(request: Request):
     mode = form.get("mode", "pages")
     pages_per_episode = int(form.get("pages", 0))
     custom_name = form.get("name", "")
+    pipeline = form.get("pipeline", "both")
 
     from gnl_core.config import get_config
     config = get_config()
@@ -1472,7 +1473,7 @@ async def prepare_from_inbox(request: Request):
 
     name = custom_name or os.path.splitext(filename)[0]
 
-    # Exam-specific: full pipeline (Anki + split by questions)
+    # Exam-specific: branched pipeline (trunk + anki/generate/both)
     if theme == 'exams':
         from gnl_core.exams import get_exam_base, step1_format, step2_convert_pdf, step3_highlight, step4_compact, step5_anki, split_exam_by_questions
         import shutil
@@ -1481,11 +1482,14 @@ async def prepare_from_inbox(request: Request):
         loop = asyncio.get_event_loop()
         origin = 'dojo' if 'dojo' in filename.lower() else 'udemy'
         questions_per_chunk = pages_per_episode if pages_per_episode > 0 else 5
+        do_anki = pipeline in ('anki', 'both', '')
+        do_generate = pipeline in ('generate', 'both', '')
 
         def on_p(msg):
             asyncio.run_coroutine_threadsafe(broadcast_log(f"  {msg}"), loop)
 
         try:
+            # === TRONC COMMUN (Format) ===
             # Step 1: Copy to origin + format
             origin_dir = base / 'pdf-formatting' / 'origin'
             origin_dir.mkdir(parents=True, exist_ok=True)
@@ -1493,41 +1497,45 @@ async def prepare_from_inbox(request: Request):
             if not origin_path.exists():
                 shutil.copy2(pdf_path, str(origin_path))
 
-            await broadcast_log("▶ [1/7] FORMAT (origin → word)")
+            await broadcast_log("▶ [FORMAT] Reformatage du document")
             word_path = await loop.run_in_executor(None, lambda: step1_format(str(origin_path), theme, subtheme, origin, on_progress=on_p))
 
-            # Step 2: Convert to PDF
-            await broadcast_log("▶ [2/7] CONVERT (word → pdf)")
+            await broadcast_log("▶ [CONVERT] Word → PDF")
             await loop.run_in_executor(None, lambda: step2_convert_pdf(word_path, theme, subtheme, on_progress=on_p))
 
-            # Step 3: Highlight
-            await broadcast_log("▶ [3/7] HIGHLIGHT (Bedrock)")
-            answers = await loop.run_in_executor(None, lambda: step3_highlight(word_path, on_progress=on_p))
-            await broadcast_log(f"  ✓ {len(answers)} questions")
+            # === BRANCHE ANKI ===
+            if do_anki:
+                await broadcast_log("▶ [HIGHLIGHT] Identification des réponses (Bedrock)")
+                answers = await loop.run_in_executor(None, lambda: step3_highlight(word_path, on_progress=on_p))
+                await broadcast_log(f"  ✓ {len(answers)} questions")
 
-            # Step 4: Compact
-            await broadcast_log("▶ [4/7] COMPACT (markdown + pdf)")
-            compact_path = await loop.run_in_executor(None, lambda: step4_compact(word_path, answers, theme, subtheme, on_progress=on_p))
+                await broadcast_log("▶ [COMPACT] Markdown structuré")
+                compact_path = await loop.run_in_executor(None, lambda: step4_compact(word_path, answers, theme, subtheme, on_progress=on_p))
 
-            # Step 5: Anki
-            await broadcast_log("▶ [5/7] ANKI (.apkg)")
-            anki_path = await loop.run_in_executor(None, lambda: step5_anki(compact_path, theme, subtheme, on_progress=on_p))
-            await broadcast_log(f"  ✓ {anki_path}")
+                await broadcast_log("▶ [ANKI] Génération .apkg")
+                anki_path = await loop.run_in_executor(None, lambda: step5_anki(compact_path, theme, subtheme, on_progress=on_p))
+                await broadcast_log(f"  ✓ {anki_path}")
 
-            # Step 6: Split by questions
-            await broadcast_log(f"▶ [6/7] SPLIT ({questions_per_chunk} questions/épisode)")
-            result = await loop.run_in_executor(None, lambda: split_exam_by_questions(word_path, questions_per_chunk, name, theme, subtheme))
-            await broadcast_log(f"  ✓ {len(result['files'])} morceaux")
+            # === BRANCHE GÉNÉRATION ===
+            if do_generate:
+                await broadcast_log(f"▶ [SPLIT] Découpage ({questions_per_chunk} questions/épisode)")
+                result = await loop.run_in_executor(None, lambda: split_exam_by_questions(word_path, questions_per_chunk, name, theme, subtheme))
+                await broadcast_log(f"  ✓ {len(result['files'])} morceaux")
 
-            # Step 7: Insert DB
-            await broadcast_log("▶ [7/7] INSERT DB → Production")
-            from gnl_core.collect import collect
-            from gnl_core.titles import generate_titles
-            parent_id = collect(result)
-            count = generate_titles(parent_id)
-            await broadcast_log(f"✓ Pipeline terminé: {name} (Anki + {len(result['files'])} épisodes)")
-            await broadcast_status()
-            return {"status": "ok", "parent_id": parent_id}
+                await broadcast_log("▶ [PRODUCTION] Insertion DB")
+                from gnl_core.collect import collect
+                from gnl_core.titles import generate_titles
+                parent_id = collect(result)
+                generate_titles(parent_id)
+
+            # Summary
+            summary = "🎴 Anki" if do_anki and not do_generate else "📻 Production" if do_generate and not do_anki else "🎴 Anki + 📻 Production"
+            await broadcast_log(f"✓ Pipeline terminé: {name} ({summary})")
+            await broadcast_log("__done__")
+            if do_generate:
+                await broadcast_status()
+                return {"status": "ok", "parent_id": parent_id}
+            return {"status": "ok"}
         except Exception as e:
             await broadcast_log(f"⚠ Erreur: {str(e)[:100]}")
             return {"status": "error", "error": str(e)}

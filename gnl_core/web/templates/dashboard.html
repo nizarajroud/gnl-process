@@ -525,11 +525,19 @@
                 if (theme === 'exams') {
                     // Simplified dialog for exams — no total count
                     document.getElementById('prep-dialog-mode-row').classList.add('hidden');
+                    document.getElementById('prep-dialog-pipeline-row').classList.remove('hidden');
+                    document.getElementById('prep-dialog-pipeline').value = 'both';
                     document.getElementById('prep-dialog-pages-label').textContent = 'Questions par épisode';
                     document.getElementById('prep-dialog-pages').value = 5;
+                    document.getElementById('prep-dialog-pages').parentElement.style.display = '';
                     document.getElementById('prep-dialog-info').textContent = '';
+                    document.getElementById('prep-dialog-pipeline').onchange = function() {
+                        document.getElementById('prep-dialog-pages').parentElement.style.display = this.value === 'anki' ? 'none' : '';
+                    };
                 } else {
                     document.getElementById('prep-dialog-mode-row').classList.remove('hidden');
+                    document.getElementById('prep-dialog-pipeline-row').classList.add('hidden');
+                    document.getElementById('prep-dialog-pages').parentElement.style.display = '';
                     document.getElementById('prep-dialog-pages-label').textContent = 'Pages par épisode';
                     document.getElementById('prep-dialog-pages').value = info.suggested_pages;
                     document.getElementById('prep-dialog-info').textContent = `${info.total_pages} pages — suggestion: ${info.suggested_pages} pages/épisode (${Math.ceil(info.total_pages/info.suggested_pages)} épisodes)`;
@@ -545,14 +553,15 @@
 
         function confirmPrepare() {
             const dlg = document.getElementById('prep-dialog');
-            const body = `theme=${dlg.dataset.theme}&subtheme=${dlg.dataset.sub}&filename=${dlg.dataset.file}&mode=${document.getElementById('prep-dialog-mode').value}&pages=${document.getElementById('prep-dialog-pages').value}&name=${document.getElementById('prep-dialog-name').value}`;
+            const pipeline = document.getElementById('prep-dialog-pipeline').value || '';
+            const body = `theme=${dlg.dataset.theme}&subtheme=${dlg.dataset.sub}&filename=${dlg.dataset.file}&mode=${document.getElementById('prep-dialog-mode').value}&pages=${document.getElementById('prep-dialog-pages').value}&name=${document.getElementById('prep-dialog-name').value}&pipeline=${pipeline}`;
             closePrepDialog();
             fetch('/prepare-from-inbox', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                 body: body
             }).then(r=>r.json()).then(data => {
-                if (data.status === 'ok') switchTab('production');
+                if (data.status === 'ok' && pipeline !== 'anki') switchTab('production');
             });
         }
 
@@ -871,6 +880,14 @@
                     <select id="prep-dialog-mode" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
                         <option value="pages">Pages</option>
                         <option value="semantic">Sémantique</option>
+                    </select>
+                </div>
+                <div id="prep-dialog-pipeline-row" class="hidden">
+                    <label class="text-xs text-gray-400">Pipeline</label>
+                    <select id="prep-dialog-pipeline" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                        <option value="anki">🎴 Anki uniquement</option>
+                        <option value="generate">📻 Génération uniquement</option>
+                        <option value="both">🎴 Anki + 📻 Génération</option>
                     </select>
                 </div>
                 <div>
