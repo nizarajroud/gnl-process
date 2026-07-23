@@ -356,7 +356,11 @@ def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size
                     raise
 
         # Parse natural language response to extract correct answers
+        debug_nlm = config_data.get('DEBUG_NLM', '0') == '1'
         if answer_text:
+            if debug_nlm and on_progress:
+                on_progress(f"[DEBUG] NLM raw response ({q_label}): {answer_text[:500]}")
+
             # Split response by question headers to handle each separately
             response_parts = re.split(r'(?:Question\s+)(\d+)', answer_text)
             # response_parts: ['intro', '1', 'content1', '2', 'content2', ...]
@@ -372,12 +376,20 @@ def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size
                             break
                     if matching_block:
                         parsed = _parse_nlm_natural_response(resp_q_num, resp_content, matching_block)
+                        if debug_nlm and on_progress:
+                            bold_items = re.findall(r'\*\*(.+?)\*\*', resp_content)
+                            on_progress(f"[DEBUG] Q{resp_q_num} bold items: {bold_items[:3]}")
+                            on_progress(f"[DEBUG] Q{resp_q_num} parsed correct: {parsed.get('correct', []) if parsed else 'NONE'}")
                         if parsed:
                             all_answers[resp_q_num] = parsed
 
             # Fallback: if split didn't work, try full response for single question
             if not any(b[0] in all_answers for b in batch) and len(batch) == 1:
                 parsed = _parse_nlm_natural_response(batch[0][0], answer_text, batch[0][1])
+                if debug_nlm and on_progress:
+                    bold_items = re.findall(r'\*\*(.+?)\*\*', answer_text)
+                    on_progress(f"[DEBUG] Q{batch[0][0]} fallback bold: {bold_items[:3]}")
+                    on_progress(f"[DEBUG] Q{batch[0][0]} fallback parsed: {parsed.get('correct', []) if parsed else 'NONE'}")
                 if parsed:
                     all_answers[batch[0][0]] = parsed
 
