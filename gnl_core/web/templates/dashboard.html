@@ -526,10 +526,10 @@
                     // Simplified dialog for exams — no total count
                     document.getElementById('prep-dialog-mode-row').classList.add('hidden');
                     document.getElementById('prep-dialog-pipeline-row').classList.remove('hidden');
-                    document.getElementById('prep-dialog-pipeline').value = 'both';
+                    document.getElementById('prep-dialog-pipeline').value = 'anki';
                     document.getElementById('prep-dialog-pages-label').textContent = 'Questions par épisode';
                     document.getElementById('prep-dialog-pages').value = 5;
-                    document.getElementById('prep-dialog-pages').parentElement.style.display = '';
+                    document.getElementById('prep-dialog-pages').parentElement.style.display = 'none';
                     document.getElementById('prep-dialog-info').textContent = '';
                     document.getElementById('prep-dialog-pipeline').onchange = function() {
                         document.getElementById('prep-dialog-pages').parentElement.style.display = this.value === 'anki' ? 'none' : '';
