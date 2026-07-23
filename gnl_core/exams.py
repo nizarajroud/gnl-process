@@ -154,7 +154,11 @@ def step2_convert_pdf(word_path, theme, subtheme, on_progress=None):
 
 
 def step2b_full_markdown(word_path, theme, subtheme, on_progress=None):
-    """Convert formatted DOCX to full Markdown (tronc commun step)."""
+    """Convert formatted DOCX to full Markdown (tronc commun step).
+    
+    Faithful reproduction — no content added or removed.
+    Only markdown formatting applied (## headers, - bullets).
+    """
     from docx import Document
     import re
 
@@ -167,33 +171,21 @@ def step2b_full_markdown(word_path, theme, subtheme, on_progress=None):
 
     doc = Document(word_path)
     lines = []
-    in_explanation = False
 
     for para in doc.paragraphs:
         text = para.text.strip()
         if not text:
-            if not in_explanation:
-                lines.append('')
+            lines.append('')
             continue
 
-        # Question header
+        # Question header → ## header
         if re.match(r'^Question\s+\d+:', text):
             lines.append('')
             lines.append(f"## {text}")
-            in_explanation = False
-        # Option lines (A) B) C) D) ...)
+        # Option lines (A) B) C) D) ...) → bullet
         elif re.match(r'^[A-F][).]\s', text):
-            lines.append(f"- **{text[0]}**) {text[2:].strip()}")
-            in_explanation = False
-        # Start of explanation section
-        elif re.match(r'^(?:Explanation|Explanations|Hence|Correct|Reference|Check out)', text, re.IGNORECASE):
-            lines.append('')
-            lines.append('> **Explanation:**')
-            lines.append(f"> {text}")
-            in_explanation = True
-        # Continuation of explanation
-        elif in_explanation:
-            lines.append(f"> {text}")
+            lines.append(f"- {text}")
+        # Everything else → as-is
         else:
             lines.append(text)
 
