@@ -221,7 +221,8 @@ def step3_highlight(source_path, on_progress=None):
     # Read text
     if source_path.endswith('.md'):
         text = Path(source_path).read_text(encoding='utf-8')
-        raw_text = text.replace('## ', '').replace('- **', '').replace('**)', ')')
+        # Strip markdown formatting but keep structure (- for options)
+        raw_text = text.replace('## ', '').replace('**', '')
     else:
         from docx import Document
         doc = Document(source_path)
@@ -249,17 +250,17 @@ def step3_highlight(source_path, on_progress=None):
     batch_size = int(config_data.get('EXAM_NLM_BATCH_SIZE', '5'))
     all_answers = {}
 
-    # === TIER 1: NotebookLM ===
+    # === TIER 1: NotebookLM (TEMPORARILY DISABLED FOR COMPARISON) ===
     nlm_success = False
-    try:
-        all_answers = _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size, config_data, on_progress)
-        if len(all_answers) >= len(question_blocks) * 0.8:  # 80% success threshold
-            nlm_success = True
-            if on_progress:
-                on_progress(f"✓ NotebookLM: {len(all_answers)}/{len(question_blocks)} questions")
-    except Exception as e:
-        if on_progress:
-            on_progress(f"⚠ NotebookLM échoué: {str(e)[:60]} → fallback Bedrock")
+    # try:
+    #     all_answers = _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size, config_data, on_progress)
+    #     if len(all_answers) >= len(question_blocks) * 0.8:
+    #         nlm_success = True
+    #         if on_progress:
+    #             on_progress(f"✓ NotebookLM: {len(all_answers)}/{len(question_blocks)} questions")
+    # except Exception as e:
+    #     if on_progress:
+    #         on_progress(f"⚠ NotebookLM échoué: {str(e)[:60]} → fallback Bedrock")
 
     # === TIER 2: Bedrock (for missing questions) ===
     if not nlm_success or len(all_answers) < len(question_blocks):
@@ -267,7 +268,8 @@ def step3_highlight(source_path, on_progress=None):
         if missing_blocks:
             if on_progress:
                 on_progress(f"Bedrock fallback: {len(missing_blocks)} questions manquantes")
-            bedrock_answers = _highlight_via_bedrock(missing_blocks, prompt_template, batch_size, config_data, on_progress)
+            bedrock_batch_size = int(config_data.get('EXAM_BATCH_SIZE', '5'))
+            bedrock_answers = _highlight_via_bedrock(missing_blocks, prompt_template, bedrock_batch_size, config_data, on_progress)
             all_answers.update(bedrock_answers)
 
     # === TIER 3: Regex fallback (last resort) ===
