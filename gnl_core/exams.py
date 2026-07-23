@@ -776,13 +776,36 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None):
     apkg_path = anki_dir / f"{name}.apkg"
     genanki.Package(deck).write_to_file(str(apkg_path))
 
+    # Generate compact markdown (questions with correct in bold)
+    md_dir = base / 'Anki-generation' / 'markdown'
+    md_dir.mkdir(parents=True, exist_ok=True)
+    md_lines = [f"# {name} — Compact\n"]
+    for num in sorted(answers.keys(), key=lambda x: int(x)):
+        entry = answers[num]
+        q_type = entry.get('type', 'single')
+        options = entry.get('options', [])
+        correct = entry.get('correct', [])
+        q_text = question_texts.get(num, '')
+        correct_norm = [c.lower().strip() for c in correct]
+
+        md_lines.append(f"\n## Question {num} [{q_type}]\n")
+        md_lines.append(q_text)
+        md_lines.append('')
+        for opt in options:
+            opt_norm = opt.lower().strip()
+            is_correct = any(opt_norm == cn or (len(cn) > 20 and cn in opt_norm) or (len(opt_norm) > 20 and opt_norm in cn) for cn in correct_norm)
+            if is_correct:
+                md_lines.append(f"- **{opt}**")
+            else:
+                md_lines.append(f"- {opt}")
+
+    compact_md_path = md_dir / f"{name}.md"
+    compact_md_path.write_text('\n'.join(md_lines), encoding='utf-8')
+
     if on_progress:
         on_progress(f"anki → {name}.apkg ({cards_count} cards)")
 
     return str(apkg_path)
-
-    if on_progress:
-        on_progress(f"anki → {apkg_path.name} ({cards_count} cards)")
 
     return str(apkg_path)
 

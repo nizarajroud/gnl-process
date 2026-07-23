@@ -43,5 +43,6 @@
       "description": "Batch generate (texte + audio)"
     }
   },
-  "DEBUG_NLM": "0"
+  "DEBUG_NLM": "0",
+  "EXAM_NLM_BATCH_SIZE": "15"
 }
