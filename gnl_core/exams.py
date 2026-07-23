@@ -306,6 +306,10 @@ def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size
         # Upload markdown as source
         add_source(client, notebook_id, source_type="file", file_path=source_path, wait=True)
 
+        # Wait for indexation to complete (NLM needs time to process)
+        import time
+        time.sleep(10)
+
         # Configure chat with exams-default prompt (for future interactive audio)
         exams_prompt_file = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / 'prompts' / 'exams-default.txt'
         if exams_prompt_file.exists():
@@ -317,14 +321,27 @@ def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size
 
     all_answers = {}
 
-    # Query by batch of 10 questions using exam-highlight prompt
+    # Query by batch using exam-highlight prompt (with retry)
     for batch_start in range(0, len(question_blocks), batch_size):
         batch = question_blocks[batch_start:batch_start + batch_size]
         batch_text = "\n\n".join([content for _, content in batch])
         query_text = prompt_template.replace('{questions}', batch_text)
 
-        result = query(client, notebook_id, query_text, timeout=120)
-        answer_text = result.get('answer', '')
+        # Retry up to 3 times (indexation may still be in progress)
+        answer_text = ''
+        for attempt in range(3):
+            try:
+                result = query(client, notebook_id, query_text, timeout=120)
+                answer_text = result.get('answer', '')
+                break
+            except Exception as e:
+                if attempt < 2:
+                    import time
+                    time.sleep(5 * (attempt + 1))
+                    if on_progress:
+                        on_progress(f"Retry {attempt + 1}/3...")
+                else:
+                    raise
 
         # Parse JSON from response
         json_match = re.search(r'\{.*\}', answer_text, re.DOTALL)
