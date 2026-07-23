@@ -279,12 +279,12 @@ def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size
     Queries use exam-highlight.txt prompt directly.
     """
     import json
-    from notebooklm_tools.core.client import NotebookLMClient
+    from notebooklm_tools.mcp.tools._utils import get_client
     from notebooklm_tools.services.notebooks import create_notebook, list_notebooks
     from notebooklm_tools.services.sources import add_source
     from notebooklm_tools.services.chat import query, configure_chat
 
-    client = NotebookLMClient()
+    client = get_client()
     name = Path(source_path).stem
     notebook_title = f"{name}-FULL"
 
