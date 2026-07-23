@@ -736,6 +736,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None):
     deck_id = random.randrange(1 << 30, 1 << 31)
     deck = genanki.Deck(deck_id, name)
 
+    debug = _get_config().get('DEBUG_NLM', '0') == '1'
     cards_count = 0
     for num in sorted(answers.keys(), key=lambda x: int(x)):
         entry = answers[num]
@@ -766,9 +767,11 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None):
                     back_items.append(f"<li>{opt}</li>")
             back = f"<b>Question {num}:</b><br><br>{q_text}<br><br><ul>{''.join(back_items)}</ul>"
 
-        note = genanki.Note(model=model, fields=[front, back])
+        note = genanki.Note(model=model, fields=[front, back], guid=f"{name}-q{num}")
         deck.add_note(note)
         cards_count += 1
+        if debug and on_progress:
+            on_progress(f"[DEBUG] Card Q{num}: q_text={q_text[:50]}... options={len(options)} correct={len(correct)}")
 
     # Save .apkg
     anki_dir = base / 'Anki-generation' / 'anki'
