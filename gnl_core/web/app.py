@@ -1525,6 +1525,20 @@ async def prepare_from_inbox(request: Request):
                 await broadcast_log("▶ [PRODUCTION] Insertion DB")
                 from gnl_core.collect import collect
                 from gnl_core.titles import generate_titles
+                from gnl_core.db import get_db
+
+                # Remove existing edition if re-processing
+                with get_db() as conn:
+                    existing = conn.execute(
+                        "SELECT id FROM parent_configuration WHERE parent_file=? AND podcast_subtheme=?",
+                        (name, subtheme)
+                    ).fetchone()
+                    if existing:
+                        conn.execute("DELETE FROM podcast_download WHERE parent_configuration_id=?", (existing['id'],))
+                        conn.execute("DELETE FROM parent_configuration WHERE id=?", (existing['id'],))
+                        conn.commit()
+                        await broadcast_log(f"  ♻ Ancienne édition supprimée (id={existing['id']})")
+
                 parent_id = collect(result)
                 generate_titles(parent_id)
 
