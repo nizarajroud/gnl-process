@@ -192,45 +192,40 @@ def step2b_full_markdown(word_path, theme, subtheme, on_progress=None):
 
 
 def step3_highlight(source_path, on_progress=None):
-    """Step 3: Identify correct answers using Bedrock/Claude.
+    """Step 3: Identify correct answers.
+    
+    Strategy (3-tier fallback):
+      1. NotebookLM — create notebook, upload .md, query by batch of 10
+      2. Bedrock (Claude) — if NLM fails or returns incomplete
+      3. Regex — last resort for questions not resolved
     
     Args:
         source_path: Path to formatted DOCX or full Markdown file
     Returns:
         Dict {question_number: {"type": str, "options": list, "correct": list}}
     """
-    import boto3
-    from botocore.config import Config
+    import json
 
-    # Read text from DOCX or Markdown
+    # Read text
     if source_path.endswith('.md'):
         text = Path(source_path).read_text(encoding='utf-8')
-        # Remove markdown formatting for Bedrock processing
-        text = text.replace('## ', '').replace('- **', '').replace('**)', ')')
+        raw_text = text.replace('## ', '').replace('- **', '').replace('**)', ')')
     else:
         from docx import Document
         doc = Document(source_path)
-        text = "\n".join([para.text for para in doc.paragraphs])
+        raw_text = "\n".join([para.text for para in doc.paragraphs])
+        text = raw_text
 
     config_data = _get_config()
-    model_id = config_data.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
-    region = config_data.get('AWS_REGION', 'ca-central-1')
-    profile = config_data.get('AWS_PROFILE', '')
 
-    session = boto3.Session(profile_name=profile, region_name=region)
-    client = session.client('bedrock-runtime', config=Config(read_timeout=600))
-
-    # Split into questions
-    questions = re.split(r'(Question\s+\d+:)', text)
+    # Split into question blocks
+    questions = re.split(r'(Question\s+\d+:)', raw_text)
     question_blocks = []
     for i in range(1, len(questions), 2):
         if i + 1 < len(questions):
             q_num = re.search(r'\d+', questions[i])
             if q_num:
                 question_blocks.append((q_num.group(), questions[i] + questions[i + 1]))
-
-    all_answers = {}
-    max_tokens = int(os.environ.get('BEDROCK_MAX_TOKENS', '4096'))
 
     # Load prompt template
     prompt_file = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / 'prompts' / 'exam-highlight.txt'
@@ -239,9 +234,122 @@ def step3_highlight(source_path, on_progress=None):
     else:
         prompt_template = "Extract correct answers.\n\n{questions}\n\nReturn JSON."
 
-    def _process_batch(batch, batch_start):
-        """Process a single batch — called in parallel."""
-        import json
+    batch_size = int(config_data.get('EXAM_BATCH_SIZE', '10'))
+    all_answers = {}
+
+    # === TIER 1: NotebookLM ===
+    nlm_success = False
+    try:
+        all_answers = _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size, config_data, on_progress)
+        if len(all_answers) >= len(question_blocks) * 0.8:  # 80% success threshold
+            nlm_success = True
+            if on_progress:
+                on_progress(f"✓ NotebookLM: {len(all_answers)}/{len(question_blocks)} questions")
+    except Exception as e:
+        if on_progress:
+            on_progress(f"⚠ NotebookLM échoué: {str(e)[:60]} → fallback Bedrock")
+
+    # === TIER 2: Bedrock (for missing questions) ===
+    if not nlm_success or len(all_answers) < len(question_blocks):
+        missing_blocks = [(num, content) for num, content in question_blocks if num not in all_answers]
+        if missing_blocks:
+            if on_progress:
+                on_progress(f"Bedrock fallback: {len(missing_blocks)} questions manquantes")
+            bedrock_answers = _highlight_via_bedrock(missing_blocks, prompt_template, batch_size, config_data, on_progress)
+            all_answers.update(bedrock_answers)
+
+    # === TIER 3: Regex fallback (last resort) ===
+    still_missing = [(num, content) for num, content in question_blocks if num not in all_answers]
+    if still_missing:
+        if on_progress:
+            on_progress(f"Regex fallback: {len(still_missing)} questions restantes")
+        for num, content in still_missing:
+            regex_result = _highlight_via_regex(num, content)
+            if regex_result:
+                all_answers[num] = regex_result
+
+    return all_answers
+
+
+def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size, config_data, on_progress=None):
+    """Tier 1: Use NotebookLM as knowledge base to identify answers."""
+    import json
+    from notebooklm_tools.core.client import NotebookLMClient
+    from notebooklm_tools.services.notebooks import create_notebook, delete_notebook
+    from notebooklm_tools.services.sources import add_source
+    from notebooklm_tools.services.chat import query, configure_chat
+
+    client = NotebookLMClient()
+    name = Path(source_path).stem
+
+    # Create notebook and upload markdown
+    nb = create_notebook(client, title=f"Exam-Highlight-{name}")
+    notebook_id = nb['notebook_id']
+
+    try:
+        add_source(client, notebook_id, source_type="file", file_path=source_path, wait=True)
+
+        # Configure chat for structured JSON output
+        configure_chat(client, notebook_id, goal="custom",
+                      custom_prompt="You are an exam answer extractor. Always respond with ONLY valid JSON. No explanations, no markdown, just the JSON object as specified in the query.")
+
+        all_answers = {}
+
+        # Query by batch of 10 questions
+        for batch_start in range(0, len(question_blocks), batch_size):
+            batch = question_blocks[batch_start:batch_start + batch_size]
+            batch_text = "\n\n".join([content for _, content in batch])
+            query_text = prompt_template.replace('{questions}', batch_text)
+
+            result = query(client, notebook_id, query_text, timeout=120)
+            answer_text = result.get('answer', '')
+
+            # Parse JSON from response
+            json_match = re.search(r'\{.*\}', answer_text, re.DOTALL)
+            if json_match:
+                try:
+                    parsed = json.loads(json_match.group())
+                    all_answers.update(parsed)
+                except json.JSONDecodeError:
+                    # Try fixing common issues
+                    fixed = json_match.group().replace('\n', ' ')
+                    fixed = re.sub(r',\s*}', '}', fixed)
+                    fixed = re.sub(r',\s*]', ']', fixed)
+                    try:
+                        parsed = json.loads(fixed)
+                        all_answers.update(parsed)
+                    except json.JSONDecodeError:
+                        pass
+
+            if on_progress:
+                on_progress(f"NLM batch {batch_start//batch_size + 1}: {len(batch)} questions")
+
+        return all_answers
+    finally:
+        # Cleanup notebook
+        try:
+            delete_notebook(client, notebook_id)
+        except Exception:
+            pass
+
+
+def _highlight_via_bedrock(question_blocks, prompt_template, batch_size, config_data, on_progress=None):
+    """Tier 2: Use Bedrock/Claude for structured extraction."""
+    import json
+    import boto3
+    from botocore.config import Config
+
+    model_id = config_data.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
+    region = config_data.get('AWS_REGION', 'ca-central-1')
+    profile = config_data.get('AWS_PROFILE', '')
+    max_tokens = int(config_data.get('BEDROCK_MAX_TOKENS', '4096'))
+
+    session = boto3.Session(profile_name=profile, region_name=region)
+    client = session.client('bedrock-runtime', config=Config(read_timeout=600))
+
+    all_answers = {}
+
+    def _process_batch(batch):
         batch_text = "\n\n".join([content for _, content in batch])
         prompt = prompt_template.replace('{questions}', batch_text)
 
@@ -259,49 +367,77 @@ def step3_highlight(source_path, on_progress=None):
                     try:
                         return json.loads(raw_json)
                     except json.JSONDecodeError:
-                        fixed = raw_json.replace('\n', ' ').replace('\r', '')
+                        fixed = raw_json.replace('\n', ' ')
                         fixed = re.sub(r',\s*}', '}', fixed)
                         fixed = re.sub(r',\s*]', ']', fixed)
                         try:
                             return json.loads(fixed)
                         except json.JSONDecodeError:
-                            if attempt < 2:
-                                continue
-                            return {}
-            except json.JSONDecodeError:
+                            continue
+            except Exception:
                 if attempt == 2:
                     return {}
-            except Exception:
-                return {}
         return {}
 
-    # Build batches
-    batch_size = int(os.environ.get('EXAM_BATCH_SIZE', '5'))
-    batches = []
-    for batch_start in range(0, len(question_blocks), batch_size):
-        batch_end = min(batch_start + batch_size, len(question_blocks))
-        batches.append((question_blocks[batch_start:batch_end], batch_start))
-
-    # Process in parallel
+    # Build and process batches in parallel
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    parallel = int(os.environ.get('EXAM_PARALLEL_BATCHES', '3'))
+    parallel = int(config_data.get('EXAM_PARALLEL_BATCHES', '3'))
+    batches = []
+    for i in range(0, len(question_blocks), batch_size):
+        batches.append(question_blocks[i:i + batch_size])
 
     with ThreadPoolExecutor(max_workers=parallel) as executor:
         futures = {}
-        for batch, batch_start in batches:
-            future = executor.submit(_process_batch, batch, batch_start)
-            futures[future] = batch_start
+        for idx, batch in enumerate(batches):
+            future = executor.submit(_process_batch, batch)
+            futures[future] = idx
 
         for future in as_completed(futures):
-            batch_start = futures[future]
-            batch_end = min(batch_start + batch_size, len(question_blocks))
+            idx = futures[future]
             if on_progress:
-                on_progress(f"Questions {batch_start + 1}-{batch_end} ✓")
+                on_progress(f"Bedrock batch {idx + 1}/{len(batches)} ✓")
             result = future.result()
             if result:
                 all_answers.update(result)
 
     return all_answers
+
+
+def _highlight_via_regex(num, content):
+    """Tier 3: Last resort regex-based extraction.
+    Tries to find correct answer markers in the text (e.g., 'Correct', checkmarks, etc.)
+    """
+    options = re.findall(r'([A-F])[).]\s*(.+?)(?=\n[A-F][).]|\n\n|$)', content, re.DOTALL)
+    if not options:
+        return None
+
+    option_texts = [f"{letter}) {text.strip().split(chr(10))[0]}" for letter, text in options]
+
+    # Try to detect correct answers from common markers
+    correct = []
+    for letter, text in options:
+        # Look for "Correct" or "✓" or "(correct)" near this option
+        if re.search(r'(?i)\bcorrect\b|✓|✔', text):
+            correct.append(f"{letter}) {text.strip().split(chr(10))[0]}")
+
+    # If no correct found via markers, check explanation section
+    if not correct:
+        explanation_match = re.search(r'(?i)(?:explanation|answer|correct answer)[:\s]+([A-F](?:\s*,\s*[A-F])*)', content)
+        if explanation_match:
+            letters = re.findall(r'[A-F]', explanation_match.group(1))
+            for letter in letters:
+                for opt_letter, opt_text in options:
+                    if opt_letter == letter:
+                        correct.append(f"{opt_letter}) {opt_text.strip().split(chr(10))[0]}")
+
+    if not correct:
+        return None
+
+    q_type = "multiple" if len(correct) > 1 else "single"
+    if re.search(r'(?i)select\s+and\s+order|arrange|sequence', content):
+        q_type = "order"
+
+    return {"type": q_type, "options": option_texts, "correct": correct}
 
 
 def step4_compact(source_path, answers, theme, subtheme, on_progress=None):
