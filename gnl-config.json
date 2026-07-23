@@ -42,5 +42,6 @@
       "time": "03:00",
       "description": "Batch generate (texte + audio)"
     }
-  }
+  },
+  "DEBUG_NLM": "1"
 }

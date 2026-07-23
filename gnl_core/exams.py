@@ -630,10 +630,22 @@ def step4_compact(source_path, answers, theme, subtheme, on_progress=None):
                 compact_lines.append(f"{idx}. **{item}**")
         else:
             # single, multiple, match — mark correct in bold
-            correct_norm = [c.lower().replace('\u00a0', ' ')[:50] for c in correct]
+            correct_norm = [c.lower().replace('\u00a0', ' ').strip() for c in correct]
             for opt in options:
-                opt_norm = opt.lower().replace('\u00a0', ' ')[:50]
-                is_correct = any(opt_norm in cn or cn in opt_norm for cn in correct_norm)
+                opt_norm = opt.lower().replace('\u00a0', ' ').strip()
+                # Strict matching: full text comparison or >80% overlap
+                is_correct = False
+                for cn in correct_norm:
+                    if opt_norm == cn:
+                        is_correct = True
+                        break
+                    # Check if one fully contains the other (but must be >80% length)
+                    shorter = min(len(opt_norm), len(cn))
+                    longer = max(len(opt_norm), len(cn))
+                    if shorter > 0 and shorter / longer > 0.8:
+                        if opt_norm[:shorter] == cn[:shorter]:
+                            is_correct = True
+                            break
                 if is_correct:
                     compact_lines.append(f"- **{opt}**")
                 else:
