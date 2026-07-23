@@ -246,7 +246,7 @@ def step3_highlight(source_path, on_progress=None):
     else:
         prompt_template = "Extract correct answers.\n\n{questions}\n\nReturn JSON."
 
-    batch_size = int(config_data.get('EXAM_NLM_BATCH_SIZE', '1'))
+    batch_size = int(config_data.get('EXAM_NLM_BATCH_SIZE', '5'))
     all_answers = {}
 
     # === TIER 1: NotebookLM ===
@@ -330,19 +330,14 @@ def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size
 
     # Query by batch — notebook already has the full content as source
     # No need to send question text, just ask by number range
-    nlm_query_single = '''For Question {num}, display the full question with all options, and put the correct option(s) in bold. No explanations, no references.'''
+    nlm_query_template = '''For Questions {start} to {end}, display each question with all options, and put the correct option(s) in bold. No explanations, no references.'''
 
     for batch_start in range(0, len(question_blocks), batch_size):
         batch = question_blocks[batch_start:batch_start + batch_size]
-        if batch_size == 1:
-            q_num = batch[0][0]
-            query_text = nlm_query_single.format(num=q_num)
-            q_label = f"Q{q_num}"
-        else:
-            q_start = int(batch[0][0])
-            q_end = int(batch[-1][0])
-            query_text = nlm_query_single.replace('Question {num}', f'Questions {q_start} to {q_end}').replace('{num}', str(q_start))
-            q_label = f"Q{q_start}-{q_end}"
+        q_start = int(batch[0][0])
+        q_end = int(batch[-1][0])
+        query_text = nlm_query_template.format(start=q_start, end=q_end)
+        q_label = f"Q{q_start}-{q_end}"
 
         # Retry up to 3 times
         answer_text = ''
@@ -361,19 +356,30 @@ def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size
                     raise
 
         # Parse natural language response to extract correct answers
-        if answer_text and batch_size == 1:
-            parsed = _parse_nlm_natural_response(q_num, answer_text, batch[0][1])
-            if parsed:
-                all_answers[q_num] = parsed
-        elif answer_text:
-            # Try JSON parsing for batch mode
-            json_match = re.search(r'\{.*\}', answer_text, re.DOTALL)
-            if json_match:
-                try:
-                    parsed = json.loads(json_match.group())
-                    all_answers.update(parsed)
-                except json.JSONDecodeError:
-                    pass
+        if answer_text:
+            # Split response by question headers to handle each separately
+            response_parts = re.split(r'(?:Question\s+)(\d+)', answer_text)
+            # response_parts: ['intro', '1', 'content1', '2', 'content2', ...]
+            for i in range(1, len(response_parts), 2):
+                if i + 1 < len(response_parts):
+                    resp_q_num = response_parts[i]
+                    resp_content = response_parts[i + 1]
+                    # Find matching question in batch
+                    matching_block = None
+                    for num, content in batch:
+                        if num == resp_q_num:
+                            matching_block = content
+                            break
+                    if matching_block:
+                        parsed = _parse_nlm_natural_response(resp_q_num, resp_content, matching_block)
+                        if parsed:
+                            all_answers[resp_q_num] = parsed
+
+            # Fallback: if split didn't work, try full response for single question
+            if not any(b[0] in all_answers for b in batch) and len(batch) == 1:
+                parsed = _parse_nlm_natural_response(batch[0][0], answer_text, batch[0][1])
+                if parsed:
+                    all_answers[batch[0][0]] = parsed
 
         if on_progress:
             on_progress(f"NLM {q_label} ✓ ({len(all_answers)} total)")
