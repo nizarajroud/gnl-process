@@ -259,27 +259,26 @@ def step3_highlight(source_path, on_progress=None):
                 on_progress(f"✓ NotebookLM: {len(all_answers)}/{len(question_blocks)} questions")
     except Exception as e:
         if on_progress:
-            on_progress(f"⚠ NotebookLM échoué: {str(e)[:60]}")
-        raise  # TEST MODE: no fallback, propagate error
+            on_progress(f"⚠ NotebookLM échoué: {str(e)[:60]} → fallback Bedrock")
 
-    # === TIER 2: Bedrock (DISABLED FOR TESTING) ===
-    # if not nlm_success or len(all_answers) < len(question_blocks):
-    #     missing_blocks = [(num, content) for num, content in question_blocks if num not in all_answers]
-    #     if missing_blocks:
-    #         if on_progress:
-    #             on_progress(f"Bedrock fallback: {len(missing_blocks)} questions manquantes")
-    #         bedrock_answers = _highlight_via_bedrock(missing_blocks, prompt_template, batch_size, config_data, on_progress)
-    #         all_answers.update(bedrock_answers)
+    # === TIER 2: Bedrock (for missing questions) ===
+    if not nlm_success or len(all_answers) < len(question_blocks):
+        missing_blocks = [(num, content) for num, content in question_blocks if num not in all_answers]
+        if missing_blocks:
+            if on_progress:
+                on_progress(f"Bedrock fallback: {len(missing_blocks)} questions manquantes")
+            bedrock_answers = _highlight_via_bedrock(missing_blocks, prompt_template, batch_size, config_data, on_progress)
+            all_answers.update(bedrock_answers)
 
-    # === TIER 3: Regex fallback (DISABLED FOR TESTING) ===
-    # still_missing = [(num, content) for num, content in question_blocks if num not in all_answers]
-    # if still_missing:
-    #     if on_progress:
-    #         on_progress(f"Regex fallback: {len(still_missing)} questions restantes")
-    #     for num, content in still_missing:
-    #         regex_result = _highlight_via_regex(num, content)
-    #         if regex_result:
-    #             all_answers[num] = regex_result
+    # === TIER 3: Regex fallback (last resort) ===
+    still_missing = [(num, content) for num, content in question_blocks if num not in all_answers]
+    if still_missing:
+        if on_progress:
+            on_progress(f"Regex fallback: {len(still_missing)} questions restantes")
+        for num, content in still_missing:
+            regex_result = _highlight_via_regex(num, content)
+            if regex_result:
+                all_answers[num] = regex_result
 
     return all_answers
 

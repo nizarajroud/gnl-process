@@ -43,5 +43,5 @@
       "description": "Batch generate (texte + audio)"
     }
   },
-  "DEBUG_NLM": "1"
+  "DEBUG_NLM": "0"
 }
