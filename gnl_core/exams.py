@@ -272,65 +272,81 @@ def step3_highlight(source_path, on_progress=None):
 
 
 def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size, config_data, on_progress=None):
-    """Tier 1: Use NotebookLM as knowledge base to identify answers."""
+    """Tier 1: Use NotebookLM as knowledge base to identify answers.
+    
+    Creates a persistent notebook named {filename}-FULL with exams-default.txt
+    as chat configuration (for future interactive audio generation).
+    Queries use exam-highlight.txt prompt directly.
+    """
     import json
     from notebooklm_tools.core.client import NotebookLMClient
-    from notebooklm_tools.services.notebooks import create_notebook, delete_notebook
+    from notebooklm_tools.services.notebooks import create_notebook, list_notebooks
     from notebooklm_tools.services.sources import add_source
     from notebooklm_tools.services.chat import query, configure_chat
 
     client = NotebookLMClient()
     name = Path(source_path).stem
+    notebook_title = f"{name}-FULL"
 
-    # Create notebook and upload markdown
-    nb = create_notebook(client, title=f"Exam-Highlight-{name}")
-    notebook_id = nb['notebook_id']
+    # Check if notebook already exists
+    notebook_id = None
+    existing = list_notebooks(client)
+    for nb in existing.get('notebooks', []):
+        if nb.get('title') == notebook_title:
+            notebook_id = nb['notebook_id']
+            if on_progress:
+                on_progress(f"Notebook existant: {notebook_title}")
+            break
 
-    try:
+    # Create if not exists
+    if not notebook_id:
+        nb = create_notebook(client, title=notebook_title)
+        notebook_id = nb['notebook_id']
+
+        # Upload markdown as source
         add_source(client, notebook_id, source_type="file", file_path=source_path, wait=True)
 
-        # Configure chat for structured JSON output
-        configure_chat(client, notebook_id, goal="custom",
-                      custom_prompt="You are an exam answer extractor. Always respond with ONLY valid JSON. No explanations, no markdown, just the JSON object as specified in the query.")
+        # Configure chat with exams-default prompt (for future interactive audio)
+        exams_prompt_file = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / 'prompts' / 'exams-default.txt'
+        if exams_prompt_file.exists():
+            exams_prompt = exams_prompt_file.read_text(encoding='utf-8')
+            configure_chat(client, notebook_id, goal="custom", custom_prompt=exams_prompt)
 
-        all_answers = {}
+        if on_progress:
+            on_progress(f"Notebook créé: {notebook_title}")
 
-        # Query by batch of 10 questions
-        for batch_start in range(0, len(question_blocks), batch_size):
-            batch = question_blocks[batch_start:batch_start + batch_size]
-            batch_text = "\n\n".join([content for _, content in batch])
-            query_text = prompt_template.replace('{questions}', batch_text)
+    all_answers = {}
 
-            result = query(client, notebook_id, query_text, timeout=120)
-            answer_text = result.get('answer', '')
+    # Query by batch of 10 questions using exam-highlight prompt
+    for batch_start in range(0, len(question_blocks), batch_size):
+        batch = question_blocks[batch_start:batch_start + batch_size]
+        batch_text = "\n\n".join([content for _, content in batch])
+        query_text = prompt_template.replace('{questions}', batch_text)
 
-            # Parse JSON from response
-            json_match = re.search(r'\{.*\}', answer_text, re.DOTALL)
-            if json_match:
+        result = query(client, notebook_id, query_text, timeout=120)
+        answer_text = result.get('answer', '')
+
+        # Parse JSON from response
+        json_match = re.search(r'\{.*\}', answer_text, re.DOTALL)
+        if json_match:
+            try:
+                parsed = json.loads(json_match.group())
+                all_answers.update(parsed)
+            except json.JSONDecodeError:
+                # Try fixing common issues
+                fixed = json_match.group().replace('\n', ' ')
+                fixed = re.sub(r',\s*}', '}', fixed)
+                fixed = re.sub(r',\s*]', ']', fixed)
                 try:
-                    parsed = json.loads(json_match.group())
+                    parsed = json.loads(fixed)
                     all_answers.update(parsed)
                 except json.JSONDecodeError:
-                    # Try fixing common issues
-                    fixed = json_match.group().replace('\n', ' ')
-                    fixed = re.sub(r',\s*}', '}', fixed)
-                    fixed = re.sub(r',\s*]', ']', fixed)
-                    try:
-                        parsed = json.loads(fixed)
-                        all_answers.update(parsed)
-                    except json.JSONDecodeError:
-                        pass
+                    pass
 
-            if on_progress:
-                on_progress(f"NLM batch {batch_start//batch_size + 1}: {len(batch)} questions")
+        if on_progress:
+            on_progress(f"NLM batch {batch_start//batch_size + 1}: {len(batch)} questions")
 
-        return all_answers
-    finally:
-        # Cleanup notebook
-        try:
-            delete_notebook(client, notebook_id)
-        except Exception:
-            pass
+    return all_answers
 
 
 def _highlight_via_bedrock(question_blocks, prompt_template, batch_size, config_data, on_progress=None):
