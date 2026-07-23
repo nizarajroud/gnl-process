@@ -185,10 +185,11 @@ def step2b_full_markdown(word_path, theme, subtheme, on_progress=None):
         # Option lines (A) B) C) D) ...) → bullet
         elif re.match(r'^[A-F][).]\s', text):
             lines.append(f"- {text}")
-        # Section separators — add blank line before
+        # Section separators — add blank line before and after
         elif re.match(r'^(Explanations?:|References?:|Check out)', text, re.IGNORECASE):
             lines.append('')
             lines.append(text)
+            lines.append('')
         # Everything else → as-is
         else:
             lines.append(text)
