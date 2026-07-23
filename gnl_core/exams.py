@@ -241,7 +241,7 @@ def step3_highlight(source_path, on_progress=None):
     else:
         prompt_template = "Extract correct answers.\n\n{questions}\n\nReturn JSON."
 
-    batch_size = int(config_data.get('EXAM_BATCH_SIZE', '10'))
+    batch_size = int(config_data.get('EXAM_NLM_BATCH_SIZE', '3'))
     all_answers = {}
 
     # === TIER 1: NotebookLM ===
@@ -301,7 +301,7 @@ def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size
     existing = list_notebooks(client)
     for nb in existing.get('notebooks', []):
         if nb.get('title') == notebook_title:
-            notebook_id = nb['notebook_id']
+            notebook_id = nb['id']
             if on_progress:
                 on_progress(f"Notebook existant: {notebook_title}")
             break
