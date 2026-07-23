@@ -333,13 +333,27 @@ def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size
 
     all_answers = {}
 
-    # Query by batch using exam-highlight prompt (with retry)
+    # Query by batch — notebook already has the full content as source
+    # No need to send question text, just ask by number range
+    nlm_query_template = '''For Questions {start} to {end}, return ONLY a JSON object with this exact format:
+{{
+  "{start}": {{"type": "single", "options": ["exact option text", ...], "correct": ["exact correct option"]}},
+  ...
+}}
+Rules:
+- type: "single" (1 answer), "multiple" (2+ answers), "order" (select and arrange in sequence)
+- options: ALL options exactly as written in the source document
+- correct: copied EXACTLY from the options array
+- Base answers EXCLUSIVELY on the explanations provided in the document
+- Return ONLY valid JSON, nothing else'''
+
     for batch_start in range(0, len(question_blocks), batch_size):
         batch = question_blocks[batch_start:batch_start + batch_size]
-        batch_text = "\n\n".join([content for _, content in batch])
-        query_text = prompt_template.replace('{questions}', batch_text)
+        q_start = int(batch[0][0])
+        q_end = int(batch[-1][0])
+        query_text = nlm_query_template.format(start=q_start, end=q_end)
 
-        # Retry up to 3 times (indexation may still be in progress)
+        # Retry up to 3 times
         answer_text = ''
         for attempt in range(3):
             try:
@@ -373,7 +387,7 @@ def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size
                     pass
 
         if on_progress:
-            on_progress(f"NLM batch {batch_start//batch_size + 1}: {len(batch)} questions")
+            on_progress(f"NLM Q{q_start}-{q_end} ✓ ({len(all_answers)} total)")
 
     return all_answers
 
