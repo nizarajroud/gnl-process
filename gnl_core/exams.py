@@ -288,7 +288,7 @@ def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size
     """
     import json
     from notebooklm_tools.mcp.tools._utils import get_client
-    from notebooklm_tools.services.notebooks import create_notebook, list_notebooks
+    from notebooklm_tools.services.notebooks import create_notebook, list_notebooks, delete_notebook
     from notebooklm_tools.services.sources import add_source
     from notebooklm_tools.services.chat import query, configure_chat
 
@@ -296,36 +296,35 @@ def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size
     name = Path(source_path).stem
     notebook_title = f"{name}-FULL"
 
-    # Check if notebook already exists
+    # Check if notebook already exists — delete and recreate
     notebook_id = None
     existing = list_notebooks(client)
     for nb in existing.get('notebooks', []):
         if nb.get('title') == notebook_title:
-            notebook_id = nb['id']
+            delete_notebook(client, nb['id'])
             if on_progress:
-                on_progress(f"Notebook existant: {notebook_title}")
+                on_progress(f"Notebook supprimé: {notebook_title}")
             break
 
-    # Create if not exists
-    if not notebook_id:
-        nb = create_notebook(client, title=notebook_title)
-        notebook_id = nb['notebook_id']
+    # Create notebook
+    nb = create_notebook(client, title=notebook_title)
+    notebook_id = nb['notebook_id']
 
-        # Upload markdown as source
-        add_source(client, notebook_id, source_type="file", file_path=source_path, wait=True)
+    # Upload markdown as source
+    add_source(client, notebook_id, source_type="file", file_path=source_path, wait=True)
 
-        # Wait for indexation to complete (NLM needs time to process)
-        import time
-        time.sleep(10)
+    # Wait for indexation to complete
+    import time
+    time.sleep(10)
 
-        # Configure chat with exams-default prompt (for future interactive audio)
-        exams_prompt_file = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / 'prompts' / 'exams-default.txt'
-        if exams_prompt_file.exists():
-            exams_prompt = exams_prompt_file.read_text(encoding='utf-8')
-            configure_chat(client, notebook_id, goal="custom", custom_prompt=exams_prompt)
+    # Configure chat with exams-default prompt (for future interactive audio)
+    exams_prompt_file = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / 'prompts' / 'exams-default.txt'
+    if exams_prompt_file.exists():
+        exams_prompt = exams_prompt_file.read_text(encoding='utf-8')
+        configure_chat(client, notebook_id, goal="custom", custom_prompt=exams_prompt)
 
-        if on_progress:
-            on_progress(f"Notebook créé: {notebook_title}")
+    if on_progress:
+        on_progress(f"Notebook créé: {notebook_title}")
 
     all_answers = {}
 
