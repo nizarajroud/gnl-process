@@ -330,7 +330,7 @@ def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size
 
     # Query by batch — notebook already has the full content as source
     # No need to send question text, just ask by number range
-    nlm_query_single = '''Question {num}: Which option(s) is/are correct and why? List all the options, then tell me which one(s) is/are the correct answer.'''
+    nlm_query_single = '''For Question {num}, display the full question with all options, and put the correct option(s) in bold. No explanations, no references.'''
 
     for batch_start in range(0, len(question_blocks), batch_size):
         batch = question_blocks[batch_start:batch_start + batch_size]
@@ -382,39 +382,36 @@ def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size
 
 
 def _parse_nlm_natural_response(q_num, answer_text, question_content):
-    """Parse a natural language NLM response to extract structured answer data."""
+    """Parse NLM response where correct options are in bold (**text**)."""
     # Extract all options from the original question content
     options = re.findall(r'^[-•]\s*(.+?)$', question_content, re.MULTILINE)
     if not options:
         options = re.findall(r'^([A-F][).]\s*.+?)$', question_content, re.MULTILINE)
 
-    # Detect correct answer(s) from NLM response
+    # Detect bold options in NLM response (correct answers are in **bold**)
+    bold_items = re.findall(r'\*\*(.+?)\*\*', answer_text)
+
     correct = []
-    answer_lower = answer_text.lower()
+    for bold in bold_items:
+        bold_clean = bold.strip()[:80].lower()
+        for opt in options:
+            opt_clean = opt.strip()
+            # Match if bold text is contained in option or option starts with bold text
+            if bold_clean in opt_clean.lower() or opt_clean[:60].lower() in bold_clean:
+                if opt_clean not in correct:
+                    correct.append(opt_clean)
+                break
 
-    for opt in options:
-        opt_clean = opt.strip()
-        # Check if this option (or significant part) is mentioned as correct
-        opt_short = opt_clean[:60].lower()
-        if opt_short in answer_lower:
-            # Check if it's marked as correct (not incorrect)
-            # Find the position of this option mention
-            pos = answer_lower.find(opt_short)
-            surrounding = answer_lower[max(0, pos-50):pos+len(opt_short)+100]
-            if 'correct' in surrounding and 'incorrect' not in surrounding:
-                correct.append(opt_clean)
-            elif 'is the correct' in surrounding or 'is correct' in surrounding:
-                correct.append(opt_clean)
-
-    # Fallback: look for "correct answer is" pattern
+    # Fallback: if no bold detected, look for "correct answer" patterns
     if not correct:
-        # Look for bold or emphasized options
-        correct_match = re.findall(r'(?:correct answer|correct option)[s]?\s*(?:is|are)[:\s]*(.+?)(?:\.|$)', answer_text, re.IGNORECASE)
-        if correct_match:
-            for match in correct_match:
-                for opt in options:
-                    if opt.strip()[:40].lower() in match.lower() or match.strip()[:40].lower() in opt.lower():
-                        correct.append(opt.strip())
+        for opt in options:
+            opt_short = opt.strip()[:50].lower()
+            # Check if option is near "correct" but not "incorrect"
+            pos = answer_text.lower().find(opt_short)
+            if pos >= 0:
+                surrounding = answer_text.lower()[max(0, pos-30):pos+len(opt_short)+50]
+                if 'correct' in surrounding and 'incorrect' not in surrounding:
+                    correct.append(opt.strip())
 
     # Determine type
     q_type = "single"
