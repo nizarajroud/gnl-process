@@ -392,7 +392,6 @@ async def clean_exam(theme: str, subtheme: str, filename: str):
     from gnl_core.exams import get_exam_base
 
     config = get_config()
-    inbox = config.get('INBOX_FOLDER', '')
     name = os.path.splitext(filename)[0]
     base = get_exam_base(theme, subtheme)
 
@@ -409,22 +408,17 @@ async def clean_exam(theme: str, subtheme: str, filename: str):
     if p.exists():
         p.unlink()
         removed += 1
-    # pdf/
-    p = base / 'pdf-formatting' / 'pdf' / f"{name}.pdf"
+    # full-markdown/
+    p = base / 'pdf-formatting' / 'full-markdown' / f"{name}.md"
     if p.exists():
         p.unlink()
         removed += 1
-    # compact-exam-versions/
-    p = base / 'pdf-formatting' / 'compact-exam-versions' / f"{name}.pdf"
-    if p.exists():
-        p.unlink()
-        removed += 1
-    # markdown/
+    # Anki-generation/markdown/
     p = base / 'Anki-generation' / 'markdown' / f"{name}.md"
     if p.exists():
         p.unlink()
         removed += 1
-    # anki/
+    # Anki-generation/anki/
     for ext in ['-anki.txt', '.apkg']:
         p = base / 'Anki-generation' / 'anki' / f"{name}{ext}"
         if p.exists():
@@ -447,6 +441,21 @@ async def clean_exam(theme: str, subtheme: str, filename: str):
         if os.path.isdir(audio_dir):
             shutil.rmtree(audio_dir)
             removed += 1
+
+    # Delete NLM notebook ({name}-FULL)
+    try:
+        from notebooklm_tools.mcp.tools._utils import get_client
+        from notebooklm_tools.services.notebooks import list_notebooks, delete_notebook
+        client = get_client()
+        notebook_title = f"{name}-FULL"
+        nbs = list_notebooks(client)
+        for nb in nbs.get('notebooks', []):
+            if nb.get('title') == notebook_title:
+                delete_notebook(client, nb['id'])
+                removed += 1
+                break
+    except Exception:
+        pass
 
     # Remove from DB (parent_configuration + podcast_download)
     from gnl_core.db import get_db
