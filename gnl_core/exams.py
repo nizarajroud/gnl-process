@@ -322,11 +322,6 @@ def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size
     import time
     time.sleep(10)
 
-    # Configure chat with exams-default prompt (for future interactive audio)
-    exams_prompt_file = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / 'prompts' / 'exams-default.txt'
-    if exams_prompt_file.exists():
-        exams_prompt = exams_prompt_file.read_text(encoding='utf-8')
-        configure_chat(client, notebook_id, goal="custom", custom_prompt=exams_prompt)
 
     if on_progress:
         on_progress(f"Notebook créé: {notebook_title}")
