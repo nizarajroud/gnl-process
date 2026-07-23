@@ -153,6 +153,44 @@ def step2_convert_pdf(word_path, theme, subtheme, on_progress=None):
     return str(pdf_path)
 
 
+def step2b_full_markdown(word_path, theme, subtheme, on_progress=None):
+    """Convert formatted DOCX to full Markdown (tronc commun step)."""
+    from docx import Document
+
+    base = get_exam_base(theme, subtheme)
+    md_dir = base / 'pdf-formatting' / 'full-markdown'
+    md_dir.mkdir(parents=True, exist_ok=True)
+
+    name = Path(word_path).stem
+    md_path = md_dir / f"{name}.md"
+
+    doc = Document(word_path)
+    lines = []
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            lines.append('')
+            continue
+
+        # Detect question headers
+        import re
+        if re.match(r'^Question\s+\d+:', text):
+            lines.append(f"## {text}")
+        # Detect options (A) B) C) D) or A. B. C. D.)
+        elif re.match(r'^[A-F][).]\s', text):
+            lines.append(f"- **{text[0]}**) {text[2:].strip()}")
+        else:
+            lines.append(text)
+
+    md_content = '\n'.join(lines)
+    md_path.write_text(md_content, encoding='utf-8')
+
+    if on_progress:
+        on_progress(f"word/ → full-markdown/{md_path.name}")
+
+    return str(md_path)
+
+
 def step3_highlight(word_path, on_progress=None):
     """Step 3: Identify correct answers using Bedrock/Claude.
     

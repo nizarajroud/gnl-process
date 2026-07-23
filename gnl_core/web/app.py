@@ -1475,7 +1475,7 @@ async def prepare_from_inbox(request: Request):
 
     # Exam-specific: branched pipeline (trunk + anki/generate/both)
     if theme == 'exams':
-        from gnl_core.exams import get_exam_base, step1_format, step2_convert_pdf, step3_highlight, step4_compact, step5_anki, split_exam_by_questions
+        from gnl_core.exams import get_exam_base, step1_format, step2_convert_pdf, step2b_full_markdown, step3_highlight, step4_compact, step5_anki, split_exam_by_questions
         import shutil
 
         base = get_exam_base(theme, subtheme)
@@ -1502,6 +1502,10 @@ async def prepare_from_inbox(request: Request):
 
             await broadcast_log("▶ [CONVERT] Word → PDF")
             await loop.run_in_executor(None, lambda: step2_convert_pdf(word_path, theme, subtheme, on_progress=on_p))
+
+            await broadcast_log("▶ [MARKDOWN] Word → Markdown")
+            md_path = await loop.run_in_executor(None, lambda: step2b_full_markdown(word_path, theme, subtheme, on_progress=on_p))
+            await broadcast_log(f"  ✓ {md_path}")
 
             # === BRANCHE ANKI ===
             if do_anki:
