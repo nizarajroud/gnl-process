@@ -392,7 +392,6 @@ async def clean_exam(theme: str, subtheme: str, filename: str):
     from gnl_core.exams import get_exam_base
 
     config = get_config()
-    inbox = config.get('INBOX_FOLDER', '')
     name = os.path.splitext(filename)[0]
     base = get_exam_base(theme, subtheme)
 
@@ -409,22 +408,17 @@ async def clean_exam(theme: str, subtheme: str, filename: str):
     if p.exists():
         p.unlink()
         removed += 1
-    # pdf/
-    p = base / 'pdf-formatting' / 'pdf' / f"{name}.pdf"
+    # full-markdown/
+    p = base / 'pdf-formatting' / 'full-markdown' / f"{name}.md"
     if p.exists():
         p.unlink()
         removed += 1
-    # compact-exam-versions/
-    p = base / 'pdf-formatting' / 'compact-exam-versions' / f"{name}.pdf"
-    if p.exists():
-        p.unlink()
-        removed += 1
-    # markdown/
+    # Anki-generation/markdown/
     p = base / 'Anki-generation' / 'markdown' / f"{name}.md"
     if p.exists():
         p.unlink()
         removed += 1
-    # anki/
+    # Anki-generation/anki/
     for ext in ['-anki.txt', '.apkg']:
         p = base / 'Anki-generation' / 'anki' / f"{name}{ext}"
         if p.exists():
@@ -447,6 +441,21 @@ async def clean_exam(theme: str, subtheme: str, filename: str):
         if os.path.isdir(audio_dir):
             shutil.rmtree(audio_dir)
             removed += 1
+
+    # Delete NLM notebook ({name}-FULL)
+    try:
+        from notebooklm_tools.mcp.tools._utils import get_client
+        from notebooklm_tools.services.notebooks import list_notebooks, delete_notebook
+        client = get_client()
+        notebook_title = f"{name}-FULL"
+        nbs = list_notebooks(client)
+        for nb in nbs.get('notebooks', []):
+            if nb.get('title') == notebook_title:
+                delete_notebook(client, nb['id'])
+                removed += 1
+                break
+    except Exception:
+        pass
 
     # Remove from DB (parent_configuration + podcast_download)
     from gnl_core.db import get_db
@@ -485,7 +494,7 @@ async def _process_exam(theme, subtheme, filename):
     origin = 'dojo' if 'dojo' in filename.lower() else 'udemy'
 
     try:
-        from gnl_core.exams import get_exam_base, step1_format, step2_convert_pdf, step3_highlight, step4_compact, step5_anki
+        from gnl_core.exams import get_exam_base, step1_format, step2b_full_markdown, step3_highlight, step5_anki
         import shutil
 
         # Move file to assets/pdf-formatting/origin/
@@ -507,24 +516,19 @@ async def _process_exam(theme, subtheme, filename):
         word_path = await loop.run_in_executor(None, lambda: step1_format(str(origin_path), theme, subtheme, origin, on_progress=on_p1))
         await broadcast_log(f"  ✓ {word_path}")
 
-        # Step 2: word/ → pdf/
-        await broadcast_log("▶ [2/5] CONVERT (word → pdf)")
-        pdf_path = await loop.run_in_executor(None, lambda: step2_convert_pdf(word_path, theme, subtheme, on_progress=on_p1))
-        await broadcast_log(f"  ✓ {pdf_path}")
+        # Step 2: word/ → markdown/
+        await broadcast_log("▶ [2/5] MARKDOWN (word → md)")
+        md_path = await loop.run_in_executor(None, lambda: step2b_full_markdown(word_path, theme, subtheme, on_progress=on_p1))
+        await broadcast_log(f"  ✓ {md_path}")
 
         # Step 3: highlight (Bedrock)
         await broadcast_log("▶ [3/5] HIGHLIGHT (Bedrock → correct answers)")
-        answers = await loop.run_in_executor(None, lambda: step3_highlight(word_path, on_progress=on_p1))
+        answers = await loop.run_in_executor(None, lambda: step3_highlight(md_path, on_progress=on_p1))
         await broadcast_log(f"  ✓ {len(answers)} questions analysées")
 
-        # Step 4: compact (markdown + pdf)
-        await broadcast_log("▶ [4/5] COMPACT (markdown + pdf)")
-        compact_path = await loop.run_in_executor(None, lambda: step4_compact(word_path, answers, theme, subtheme, on_progress=on_p1))
-        await broadcast_log(f"  ✓ {compact_path}")
-
-        # Step 5: anki cards
-        await broadcast_log("▶ [5/5] ANKI (flashcards)")
-        anki_path = await loop.run_in_executor(None, lambda: step5_anki(compact_path, theme, subtheme, on_progress=on_p1))
+        # Step 4: anki cards (directly from answers)
+        await broadcast_log("▶ [4/4] ANKI (flashcards)")
+        anki_path = await loop.run_in_executor(None, lambda: step5_anki(answers, md_path, theme, subtheme, on_progress=on_p1))
         await broadcast_log(f"  ✓ {anki_path}")
 
         await broadcast_log(f"✓ Pipeline terminé: {name}")
@@ -1475,7 +1479,7 @@ async def prepare_from_inbox(request: Request):
 
     # Exam-specific: branched pipeline (trunk + anki/generate/both)
     if theme == 'exams':
-        from gnl_core.exams import get_exam_base, step1_format, step2_convert_pdf, step3_highlight, step4_compact, step5_anki, split_exam_by_questions
+        from gnl_core.exams import get_exam_base, step1_format, step2b_full_markdown, step3_highlight, step5_anki, split_exam_by_questions
         import shutil
 
         base = get_exam_base(theme, subtheme)
@@ -1500,26 +1504,24 @@ async def prepare_from_inbox(request: Request):
             await broadcast_log("▶ [FORMAT] Reformatage du document")
             word_path = await loop.run_in_executor(None, lambda: step1_format(str(origin_path), theme, subtheme, origin, on_progress=on_p))
 
-            await broadcast_log("▶ [CONVERT] Word → PDF")
-            await loop.run_in_executor(None, lambda: step2_convert_pdf(word_path, theme, subtheme, on_progress=on_p))
+            await broadcast_log("▶ [MARKDOWN] Word → Markdown")
+            md_path = await loop.run_in_executor(None, lambda: step2b_full_markdown(word_path, theme, subtheme, on_progress=on_p))
+            await broadcast_log(f"  ✓ {md_path}")
 
             # === BRANCHE ANKI ===
             if do_anki:
                 await broadcast_log("▶ [HIGHLIGHT] Identification des réponses (Bedrock)")
-                answers = await loop.run_in_executor(None, lambda: step3_highlight(word_path, on_progress=on_p))
+                answers = await loop.run_in_executor(None, lambda: step3_highlight(md_path, on_progress=on_p))
                 await broadcast_log(f"  ✓ {len(answers)} questions")
 
-                await broadcast_log("▶ [COMPACT] Markdown structuré")
-                compact_path = await loop.run_in_executor(None, lambda: step4_compact(word_path, answers, theme, subtheme, on_progress=on_p))
-
                 await broadcast_log("▶ [ANKI] Génération .apkg")
-                anki_path = await loop.run_in_executor(None, lambda: step5_anki(compact_path, theme, subtheme, on_progress=on_p))
+                anki_path = await loop.run_in_executor(None, lambda: step5_anki(answers, md_path, theme, subtheme, on_progress=on_p))
                 await broadcast_log(f"  ✓ {anki_path}")
 
             # === BRANCHE GÉNÉRATION ===
             if do_generate:
                 await broadcast_log(f"▶ [SPLIT] Découpage ({questions_per_chunk} questions/épisode)")
-                result = await loop.run_in_executor(None, lambda: split_exam_by_questions(word_path, questions_per_chunk, name, theme, subtheme))
+                result = await loop.run_in_executor(None, lambda: split_exam_by_questions(md_path, questions_per_chunk, name, theme, subtheme))
                 await broadcast_log(f"  ✓ {len(result['files'])} morceaux")
 
                 await broadcast_log("▶ [PRODUCTION] Insertion DB")

@@ -153,39 +153,93 @@ def step2_convert_pdf(word_path, theme, subtheme, on_progress=None):
     return str(pdf_path)
 
 
-def step3_highlight(word_path, on_progress=None):
-    """Step 3: Identify correct answers using Bedrock/Claude.
+def step2b_full_markdown(word_path, theme, subtheme, on_progress=None):
+    """Convert formatted DOCX to full Markdown (tronc commun step).
     
+    Faithful reproduction — no content added or removed.
+    Only markdown formatting applied (## headers, - bullets).
+    """
+    from docx import Document
+    import re
+
+    base = get_exam_base(theme, subtheme)
+    md_dir = base / 'pdf-formatting' / 'full-markdown'
+    md_dir.mkdir(parents=True, exist_ok=True)
+
+    name = Path(word_path).stem
+    md_path = md_dir / f"{name}.md"
+
+    doc = Document(word_path)
+    lines = []
+
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            lines.append('')
+            continue
+
+        # Question header → ## header
+        if re.match(r'^Question\s+\d+:', text):
+            lines.append('')
+            lines.append(f"## {text}")
+        # Option lines (A) B) C) D) ...) → bullet
+        elif re.match(r'^[A-F][).]\s', text):
+            lines.append(f"- {text}")
+        # Section separators — add blank line before and after
+        elif re.match(r'^(Explanations?:|References?:|Check out)', text, re.IGNORECASE):
+            lines.append('')
+            lines.append(text)
+            lines.append('')
+        # Everything else → as-is
+        else:
+            lines.append(text)
+
+    md_content = '\n'.join(lines).strip()
+    md_path.write_text(md_content, encoding='utf-8')
+
+    if on_progress:
+        on_progress(f"word/ → full-markdown/{md_path.name}")
+
+    return str(md_path)
+
+
+def step3_highlight(source_path, on_progress=None):
+    """Step 3: Identify correct answers.
+    
+    Strategy (3-tier fallback):
+      1. NotebookLM — create notebook, upload .md, query by batch of 10
+      2. Bedrock (Claude) — if NLM fails or returns incomplete
+      3. Regex — last resort for questions not resolved
+    
+    Args:
+        source_path: Path to formatted DOCX or full Markdown file
     Returns:
         Dict {question_number: {"type": str, "options": list, "correct": list}}
     """
-    import boto3
-    from botocore.config import Config
-    from docx import Document
+    import json
 
-    # Read text from cleaned DOCX
+    # Read text — Bedrock uses DOCX, NLM uses Markdown
+    if source_path.endswith('.md'):
+        word_path = source_path.replace('/full-markdown/', '/word/').replace('.md', '.docx')
+    else:
+        word_path = source_path
+
+    # Read DOCX for Bedrock (always available)
+    from docx import Document
     doc = Document(word_path)
-    text = "\n".join([para.text for para in doc.paragraphs])
+    raw_text = "\n".join([para.text for para in doc.paragraphs])
 
     config_data = _get_config()
-    model_id = config_data.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
-    region = config_data.get('AWS_REGION', 'ca-central-1')
-    profile = config_data.get('AWS_PROFILE', '')
+    use_nlm = config_data.get('EXAM_USE_NLM', '0') == '1'
 
-    session = boto3.Session(profile_name=profile, region_name=region)
-    client = session.client('bedrock-runtime', config=Config(read_timeout=600))
-
-    # Split into questions
-    questions = re.split(r'(Question\s+\d+:)', text)
+    # Split into question blocks
+    questions = re.split(r'(Question\s+\d+:)', raw_text)
     question_blocks = []
     for i in range(1, len(questions), 2):
         if i + 1 < len(questions):
             q_num = re.search(r'\d+', questions[i])
             if q_num:
                 question_blocks.append((q_num.group(), questions[i] + questions[i + 1]))
-
-    all_answers = {}
-    max_tokens = int(os.environ.get('BEDROCK_MAX_TOKENS', '4096'))
 
     # Load prompt template
     prompt_file = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / 'prompts' / 'exam-highlight.txt'
@@ -194,9 +248,222 @@ def step3_highlight(word_path, on_progress=None):
     else:
         prompt_template = "Extract correct answers.\n\n{questions}\n\nReturn JSON."
 
-    def _process_batch(batch, batch_start):
-        """Process a single batch — called in parallel."""
-        import json
+    batch_size = int(config_data.get('EXAM_NLM_BATCH_SIZE', '5'))
+    all_answers = {}
+
+    # === TIER 1: NotebookLM (controlled by EXAM_USE_NLM flag) ===
+    nlm_success = False
+    if use_nlm:
+        try:
+            all_answers = _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size, config_data, on_progress)
+            if len(all_answers) >= len(question_blocks) * 0.8:
+                nlm_success = True
+                if on_progress:
+                    on_progress(f"✓ NotebookLM: {len(all_answers)}/{len(question_blocks)} questions")
+        except Exception as e:
+            if on_progress:
+                on_progress(f"⚠ NotebookLM échoué: {str(e)[:60]} → fallback Bedrock")
+
+    # === TIER 2: Bedrock (from DOCX) ===
+    if not nlm_success or len(all_answers) < len(question_blocks):
+        missing_blocks = [(num, content) for num, content in question_blocks if num not in all_answers]
+        if missing_blocks:
+            if on_progress:
+                label = "Bedrock" if not use_nlm else f"Bedrock fallback: {len(missing_blocks)} questions manquantes"
+                on_progress(f"▶ {label}")
+            bedrock_batch_size = int(config_data.get('EXAM_BATCH_SIZE', '5'))
+            bedrock_answers = _highlight_via_bedrock(missing_blocks, prompt_template, bedrock_batch_size, config_data, on_progress)
+            all_answers.update(bedrock_answers)
+
+    # === TIER 3: Regex fallback (last resort) ===
+    still_missing = [(num, content) for num, content in question_blocks if num not in all_answers]
+    if still_missing:
+        if on_progress:
+            on_progress(f"Regex fallback: {len(still_missing)} questions restantes")
+        for num, content in still_missing:
+            regex_result = _highlight_via_regex(num, content)
+            if regex_result:
+                all_answers[num] = regex_result
+
+    return all_answers
+
+
+def _highlight_via_nlm(source_path, question_blocks, prompt_template, batch_size, config_data, on_progress=None):
+    """Tier 1: Use NotebookLM as knowledge base to identify answers.
+    
+    Creates a persistent notebook named {filename}-FULL with exams-default.txt
+    as chat configuration (for future interactive audio generation).
+    Queries use exam-highlight.txt prompt directly.
+    """
+    import json
+    from notebooklm_tools.mcp.tools._utils import get_client
+    from notebooklm_tools.services.notebooks import create_notebook, list_notebooks, delete_notebook
+    from notebooklm_tools.services.sources import add_source
+    from notebooklm_tools.services.chat import query, configure_chat
+
+    client = get_client()
+    name = Path(source_path).stem
+    notebook_title = f"{name}-FULL"
+
+    # Check if notebook already exists — delete and recreate
+    notebook_id = None
+    existing = list_notebooks(client)
+    for nb in existing.get('notebooks', []):
+        if nb.get('title') == notebook_title:
+            delete_notebook(client, nb['id'])
+            if on_progress:
+                on_progress(f"Notebook supprimé: {notebook_title}")
+            break
+
+    # Create notebook
+    nb = create_notebook(client, title=notebook_title)
+    notebook_id = nb['notebook_id']
+
+    # Upload markdown as source
+    add_source(client, notebook_id, source_type="file", file_path=source_path, wait=True)
+
+    # Wait for indexation to complete
+    import time
+    time.sleep(10)
+
+
+    if on_progress:
+        on_progress(f"Notebook créé: {notebook_title}")
+
+    all_answers = {}
+
+    # Query by batch — notebook already has the full content as source
+    # No need to send question text, just ask by number range
+    nlm_query_template = '''For Questions {start} to {end}, display each question with all options, and put the correct option(s) in bold. No explanations, no references.'''
+
+    for batch_start in range(0, len(question_blocks), batch_size):
+        batch = question_blocks[batch_start:batch_start + batch_size]
+        q_start = int(batch[0][0])
+        q_end = int(batch[-1][0])
+        query_text = nlm_query_template.format(start=q_start, end=q_end)
+        q_label = f"Q{q_start}-{q_end}"
+
+        # Retry up to 3 times
+        answer_text = ''
+        for attempt in range(3):
+            try:
+                result = query(client, notebook_id, query_text, timeout=120)
+                answer_text = result.get('answer', '')
+                break
+            except Exception as e:
+                if attempt < 2:
+                    import time
+                    time.sleep(5 * (attempt + 1))
+                    if on_progress:
+                        on_progress(f"Retry {attempt + 1}/3...")
+                else:
+                    raise
+
+        # Parse natural language response to extract correct answers
+        debug_nlm = config_data.get('DEBUG_NLM', '0') == '1'
+        if answer_text:
+            if debug_nlm and on_progress:
+                on_progress(f"[DEBUG] NLM raw response ({q_label}): {answer_text[:500]}")
+
+            # Split response by question headers to handle each separately
+            response_parts = re.split(r'(?:Question\s+)(\d+)', answer_text)
+            # response_parts: ['intro', '1', 'content1', '2', 'content2', ...]
+            for i in range(1, len(response_parts), 2):
+                if i + 1 < len(response_parts):
+                    resp_q_num = response_parts[i]
+                    resp_content = response_parts[i + 1]
+                    # Find matching question in batch
+                    matching_block = None
+                    for num, content in batch:
+                        if num == resp_q_num:
+                            matching_block = content
+                            break
+                    if matching_block:
+                        parsed = _parse_nlm_natural_response(resp_q_num, resp_content, matching_block)
+                        if debug_nlm and on_progress:
+                            bold_items = re.findall(r'\*\*(.+?)\*\*', resp_content)
+                            on_progress(f"[DEBUG] Q{resp_q_num} bold items: {bold_items[:3]}")
+                            on_progress(f"[DEBUG] Q{resp_q_num} parsed correct: {parsed.get('correct', []) if parsed else 'NONE'}")
+                        if parsed:
+                            all_answers[resp_q_num] = parsed
+
+            # Fallback: if split didn't work, try full response for single question
+            if not any(b[0] in all_answers for b in batch) and len(batch) == 1:
+                parsed = _parse_nlm_natural_response(batch[0][0], answer_text, batch[0][1])
+                if debug_nlm and on_progress:
+                    bold_items = re.findall(r'\*\*(.+?)\*\*', answer_text)
+                    on_progress(f"[DEBUG] Q{batch[0][0]} fallback bold: {bold_items[:3]}")
+                    on_progress(f"[DEBUG] Q{batch[0][0]} fallback parsed: {parsed.get('correct', []) if parsed else 'NONE'}")
+                if parsed:
+                    all_answers[batch[0][0]] = parsed
+
+        if on_progress:
+            on_progress(f"NLM {q_label} ✓ ({len(all_answers)} total)")
+
+    return all_answers
+
+
+def _parse_nlm_natural_response(q_num, answer_text, question_content):
+    """Parse NLM response where correct options are in bold (**text**)."""
+    # Extract all options from the original question content
+    options = re.findall(r'^[-•]\s*(.+?)$', question_content, re.MULTILINE)
+    if not options:
+        options = re.findall(r'^([A-F][).]\s*.+?)$', question_content, re.MULTILINE)
+
+    # Detect bold options in NLM response (correct answers are in **bold**)
+    bold_items = re.findall(r'\*\*(.+?)\*\*', answer_text)
+
+    correct = []
+    for bold in bold_items:
+        bold_clean = bold.strip()[:80].lower()
+        for opt in options:
+            opt_clean = opt.strip()
+            # Match if bold text is contained in option or option starts with bold text
+            if bold_clean in opt_clean.lower() or opt_clean[:60].lower() in bold_clean:
+                if opt_clean not in correct:
+                    correct.append(opt_clean)
+                break
+
+    # Fallback: if no bold detected, look for "correct answer" patterns
+    if not correct:
+        for opt in options:
+            opt_short = opt.strip()[:50].lower()
+            # Check if option is near "correct" but not "incorrect"
+            pos = answer_text.lower().find(opt_short)
+            if pos >= 0:
+                surrounding = answer_text.lower()[max(0, pos-30):pos+len(opt_short)+50]
+                if 'correct' in surrounding and 'incorrect' not in surrounding:
+                    correct.append(opt.strip())
+
+    # Determine type
+    q_type = "single"
+    if len(correct) > 1:
+        q_type = "multiple"
+    if re.search(r'(?i)select\s+and\s+order|arrange|sequence', question_content):
+        q_type = "order"
+
+    if correct:
+        return {"type": q_type, "options": [o.strip() for o in options], "correct": correct}
+    return None
+
+
+def _highlight_via_bedrock(question_blocks, prompt_template, batch_size, config_data, on_progress=None):
+    """Tier 2: Use Bedrock/Claude for structured extraction."""
+    import json
+    import boto3
+    from botocore.config import Config
+
+    model_id = config_data.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
+    region = config_data.get('AWS_REGION', 'ca-central-1')
+    profile = config_data.get('AWS_PROFILE', '')
+    max_tokens = int(config_data.get('BEDROCK_MAX_TOKENS', '4096'))
+
+    session = boto3.Session(profile_name=profile, region_name=region)
+    client = session.client('bedrock-runtime', config=Config(read_timeout=600))
+
+    all_answers = {}
+
+    def _process_batch(batch):
         batch_text = "\n\n".join([content for _, content in batch])
         prompt = prompt_template.replace('{questions}', batch_text)
 
@@ -214,44 +481,35 @@ def step3_highlight(word_path, on_progress=None):
                     try:
                         return json.loads(raw_json)
                     except json.JSONDecodeError:
-                        fixed = raw_json.replace('\n', ' ').replace('\r', '')
+                        fixed = raw_json.replace('\n', ' ')
                         fixed = re.sub(r',\s*}', '}', fixed)
                         fixed = re.sub(r',\s*]', ']', fixed)
                         try:
                             return json.loads(fixed)
                         except json.JSONDecodeError:
-                            if attempt < 2:
-                                continue
-                            return {}
-            except json.JSONDecodeError:
+                            continue
+            except Exception:
                 if attempt == 2:
                     return {}
-            except Exception:
-                return {}
         return {}
 
-    # Build batches
-    batch_size = int(os.environ.get('EXAM_BATCH_SIZE', '5'))
-    batches = []
-    for batch_start in range(0, len(question_blocks), batch_size):
-        batch_end = min(batch_start + batch_size, len(question_blocks))
-        batches.append((question_blocks[batch_start:batch_end], batch_start))
-
-    # Process in parallel
+    # Build and process batches in parallel
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    parallel = int(os.environ.get('EXAM_PARALLEL_BATCHES', '3'))
+    parallel = int(config_data.get('EXAM_PARALLEL_BATCHES', '3'))
+    batches = []
+    for i in range(0, len(question_blocks), batch_size):
+        batches.append(question_blocks[i:i + batch_size])
 
     with ThreadPoolExecutor(max_workers=parallel) as executor:
         futures = {}
-        for batch, batch_start in batches:
-            future = executor.submit(_process_batch, batch, batch_start)
-            futures[future] = batch_start
+        for idx, batch in enumerate(batches):
+            future = executor.submit(_process_batch, batch)
+            futures[future] = idx
 
         for future in as_completed(futures):
-            batch_start = futures[future]
-            batch_end = min(batch_start + batch_size, len(question_blocks))
+            idx = futures[future]
             if on_progress:
-                on_progress(f"Questions {batch_start + 1}-{batch_end} ✓")
+                on_progress(f"Bedrock batch {idx + 1}/{len(batches)} ✓")
             result = future.result()
             if result:
                 all_answers.update(result)
@@ -259,23 +517,66 @@ def step3_highlight(word_path, on_progress=None):
     return all_answers
 
 
-def step4_compact(word_path, answers, theme, subtheme, on_progress=None):
+def _highlight_via_regex(num, content):
+    """Tier 3: Last resort regex-based extraction.
+    Tries to find correct answer markers in the text (e.g., 'Correct', checkmarks, etc.)
+    """
+    options = re.findall(r'([A-F])[).]\s*(.+?)(?=\n[A-F][).]|\n\n|$)', content, re.DOTALL)
+    if not options:
+        return None
+
+    option_texts = [f"{letter}) {text.strip().split(chr(10))[0]}" for letter, text in options]
+
+    # Try to detect correct answers from common markers
+    correct = []
+    for letter, text in options:
+        # Look for "Correct" or "✓" or "(correct)" near this option
+        if re.search(r'(?i)\bcorrect\b|✓|✔', text):
+            correct.append(f"{letter}) {text.strip().split(chr(10))[0]}")
+
+    # If no correct found via markers, check explanation section
+    if not correct:
+        explanation_match = re.search(r'(?i)(?:explanation|answer|correct answer)[:\s]+([A-F](?:\s*,\s*[A-F])*)', content)
+        if explanation_match:
+            letters = re.findall(r'[A-F]', explanation_match.group(1))
+            for letter in letters:
+                for opt_letter, opt_text in options:
+                    if opt_letter == letter:
+                        correct.append(f"{opt_letter}) {opt_text.strip().split(chr(10))[0]}")
+
+    if not correct:
+        return None
+
+    q_type = "multiple" if len(correct) > 1 else "single"
+    if re.search(r'(?i)select\s+and\s+order|arrange|sequence', content):
+        q_type = "order"
+
+    return {"type": q_type, "options": option_texts, "correct": correct}
+
+
+def step4_compact(source_path, answers, theme, subtheme, on_progress=None):
     """Step 4: Generate compact version (Markdown + PDF).
     Uses structured answers from step3 (type, options, correct).
     
+    Args:
+        source_path: Path to formatted DOCX or full Markdown
     Returns:
         Path to compact markdown
     """
-    from docx import Document
     import markdown
     from weasyprint import HTML
 
     base = get_exam_base(theme, subtheme)
-    name = Path(word_path).stem
+    name = Path(source_path).stem
 
-    # Read formatted text for question text extraction
-    doc = Document(word_path)
-    text = "\n".join([para.text for para in doc.paragraphs])
+    # Read text from DOCX or Markdown
+    if source_path.endswith('.md'):
+        text = Path(source_path).read_text(encoding='utf-8')
+        text = text.replace('## ', '').replace('- **', '').replace('**)', ')')
+    else:
+        from docx import Document
+        doc = Document(source_path)
+        text = "\n".join([para.text for para in doc.paragraphs])
 
     # Extract question texts
     questions = re.split(r'(Question\s+\d+:)', text)
@@ -333,10 +634,22 @@ def step4_compact(word_path, answers, theme, subtheme, on_progress=None):
                 compact_lines.append(f"{idx}. **{item}**")
         else:
             # single, multiple, match — mark correct in bold
-            correct_norm = [c.lower().replace('\u00a0', ' ')[:50] for c in correct]
+            correct_norm = [c.lower().replace('\u00a0', ' ').strip() for c in correct]
             for opt in options:
-                opt_norm = opt.lower().replace('\u00a0', ' ')[:50]
-                is_correct = any(opt_norm in cn or cn in opt_norm for cn in correct_norm)
+                opt_norm = opt.lower().replace('\u00a0', ' ').strip()
+                # Strict matching: full text comparison or >80% overlap
+                is_correct = False
+                for cn in correct_norm:
+                    if opt_norm == cn:
+                        is_correct = True
+                        break
+                    # Check if one fully contains the other (but must be >80% length)
+                    shorter = min(len(opt_norm), len(cn))
+                    longer = max(len(opt_norm), len(cn))
+                    if shorter > 0 and shorter / longer > 0.8:
+                        if opt_norm[:shorter] == cn[:shorter]:
+                            is_correct = True
+                            break
                 if is_correct:
                     compact_lines.append(f"- **{opt}**")
                 else:
@@ -365,10 +678,13 @@ def step4_compact(word_path, answers, theme, subtheme, on_progress=None):
     return str(md_path)
 
 
-def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
-    """Step 5: Generate Anki .apkg package from compact markdown.
-    Handles all question types: single, multiple, order, match.
+def step5_anki(answers, source_path, theme, subtheme, on_progress=None):
+    """Step 5: Generate Anki .apkg package directly from answers dict.
     
+    Args:
+        answers: Dict from step3_highlight {num: {type, options, correct}}
+        source_path: Path to full markdown (for question text extraction)
+        theme, subtheme: For path resolution
     Returns:
         Path to .apkg file
     """
@@ -376,10 +692,25 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
     import random
 
     base = get_exam_base(theme, subtheme)
-    name = Path(compact_md_path).stem
+    name = Path(source_path).stem
 
-    with open(compact_md_path, 'r', encoding='utf-8') as f:
-        content = f.read()
+    # Extract question texts from full markdown
+    md_content = Path(source_path).read_text(encoding='utf-8')
+    parts = re.split(r'## Question\s+\d+:', md_content)
+    question_texts = {}
+    q_headers = re.findall(r'## (Question\s+(\d+):)', md_content)
+    for idx, (_, num) in enumerate(q_headers):
+        if idx + 1 < len(parts):
+            block = parts[idx + 1]
+            # Get question text (lines before first option "- ")
+            lines = block.strip().split('\n')
+            q_lines = []
+            for line in lines:
+                if line.strip().startswith('- '):
+                    break
+                if line.strip():
+                    q_lines.append(line.strip())
+            question_texts[num] = ' '.join(q_lines[:5])
 
     # Model for exam cards
     font_size = os.environ.get('ANKI_FONT_SIZE', '16')
@@ -410,79 +741,42 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
     deck_id = random.randrange(1 << 30, 1 << 31)
     deck = genanki.Deck(deck_id, name)
 
-    # Parse questions from markdown
-    questions = re.split(r'(\*\*Question\s+\d+:\*\*(?:\s*\[[a-z]+\])?)', content)
-
+    debug = _get_config().get('DEBUG_NLM', '0') == '1'
     cards_count = 0
-    for i in range(1, len(questions), 2):
-        q_header_raw = questions[i]
-        q_header = re.sub(r'\*\*', '', q_header_raw).strip()
-        q_type_match = re.search(r'\[(\w+)\]', q_header)
-        q_type = q_type_match.group(1) if q_type_match else 'single'
-        q_header_clean = re.sub(r'\s*\[\w+\]', '', q_header)
+    for num in sorted(answers.keys(), key=lambda x: int(x)):
+        entry = answers[num]
+        q_type = entry.get('type', 'single')
+        options = entry.get('options', [])
+        correct = entry.get('correct', [])
+        q_text = question_texts.get(num, f'Question {num}')
 
-        q_body = questions[i + 1].strip() if i + 1 < len(questions) else ''
-        lines = q_body.split('\n')
-
-        # Get question text (first non-empty line)
-        question_text = ''
-        for l in lines:
-            if l.strip() and not l.strip().startswith('- ') and not l.strip().startswith('**Correct') and 'correct order' not in l.lower():
-                question_text = l.strip()
-                break
+        # Normalize correct answers for matching
+        correct_norm = [c.lower().strip() for c in correct]
 
         if q_type == 'order':
-            # Options = regular list items, Correct order = numbered bold items
-            options = []
-            correct_order = []
-            in_correct = False
-            for line in lines:
-                line = line.strip()
-                if 'correct order' in line.lower():
-                    in_correct = True
-                elif in_correct and re.match(r'^\d+\.', line):
-                    item = re.sub(r'^\d+\.\s*\*\*(.+)\*\*$', r'\1', line)
-                    correct_order.append(item)
-                elif line.startswith('- '):
-                    options.append(line[2:])
-
-            if question_text and options:
-                options_html = "".join(f"<li>{o}</li>" for o in options)
-                front = f"<b>{q_header_clean}</b><br><br>{question_text}<br><br><ul>{options_html}</ul>"
-
-                order_html = "".join(f"<li><span class='correct'>{o}</span></li>" for o in correct_order)
-                back = f"<b>{q_header_clean}</b><br><br>{question_text}<br><br><b>Correct order:</b><ol>{order_html}</ol>"
-
-                note = genanki.Note(model=model, fields=[front, back])
-                deck.add_note(note)
-                cards_count += 1
+            options_html = "".join(f"<li>{o}</li>" for o in options)
+            front = f"<b>Question {num}:</b><br><br>{q_text}<br><br><ul>{options_html}</ul>"
+            order_html = "".join(f"<li><span class='correct'>{o}</span></li>" for o in correct)
+            back = f"<b>Question {num}:</b><br><br>{q_text}<br><br><b>Correct order:</b><ol>{order_html}</ol>"
         else:
-            # single, multiple, match
-            options = []
-            for line in lines:
-                line = line.strip()
-                if line.startswith('- **') and line.endswith('**'):
-                    opt_text = line[4:-2]
-                    options.append(('correct', opt_text))
-                elif line.startswith('- '):
-                    opt_text = line[2:]
-                    options.append(('wrong', opt_text))
+            options_html = "".join(f"<li>{o}</li>" for o in options)
+            front = f"<b>Question {num}:</b><br><br>{q_text}<br><br><ul>{options_html}</ul>"
 
-            if question_text and options:
-                options_html = "".join(f"<li>{opt_text}</li>" for _, opt_text in options)
-                front = f"<b>{q_header_clean}</b><br><br>{question_text}<br><br><ul>{options_html}</ul>"
+            back_items = []
+            for opt in options:
+                opt_norm = opt.lower().strip()
+                is_correct = any(opt_norm == cn or (len(cn) > 20 and cn in opt_norm) or (len(opt_norm) > 20 and opt_norm in cn) for cn in correct_norm)
+                if is_correct:
+                    back_items.append(f"<li><span class='correct'>{opt}</span></li>")
+                else:
+                    back_items.append(f"<li>{opt}</li>")
+            back = f"<b>Question {num}:</b><br><br>{q_text}<br><br><ul>{''.join(back_items)}</ul>"
 
-                back_items = []
-                for status, opt_text in options:
-                    if status == 'correct':
-                        back_items.append(f"<li><span class='correct'>{opt_text}</span></li>")
-                    else:
-                        back_items.append(f"<li>{opt_text}</li>")
-                back = f"<b>{q_header_clean}</b><br><br>{question_text}<br><br><ul>{''.join(back_items)}</ul>"
-
-                note = genanki.Note(model=model, fields=[front, back])
-                deck.add_note(note)
-                cards_count += 1
+        note = genanki.Note(model=model, fields=[front, back], guid=f"{name}-q{num}")
+        deck.add_note(note)
+        cards_count += 1
+        if debug and on_progress:
+            on_progress(f"[DEBUG] Card Q{num}: q_text={q_text[:50]}... options={len(options)} correct={len(correct)}")
 
     # Save .apkg
     anki_dir = base / 'Anki-generation' / 'anki'
@@ -490,8 +784,36 @@ def step5_anki(compact_md_path, theme, subtheme, on_progress=None):
     apkg_path = anki_dir / f"{name}.apkg"
     genanki.Package(deck).write_to_file(str(apkg_path))
 
+    # Generate compact markdown (questions with correct in bold)
+    md_dir = base / 'Anki-generation' / 'markdown'
+    md_dir.mkdir(parents=True, exist_ok=True)
+    md_lines = [f"# {name} — Compact\n"]
+    for num in sorted(answers.keys(), key=lambda x: int(x)):
+        entry = answers[num]
+        q_type = entry.get('type', 'single')
+        options = entry.get('options', [])
+        correct = entry.get('correct', [])
+        q_text = question_texts.get(num, '')
+        correct_norm = [c.lower().strip() for c in correct]
+
+        md_lines.append(f"\n## Question {num} [{q_type}]\n")
+        md_lines.append(q_text)
+        md_lines.append('')
+        for opt in options:
+            opt_norm = opt.lower().strip()
+            is_correct = any(opt_norm == cn or (len(cn) > 20 and cn in opt_norm) or (len(opt_norm) > 20 and opt_norm in cn) for cn in correct_norm)
+            if is_correct:
+                md_lines.append(f"- **{opt}**")
+            else:
+                md_lines.append(f"- {opt}")
+
+    compact_md_path = md_dir / f"{name}.md"
+    compact_md_path.write_text('\n'.join(md_lines), encoding='utf-8')
+
     if on_progress:
-        on_progress(f"anki → {apkg_path.name} ({cards_count} cards)")
+        on_progress(f"anki → {name}.apkg ({cards_count} cards)")
+
+    return str(apkg_path)
 
     return str(apkg_path)
 
@@ -501,29 +823,25 @@ def _get_config():
     return get_config()
 
 
-def split_exam_by_questions(word_path, questions_per_chunk=5, name=None, theme='exams', subtheme='sap-c02'):
-    """Split a formatted DOCX exam by questions (not pages).
+def split_exam_by_questions(md_path, questions_per_chunk=5, name=None, theme='exams', subtheme='sap-c02'):
+    """Split a full Markdown exam by questions into .md chunks.
     
     Args:
-        word_path: Path to the formatted DOCX (from assets/pdf-formatting/word/)
+        md_path: Path to the full Markdown (from assets/pdf-formatting/full-markdown/)
         questions_per_chunk: Number of questions per split
         name: Edition name
         theme, subtheme: For path resolution
     Returns:
         Split result dict compatible with collect()
     """
-    from docx import Document
-    import subprocess
-    import tempfile
 
-    doc = Document(word_path)
-    text = "\n".join([para.text for para in doc.paragraphs])
+    md_content = Path(md_path).read_text(encoding='utf-8')
     
     if not name:
-        name = Path(word_path).stem
+        name = Path(md_path).stem
 
-    # Split by "Question N:"
-    parts = re.split(r'(Question\s+\d+:)', text)
+    # Split by "## Question N:" headers
+    parts = re.split(r'(## Question\s+\d+:)', md_content)
     
     # Rebuild question blocks
     question_blocks = []
@@ -542,43 +860,20 @@ def split_exam_by_questions(word_path, questions_per_chunk=5, name=None, theme='
     output_dir = Path(pdf_parts) / theme / subtheme / name
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Write each chunk as DOCX then convert to PDF
+    # Write each chunk as .md
     files_list = []
-    temp_dir = tempfile.mkdtemp()
-
     for idx, chunk_text in enumerate(chunks, 1):
-        # Create temp DOCX
-        chunk_doc = Document()
-        for line in chunk_text.split('\n'):
-            para = chunk_doc.add_paragraph()
-            if re.match(r'^Question\s+\d+:', line.strip()):
-                para.add_run(line).bold = True
-            else:
-                para.add_run(line)
-        
-        docx_path = os.path.join(temp_dir, f"p{idx}.docx")
-        chunk_doc.save(docx_path)
+        chunk_path = output_dir / f"p{idx}.md"
+        chunk_path.write_text(chunk_text.strip(), encoding='utf-8')
 
-        # Convert to PDF
-        subprocess.run([
-            "libreoffice", "--headless", "--convert-to", "pdf",
-            "--outdir", str(output_dir), docx_path
-        ], capture_output=True)
-
-        pdf_path = output_dir / f"p{idx}.pdf"
-        if pdf_path.exists():
-            files_list.append({
-                'fullPath': str(pdf_path),
-                'parentDir': name,
-                'fileName': f'p{idx}.pdf',
-                'sourceType': 'LocalStorage',
-                'podcastTheme': theme,
-                'podcastSubfolder': subtheme,
-            })
-
-    # Cleanup temp DOCX files
-    import shutil
-    shutil.rmtree(temp_dir, ignore_errors=True)
+        files_list.append({
+            'fullPath': str(chunk_path),
+            'parentDir': name,
+            'fileName': f'p{idx}.md',
+            'sourceType': 'LocalStorage',
+            'podcastTheme': theme,
+            'podcastSubfolder': subtheme,
+        })
 
     return {
         'splitConfiguration': f'{len(chunks)}ck-{questions_per_chunk}q',
