@@ -932,8 +932,17 @@ async def _batch_generate(source):
             continue
 
     # Step 3: Combine all generated MP3s into one batch file
-    if generated_audio_paths:
-        await broadcast_log(f"▶ COMBINE ({len(generated_audio_paths)} articles)")
+    # Include previously processed articles that weren't combined (e.g. crash recovery)
+    with get_db() as conn:
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        all_audio = conn.execute(
+            "SELECT audio_path FROM saved_articles WHERE source=? AND processed=1 AND audio_path IS NOT NULL AND combined_at IS NULL",
+            (source,)
+        ).fetchall()
+        all_paths = [r[0] for r in all_audio if r[0] and os.path.exists(r[0])]
+    # Use all_paths (includes current run + previous unfinished runs)
+    if all_paths:
+        await broadcast_log(f"▶ COMBINE ({len(all_paths)} articles)")
         try:
             config = get_config()
             backlog_dir = os.path.join(config.get('GNL_BACKLOG', ''), 'saved-articles', source)
@@ -941,6 +950,7 @@ async def _batch_generate(source):
 
             from datetime import datetime
             date_str = datetime.now().strftime('%Y-%m-%d')
+            now_str = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
             output_file = os.path.join(backlog_dir, f"batch-{date_str}.mp3")
 
             # Check if batch already exists today
@@ -954,13 +964,19 @@ async def _batch_generate(source):
             silence_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'assets', 'silence-3s.mp3')
             concat_path = os.path.join(tempfile.gettempdir(), 'batch_concat.txt')
             with open(concat_path, 'w') as f:
-                for idx, p in enumerate(generated_audio_paths):
+                for idx, p in enumerate(all_paths):
                     f.write(f"file '{p}'\n")
-                    if idx < len(generated_audio_paths) - 1:
+                    if idx < len(all_paths) - 1:
                         f.write(f"file '{silence_file}'\n")
 
             subprocess.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', concat_path, '-c', 'copy', output_file], capture_output=True)
             os.unlink(concat_path)
+
+            # Mark all as combined
+            with get_db() as conn:
+                for p in all_paths:
+                    conn.execute("UPDATE saved_articles SET combined_at=? WHERE audio_path=?", (now_str, p))
+                conn.commit()
 
             await broadcast_log(f"✓ Batch combiné: {output_file}")
         except Exception as e:
