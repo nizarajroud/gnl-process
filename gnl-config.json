@@ -45,5 +45,6 @@
   },
   "DEBUG_NLM": "0",
   "EXAM_NLM_BATCH_SIZE": "15",
-  "EXAM_USE_NLM": "0"
+  "EXAM_USE_NLM": "0",
+  "NLM_QUOTA_RESET_UTC": "00:00"
 }
