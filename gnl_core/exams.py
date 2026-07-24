@@ -761,15 +761,16 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None):
             order_html = "".join(f"<li><span class='correct'>{o}</span></li>" for o in correct)
             back = f"<b>Question {num}:</b><br><br>{q_text}<br><br><b>Correct order:</b><ol>{order_html}</ol>"
         else:
-            # Front: checkboxes (disabled, for visual only)
+            # Front: interactive checkboxes (user can check before flipping)
             front_items = "".join(
-                f"<div class='option'><input type='checkbox' disabled> {o}</div>" for o in options
+                f"<div class='option'><input type='checkbox' id='q{num}o{i}'> <label for='q{num}o{i}'>{o}</label></div>"
+                for i, o in enumerate(options)
             )
             front = f"<b>Question {num}:</b><br><br>{q_text}<br><br>{front_items}"
 
             # Back: checkboxes with correct ones checked + green
             back_items = []
-            for opt in options:
+            for i, opt in enumerate(options):
                 opt_norm = opt.lower().strip()
                 is_correct = any(opt_norm == cn or (len(cn) > 20 and cn in opt_norm) or (len(opt_norm) > 20 and opt_norm in cn) for cn in correct_norm)
                 if is_correct:
