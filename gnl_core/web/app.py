@@ -1241,7 +1241,7 @@ async def quota_check(parent_id: int):
     from datetime import datetime, timezone, timedelta
 
     s = parent_status(parent_id)
-    to_generate = s['total'] - s['generated']
+    to_generate = s['total'] - (s['generated'] or 0)
 
     if to_generate == 0:
         return {"sufficient": True, "to_generate": 0, "remaining": 0}
