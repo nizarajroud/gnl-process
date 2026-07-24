@@ -732,6 +732,8 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None):
             ul {{ padding-left: 20px; }}
             ol {{ padding-left: 20px; }}
             li {{ margin-bottom: 5px; }}
+            .option {{ margin-bottom: 8px; line-height: 1.4; }}
+            .option input[type='checkbox'] {{ margin-right: 8px; transform: scale(1.2); vertical-align: middle; }}
             .correct {{ color: #28a745; font-weight: bold; }}
             b {{ color: #0073bb; }}
         """
@@ -759,18 +761,23 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None):
             order_html = "".join(f"<li><span class='correct'>{o}</span></li>" for o in correct)
             back = f"<b>Question {num}:</b><br><br>{q_text}<br><br><b>Correct order:</b><ol>{order_html}</ol>"
         else:
-            options_html = "".join(f"<li>{o}</li>" for o in options)
-            front = f"<b>Question {num}:</b><br><br>{q_text}<br><br><ul>{options_html}</ul>"
+            # Front: interactive checkboxes (user can check before flipping)
+            front_items = "".join(
+                f"<div class='option'><input type='checkbox' id='q{num}o{i}'> <label for='q{num}o{i}'>{o}</label></div>"
+                for i, o in enumerate(options)
+            )
+            front = f"<b>Question {num}:</b><br><br>{q_text}<br><br>{front_items}"
 
+            # Back: checkboxes with correct ones checked + green
             back_items = []
-            for opt in options:
+            for i, opt in enumerate(options):
                 opt_norm = opt.lower().strip()
                 is_correct = any(opt_norm == cn or (len(cn) > 20 and cn in opt_norm) or (len(opt_norm) > 20 and opt_norm in cn) for cn in correct_norm)
                 if is_correct:
-                    back_items.append(f"<li><span class='correct'>{opt}</span></li>")
+                    back_items.append(f"<div class='option'><input type='checkbox' checked disabled> <span class='correct'>{opt}</span></div>")
                 else:
-                    back_items.append(f"<li>{opt}</li>")
-            back = f"<b>Question {num}:</b><br><br>{q_text}<br><br><ul>{''.join(back_items)}</ul>"
+                    back_items.append(f"<div class='option'><input type='checkbox' disabled> {opt}</div>")
+            back = f"<b>Question {num}:</b><br><br>{q_text}<br><br>{''.join(back_items)}"
 
         note = genanki.Note(model=model, fields=[front, back], guid=f"{name}-q{num}")
         deck.add_note(note)
