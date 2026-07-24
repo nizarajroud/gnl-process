@@ -743,6 +743,12 @@ def _fetch_linkedin_from_cache():
                     "INSERT OR IGNORE INTO saved_articles (source, source_id, title, content, source_url, saved_date, fetched_at, processed) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
                     ('linkedin', url, title, content, url, date_str, now)
                 )
+                # Update title for existing articles if Bedrock generated a better one
+                if title and title != 'Sans titre':
+                    conn.execute(
+                        "UPDATE saved_articles SET title = ? WHERE source_id = ? AND (title = 'Sans titre' OR length(title) > 60)",
+                        (title, url)
+                    )
                 added += 1
                 # Save original content to INBOX_FOLDER
                 from gnl_core.config import get_config
