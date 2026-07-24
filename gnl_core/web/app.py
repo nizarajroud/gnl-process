@@ -656,6 +656,31 @@ async def _call_linkedin_mcp():
         return False
 
 
+def _generate_title_bedrock(content: str) -> str:
+    """Generate a meaningful title for an article using Bedrock (Claude)."""
+    try:
+        import boto3, json
+        from gnl_core.config import get_config
+        config = get_config()
+        model_id = config.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
+        client = boto3.client('bedrock-runtime', region_name='us-east-1')
+        # Use first 800 chars for context
+        snippet = content[:800]
+        response = client.invoke_model(
+            modelId=model_id,
+            body=json.dumps({
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 50,
+                "messages": [{"role": "user", "content": f"Give a concise title (max 10 words, no quotes) that summarizes the main topic of this LinkedIn post:\n\n{snippet}"}]
+            })
+        )
+        result = json.loads(response['body'].read())
+        title = result['content'][0]['text'].strip().strip('"\'')
+        return title[:100] if title else 'Sans titre'
+    except Exception:
+        return ''
+
+
 def _fetch_linkedin_from_cache():
     """Read LinkedIn MCP cache and import into our saved_articles table."""
     from gnl_core.db import get_db
@@ -683,14 +708,16 @@ def _fetch_linkedin_from_cache():
             if not url or url.startswith('no-url'):
                 continue
             content = r['content'] or ''
-            # Extract title: first substantial line (not author name/metadata)
-            lines = content.split('\n')
-            title = 'Sans titre'
-            for l in lines:
-                l = l.strip()
-                if len(l) > 40 and '•' not in l and 'abonnés' not in l and 'Architect' not in l and 'Engineer' not in l and 'Creator' not in l:
-                    title = l[:100]
-                    break
+            # Generate title via Bedrock (fallback to first substantial line)
+            title = _generate_title_bedrock(content)
+            if not title:
+                lines = content.split('\n')
+                title = 'Sans titre'
+                for l in lines:
+                    l = l.strip()
+                    if len(l) > 40 and '•' not in l and 'abonnés' not in l and 'Architect' not in l and 'Engineer' not in l and 'Creator' not in l:
+                        title = l[:100]
+                        break
             # Extract relative date from content (e.g. "• 1 j", "• 2 sem.", "• 3 h")
             import re
             date_str = ''
