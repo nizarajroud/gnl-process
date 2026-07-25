@@ -471,6 +471,46 @@
             fetch(`/saved-articles/batch/${source}`, {method: 'POST'});
         }
 
+        async function openCombineDialog(source) {
+            const res = await fetch(`/saved-articles/audio-files/${source}`);
+            const files = await res.json();
+            if (!files.length) { alert('Aucun fichier audio trouvé'); return; }
+            let html = `<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" id="combine-dialog">
+                <div class="bg-gray-800 rounded-lg p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto">
+                    <h3 class="text-lg font-semibold mb-3">🔗 Combiner les audios</h3>
+                    <div class="mb-3 flex gap-2">
+                        <button onclick="document.querySelectorAll('#combine-list input').forEach(c=>c.checked=true)" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">✓ All</button>
+                        <button onclick="document.querySelectorAll('#combine-list input').forEach(c=>c.checked=false)" class="px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded text-sm">✗ None</button>
+                    </div>
+                    <div id="combine-list" class="space-y-2 mb-4">`;
+            files.forEach((f, i) => {
+                html += `<label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-700 p-1 rounded">
+                    <input type="checkbox" value="${f.filename}" class="rounded" checked>
+                    <span class="truncate">${f.filename}</span>
+                    <span class="text-gray-500 text-xs ml-auto">${f.date}</span>
+                </label>`;
+            });
+            html += `</div>
+                    <div class="flex gap-2 justify-end">
+                        <button onclick="document.getElementById('combine-dialog').remove()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded">Annuler</button>
+                        <button onclick="doCombine('${source}')" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded font-semibold">🔗 Combiner</button>
+                    </div>
+                </div>
+            </div>`;
+            document.body.insertAdjacentHTML('beforeend', html);
+        }
+
+        function doCombine(source) {
+            const checked = [...document.querySelectorAll('#combine-list input:checked')].map(c => c.value);
+            if (!checked.length) { alert('Sélectionnez au moins un fichier'); return; }
+            document.getElementById('combine-dialog').remove();
+            fetch(`/saved-articles/combine/${source}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({files: checked})
+            });
+        }
+
         function processExam(theme, sub, filename) {
             fetch(`/exams/process/${theme}/${sub}/${filename}`, {method: 'POST'});
         }
@@ -618,7 +658,7 @@
                         subPanel.innerHTML = html;
                         loadFileList(theme, sub);
                     } else if (mode === 'fetch') {
-                        html += `<div class="mb-4 flex gap-2"><button onclick="fetchSavedArticles('${sub}')" data-source="${sub}" class="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">🔄 Récupérer</button><button onclick="batchGenerate('${sub}')" class="px-4 py-1 bg-purple-600 hover:bg-purple-500 rounded text-sm">🚀 Générer lot</button></div>`;
+                        html += `<div class="mb-4 flex gap-2"><button onclick="fetchSavedArticles('${sub}')" data-source="${sub}" class="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">🔄 Récupérer</button><button onclick="batchGenerate('${sub}')" class="px-4 py-1 bg-purple-600 hover:bg-purple-500 rounded text-sm">🚀 Générer lot</button><button onclick="openCombineDialog('${sub}')" class="px-4 py-1 bg-green-600 hover:bg-green-500 rounded text-sm">🔗 Combiner</button></div>`;
                         html += `<div id="articles-${sub}" class="text-sm text-gray-400">Chargement...</div>`;
                         subPanel.innerHTML = html;
                         loadSavedArticles(sub);
