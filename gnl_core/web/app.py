@@ -769,16 +769,29 @@ def _fetch_linkedin_from_cache():
 
 @app.get("/saved-articles/audio-files/{source}")
 async def list_audio_files(source: str):
-    """List available MP3 files for combining, sorted by creation date."""
+    """List MP3 files not yet combined, sorted by creation date."""
+    from gnl_core.db import get_db
     from gnl_core.config import get_config
     config = get_config()
     audio_dir = os.path.join(config.get('AUDIO_PARTS_FOLDER', ''), 'saved-articles', source)
+
+    # Get uncombined articles from DB
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT audio_path FROM saved_articles WHERE source=? AND processed=1 AND audio_path IS NOT NULL AND combined_at IS NULL",
+            (source,)
+        ).fetchall()
+    uncombined = {r[0] for r in rows if r[0]}
+
     if not os.path.isdir(audio_dir):
         return []
     files = []
     for f in os.listdir(audio_dir):
         if f.endswith('.mp3'):
             path = os.path.join(audio_dir, f)
+            # Only show if not already combined
+            if path not in uncombined:
+                continue
             ctime = os.path.getctime(path)
             from datetime import datetime
             files.append({'filename': f, 'date': datetime.fromtimestamp(ctime).strftime('%Y-%m-%d %H:%M')})
@@ -840,6 +853,14 @@ async def _combine_selected(source: str, selected_files: list):
     os.unlink(concat_path)
 
     if result.returncode == 0:
+        # Mark combined in DB
+        from gnl_core.db import get_db
+        from datetime import datetime
+        now_str = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+        with get_db() as conn:
+            for p in paths:
+                conn.execute("UPDATE saved_articles SET combined_at=? WHERE audio_path=?", (now_str, p))
+            conn.commit()
         await broadcast_log(f"✓ Batch combiné: {output_file}")
     else:
         await broadcast_log(f"⚠ Erreur ffmpeg: {result.stderr.decode()[:100]}")
