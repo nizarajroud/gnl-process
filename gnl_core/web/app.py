@@ -767,9 +767,109 @@ def _fetch_linkedin_from_cache():
     return added
 
 
+@app.get("/saved-articles/audio-files/{source}")
+async def list_audio_files(source: str):
+    """List MP3 files not yet combined, sorted by creation date."""
+    from gnl_core.db import get_db
+    from gnl_core.config import get_config
+    config = get_config()
+    audio_dir = os.path.join(config.get('AUDIO_PARTS_FOLDER', ''), 'saved-articles', source)
+
+    # Get uncombined articles from DB
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT audio_path FROM saved_articles WHERE source=? AND processed=1 AND audio_path IS NOT NULL AND combined_at IS NULL",
+            (source,)
+        ).fetchall()
+    uncombined = {r[0] for r in rows if r[0]}
+
+    if not os.path.isdir(audio_dir):
+        return []
+    files = []
+    for f in os.listdir(audio_dir):
+        if f.endswith('.mp3'):
+            path = os.path.join(audio_dir, f)
+            # Only show if not already combined
+            if path not in uncombined:
+                continue
+            ctime = os.path.getctime(path)
+            from datetime import datetime
+            files.append({'filename': f, 'date': datetime.fromtimestamp(ctime).strftime('%Y-%m-%d %H:%M')})
+    files.sort(key=lambda x: x['date'], reverse=True)
+    return files
+
+
+@app.post("/saved-articles/combine/{source}")
+async def combine_articles(source: str, request: Request):
+    """Combine selected MP3 files into a batch."""
+    data = await request.json()
+    selected_files = data.get('files', [])
+    asyncio.create_task(_combine_selected(source, selected_files))
+    return {"status": "combining"}
+
+
+async def _combine_selected(source: str, selected_files: list):
+    """Combine selected MP3 files into one batch file on the backlog drive."""
+    import subprocess
+    from gnl_core.config import get_config
+    from datetime import datetime
+    config = get_config()
+    audio_dir = os.path.join(config.get('AUDIO_PARTS_FOLDER', ''), 'saved-articles', source)
+    backlog_dir = os.path.join(config.get('GNL_BACKLOG', ''), 'saved-articles', source)
+    os.makedirs(backlog_dir, exist_ok=True)
+
+    # Build list of full paths (in selection order)
+    paths = []
+    for f in selected_files:
+        p = os.path.join(audio_dir, f)
+        if os.path.exists(p):
+            paths.append(p)
+
+    if not paths:
+        await broadcast_log("⚠ Aucun fichier valide sélectionné")
+        await broadcast_log("__done__")
+        return
+
+    await broadcast_log(f"▶ COMBINE ({len(paths)} fichiers)")
+
+    date_str = datetime.now().strftime('%Y-%m-%d')
+    output_file = os.path.join(backlog_dir, f"batch-{date_str}.mp3")
+    counter = 1
+    while os.path.exists(output_file):
+        counter += 1
+        output_file = os.path.join(backlog_dir, f"batch-{date_str}-{counter}.mp3")
+
+    # Create ffmpeg concat file with silence between articles
+    import tempfile
+    silence_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'assets', 'silence-3s.mp3')
+    concat_path = os.path.join(tempfile.gettempdir(), 'combine_concat.txt')
+    with open(concat_path, 'w') as f:
+        for idx, p in enumerate(paths):
+            f.write(f"file '{p}'\n")
+            if idx < len(paths) - 1 and os.path.exists(silence_file):
+                f.write(f"file '{silence_file}'\n")
+
+    result = subprocess.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', concat_path, '-c', 'copy', output_file], capture_output=True)
+    os.unlink(concat_path)
+
+    if result.returncode == 0:
+        # Mark combined in DB
+        from gnl_core.db import get_db
+        from datetime import datetime
+        now_str = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+        with get_db() as conn:
+            for p in paths:
+                conn.execute("UPDATE saved_articles SET combined_at=? WHERE audio_path=?", (now_str, p))
+            conn.commit()
+        await broadcast_log(f"✓ Batch combiné: {output_file}")
+    else:
+        await broadcast_log(f"⚠ Erreur ffmpeg: {result.stderr.decode()[:100]}")
+    await broadcast_log("__done__")
+
+
 @app.post("/saved-articles/batch/{source}")
 async def batch_generate_articles(source: str):
-    """Generate text + audio for next 10 unprocessed articles, then combine."""
+    """Generate text + audio for next 10 unprocessed articles."""
     asyncio.create_task(_batch_generate(source))
     return {"status": "started"}
 
@@ -930,59 +1030,6 @@ async def _batch_generate(source):
         except Exception as e:
             await broadcast_log(f"  ⚠ Audio échoué: {str(e)[:60]}")
             continue
-
-    # Step 3: Combine all generated MP3s into one batch file
-    # Include previously processed articles that weren't combined (e.g. crash recovery)
-    with get_db() as conn:
-        today_str = datetime.now().strftime('%Y-%m-%d')
-        all_audio = conn.execute(
-            "SELECT audio_path FROM saved_articles WHERE source=? AND processed=1 AND audio_path IS NOT NULL AND combined_at IS NULL",
-            (source,)
-        ).fetchall()
-        all_paths = [r[0] for r in all_audio if r[0] and os.path.exists(r[0])]
-    # Use all_paths (includes current run + previous unfinished runs)
-    if all_paths:
-        await broadcast_log(f"▶ COMBINE ({len(all_paths)} articles)")
-        try:
-            config = get_config()
-            backlog_dir = os.path.join(config.get('GNL_BACKLOG', ''), 'saved-articles', source)
-            os.makedirs(backlog_dir, exist_ok=True)
-
-            from datetime import datetime
-            date_str = datetime.now().strftime('%Y-%m-%d')
-            now_str = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-            output_file = os.path.join(backlog_dir, f"batch-{date_str}.mp3")
-
-            # Check if batch already exists today
-            counter = 1
-            while os.path.exists(output_file):
-                counter += 1
-                output_file = os.path.join(backlog_dir, f"batch-{date_str}-{counter}.mp3")
-
-            # Create ffmpeg concat file (with silence separator between articles)
-            import tempfile
-            silence_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'assets', 'silence-3s.mp3')
-            concat_path = os.path.join(tempfile.gettempdir(), 'batch_concat.txt')
-            with open(concat_path, 'w') as f:
-                for idx, p in enumerate(all_paths):
-                    f.write(f"file '{p}'\n")
-                    if idx < len(all_paths) - 1:
-                        f.write(f"file '{silence_file}'\n")
-
-            subprocess.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', concat_path, '-c', 'copy', output_file], capture_output=True)
-            os.unlink(concat_path)
-
-            # Mark all as combined
-            with get_db() as conn:
-                for p in all_paths:
-                    conn.execute("UPDATE saved_articles SET combined_at=? WHERE audio_path=?", (now_str, p))
-                conn.commit()
-
-            await broadcast_log(f"✓ Batch combiné: {output_file}")
-        except Exception as e:
-            await broadcast_log(f"⚠ Combine échoué: {str(e)[:80]}")
-    else:
-        await broadcast_log("⚠ Aucun audio généré pour le batch")
 
     await broadcast_log("__done__")
 
