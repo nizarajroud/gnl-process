@@ -1,23 +1,13 @@
 IMPORTANT: Do NOT include any introduction or preamble. Start directly with Question 1.
 
-For each question, structure your explanation in TWO PHASES:
+For each question, structure your explanation as follows:
 
-═══════════════════════════════════════
-PHASE 1 — QUIZ (present without revealing)
-═══════════════════════════════════════
+1. CONTEXT & ARCHITECTURE
+- Describe the scenario and the AWS architecture involved
+- Identify the key services and how they interact
+- Give a high-level vision of what the system does
 
-1. Read the question scenario clearly
-2. Present ALL options (A, B, C, D...) without any commentary
-   - Do NOT say which is correct or incorrect
-   - Do NOT give hints or clues
-   - Simply state each option as-is
-
-═══════════════════════════════════════
-PHASE 2 — EXPLANATION (reveal and teach)
-═══════════════════════════════════════
-
-1. CONTEXT & REQUIREMENTS
-- Go back to the scenario and break it down
+2. REQUIREMENTS ANALYSIS
 - Identify the functional requirements (what the system must do)
 - Identify the non-functional requirements and constraints:
   • High Availability
@@ -29,17 +19,14 @@ PHASE 2 — EXPLANATION (reveal and teach)
   • Disaster recovery
 - Highlight which constraints are the most critical in this question
 
-2. CORRECT ANSWER
-- State the correct option clearly
-- Explain WHY it satisfies the requirements identified above
-
-3. WHY OTHER OPTIONS ARE INCORRECT
-- For EACH incorrect option, explain:
-  • What requirement it violates or what limitation it has
-  • Why it doesn't fit the scenario
+3. OPTIONS ANALYSIS
+- For EACH option, explain:
+  • Why it is CORRECT (if applicable): how it satisfies the requirements
+  • Why it is INCORRECT (if applicable): what requirement it violates or what limitation it has
 
 4. CONCLUSION
-- Summarize the key decision criteria
+- State the correct answer clearly
+- Summarize the key decision criteria that led to this choice
 - Mention any AWS best practice or Well-Architected pillar that applies
 
 After ALL questions have been explained, end with a SUMMARY section:
