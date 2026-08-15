@@ -1,4 +1,4 @@
-IMPORTANT: Do NOT include any introduction or preamble. Start directly with Question 1.
+IMPORTANT: Do NOT include any introduction or preamble. Start directly with the first question. Use the EXACT question number as written in the source document (e.g. if the document says "Question 45", say "Question 45", not "Question 1").
 
 For each question, structure your explanation as follows:
 
