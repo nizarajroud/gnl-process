@@ -25,6 +25,38 @@ def _hash_url(url):
     return hashlib.md5(url.encode()).hexdigest()[:16]
 
 
+def _classify_article(headline, content_snippet=''):
+    """Classify a What's New article into an AWS category using Bedrock."""
+    try:
+        import boto3, json
+        config = get_config()
+        categories = config.get('WHATSNEW_CATEGORIES', ['Other'])
+        model_id = config.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
+        client = boto3.client('bedrock-runtime', region_name='us-east-1')
+        cat_list = ', '.join(categories)
+        text = f"{headline}. {content_snippet[:200]}" if content_snippet else headline
+        response = client.invoke_model(
+            modelId=model_id,
+            body=json.dumps({
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 30,
+                "messages": [{"role": "user", "content": f"Classify this AWS announcement into exactly one category from this list: [{cat_list}]. Reply with ONLY the category name, nothing else.\n\nAnnouncement: {text}"}]
+            })
+        )
+        result = json.loads(response['body'].read())
+        category = result['content'][0]['text'].strip()
+        # Validate against known categories
+        if category in categories:
+            return category
+        # Fuzzy match
+        for cat in categories:
+            if cat.lower() in category.lower() or category.lower() in cat.lower():
+                return cat
+        return 'Other'
+    except Exception:
+        return 'Other'
+
+
 def _fetch_content(url):
     try:
         resp = requests.get(url, timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
@@ -103,21 +135,29 @@ def generate_whats_new(month, on_progress=None):
     if on_progress:
         on_progress(f"✓ {len(all_items)} annonces trouvées")
 
-    # Aggregate by day + fetch content
+    # Classify + fetch content
     if on_progress:
-        on_progress("📄 Récupération du contenu...")
+        on_progress("📄 Récupération du contenu + classification...")
 
-    by_day = defaultdict(list)
-    for item_url, date_fmt, headline in all_items:
-        by_day[date_fmt].append((item_url, headline))
+    categories = config.get('WHATSNEW_CATEGORIES', ['Other'])
+    by_category = defaultdict(list)
+    for i, (item_url, date_fmt, headline) in enumerate(all_items):
+        content = _fetch_content(item_url)
+        category = _classify_article(headline, content[:300])
+        by_category[category].append((item_url, date_fmt, headline, content))
+        if on_progress and (i + 1) % 10 == 0:
+            on_progress(f"  {i+1}/{len(all_items)} classifiés...")
 
+    # Generate markdown grouped by category (priority order)
     md_parts = [f"# What's New — {month_name.capitalize()} {current_year}\n"]
-    for day in sorted(by_day.keys(), key=lambda d: int(d.split()[0])):
-        items = by_day[day]
-        md_parts.append(f"\n## {day}\n")
-        for item_url, headline in items:
-            content = _fetch_content(item_url)
+    for cat in categories:
+        items = by_category.get(cat, [])
+        if not items:
+            continue
+        md_parts.append(f"\n## {cat} ({len(items)})\n")
+        for item_url, date_fmt, headline, content in items:
             md_parts.append(f"### {headline}\n")
+            md_parts.append(f"*{date_fmt}*\n")
             md_parts.append(f"{content}\n")
             md_parts.append("---\n")
 
