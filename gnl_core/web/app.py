@@ -1233,11 +1233,13 @@ async def _generate_content(source, param, category=""):
             def on_progress(msg):
                 asyncio.run_coroutine_threadsafe(broadcast_log(msg), loop)
 
-            result = await loop.run_in_executor(None, lambda: generate_whats_new(param, category_filter=category or None, on_progress=on_progress))
+            # Support multiple months (comma-separated)
+            months = [m.strip() for m in param.split(',') if m.strip()]
+            result = await loop.run_in_executor(None, lambda: generate_whats_new(months, category_filter=category or None, on_progress=on_progress))
             if result:
                 await broadcast_log(f"✓ PDF généré: {result}")
             else:
-                await broadcast_log("⚠ Aucune annonce trouvée pour ce mois")
+                await broadcast_log("⚠ Aucune annonce trouvée pour cette période")
     except Exception as e:
         await broadcast_log(f"⚠ Erreur: {str(e)[:100]}")
     await broadcast_log("__done__")

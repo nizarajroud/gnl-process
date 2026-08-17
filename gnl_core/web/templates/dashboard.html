@@ -615,6 +615,28 @@
             });
         }
 
+        function wnSelectQ(q) {
+            const starts = {1: ['01','02','03'], 2: ['04','05','06'], 3: ['07','08','09'], 4: ['10','11','12']};
+            document.querySelectorAll('.wn-month').forEach(cb => {
+                cb.checked = starts[q].includes(cb.value);
+            });
+        }
+        function wnSelectAll() {
+            document.querySelectorAll('.wn-month').forEach(cb => cb.checked = true);
+        }
+        function generateWhatsNew() {
+            const months = [...document.querySelectorAll('.wn-month:checked')].map(cb => cb.value);
+            if (!months.length) { alert('Sélectionnez au moins un mois'); return; }
+            const category = document.getElementById('wn-category').value;
+            let body = `source=whats-new&param=${months.join(',')}`;
+            if (category) body += `&category=${encodeURIComponent(category)}`;
+            fetch('/content/generate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: body
+            });
+        }
+
         function renderContentTabs() {
             const tabs = document.getElementById('content-provider-tabs');
             const panels = document.getElementById('content-provider-panels');
@@ -655,7 +677,35 @@
 
                     let html = '';
                     if (mode === 'generate' && sub === 'aws-whats-new') {
-                        html += `<div class="mb-4 p-3 border border-gray-700 rounded"><div class="flex items-end gap-3"><div><label class="text-xs text-gray-400">Mois</label><select id="wn-month" class="bg-gray-700 rounded px-2 py-1 text-sm"><option value="01">Janvier</option><option value="02">Février</option><option value="03">Mars</option><option value="04">Avril</option><option value="05">Mai</option><option value="06">Juin</option><option value="07">Juillet</option><option value="08">Août</option><option value="09">Septembre</option><option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Décembre</option></select></div><div><label class="text-xs text-gray-400">Catégorie</label><select id="wn-category" class="bg-gray-700 rounded px-2 py-1 text-sm"><option value="">Toutes</option><option value="Machine Learning & AI">ML & AI</option><option value="Compute">Compute</option><option value="Networking & Content Delivery">Networking</option><option value="Storage">Storage</option><option value="Database">Database</option><option value="Security, Identity & Compliance">Security</option><option value="Analytics">Analytics</option><option value="Application Integration">Integration</option><option value="Containers">Containers</option><option value="Serverless">Serverless</option></select></div><button onclick="generateContent('whats-new', document.getElementById('wn-month').value, document.getElementById('wn-category').value)" class="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">Générer PDF</button></div></div>`;
+                        html += `<div class="mb-4 p-3 border border-gray-700 rounded">
+                        <div class="mb-2">
+                            <label class="text-xs text-gray-400">Période</label>
+                            <div class="flex gap-1 mt-1 mb-2">
+                                <button onclick="wnSelectQ(1)" class="px-2 py-0.5 bg-gray-600 hover:bg-gray-500 rounded text-xs">Q1</button>
+                                <button onclick="wnSelectQ(2)" class="px-2 py-0.5 bg-gray-600 hover:bg-gray-500 rounded text-xs">Q2</button>
+                                <button onclick="wnSelectQ(3)" class="px-2 py-0.5 bg-gray-600 hover:bg-gray-500 rounded text-xs">Q3</button>
+                                <button onclick="wnSelectQ(4)" class="px-2 py-0.5 bg-gray-600 hover:bg-gray-500 rounded text-xs">Q4</button>
+                                <button onclick="wnSelectAll()" class="px-2 py-0.5 bg-gray-600 hover:bg-gray-500 rounded text-xs">All</button>
+                            </div>
+                            <div class="grid grid-cols-6 gap-1">
+                                <label class="text-xs flex items-center gap-1"><input type="checkbox" class="wn-month" value="01"> Jan</label>
+                                <label class="text-xs flex items-center gap-1"><input type="checkbox" class="wn-month" value="02"> Fév</label>
+                                <label class="text-xs flex items-center gap-1"><input type="checkbox" class="wn-month" value="03"> Mar</label>
+                                <label class="text-xs flex items-center gap-1"><input type="checkbox" class="wn-month" value="04"> Avr</label>
+                                <label class="text-xs flex items-center gap-1"><input type="checkbox" class="wn-month" value="05"> Mai</label>
+                                <label class="text-xs flex items-center gap-1"><input type="checkbox" class="wn-month" value="06"> Jun</label>
+                                <label class="text-xs flex items-center gap-1"><input type="checkbox" class="wn-month" value="07"> Jul</label>
+                                <label class="text-xs flex items-center gap-1"><input type="checkbox" class="wn-month" value="08"> Aoû</label>
+                                <label class="text-xs flex items-center gap-1"><input type="checkbox" class="wn-month" value="09"> Sep</label>
+                                <label class="text-xs flex items-center gap-1"><input type="checkbox" class="wn-month" value="10"> Oct</label>
+                                <label class="text-xs flex items-center gap-1"><input type="checkbox" class="wn-month" value="11"> Nov</label>
+                                <label class="text-xs flex items-center gap-1"><input type="checkbox" class="wn-month" value="12"> Déc</label>
+                            </div>
+                        </div>
+                        <div class="flex items-end gap-3">
+                            <div><label class="text-xs text-gray-400">Catégorie</label><select id="wn-category" class="bg-gray-700 rounded px-2 py-1 text-sm"><option value="">Toutes</option><option value="Machine Learning & AI">ML & AI</option><option value="Compute">Compute</option><option value="Networking & Content Delivery">Networking</option><option value="Storage">Storage</option><option value="Database">Database</option><option value="Security, Identity & Compliance">Security</option><option value="Analytics">Analytics</option><option value="Application Integration">Integration</option><option value="Containers">Containers</option><option value="Serverless">Serverless</option></select></div>
+                            <button onclick="generateWhatsNew()" class="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">Générer PDF</button>
+                        </div></div>`;
                         html += `<div id="filelist-${theme}-${sub}" class="text-sm text-gray-400">Chargement...</div>`;
                         subPanel.innerHTML = html;
                         loadFileList(theme, sub);

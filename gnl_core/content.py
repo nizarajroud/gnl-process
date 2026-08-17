@@ -71,11 +71,11 @@ def _fetch_content(url):
         return f"(erreur: {e})"
 
 
-def generate_whats_new(month, category_filter=None, on_progress=None):
-    """Generate What's New PDF for a given month. Optionally filter by category.
+def generate_whats_new(months_input, category_filter=None, on_progress=None):
+    """Generate What's New PDF for one or more months. Optionally filter by category.
     
     Args:
-        month: Month number (1-12)
+        months_input: Single month string or list of month numbers (e.g. ['01','02','03'])
         category_filter: If set, only include articles in this category
         on_progress: Callback for progress updates
     Returns:
@@ -83,18 +83,30 @@ def generate_whats_new(month, category_filter=None, on_progress=None):
     """
     from weasyprint import HTML
 
-    month = str(month).zfill(2)
-    month_name = MONTHS_FR.get(month)
-    if not month_name:
+    # Normalize to list
+    if isinstance(months_input, str):
+        months_input = [months_input]
+    months = [str(m).zfill(2) for m in months_input]
+
+    # Validate
+    month_names = [MONTHS_FR.get(m) for m in months]
+    if not all(month_names):
         return None
 
     config = get_config()
     current_year = datetime.now().year
-    month_prefix = f"{current_year}-{month}"
+    month_prefixes = set(f"{current_year}-{m}" for m in months)
+    earliest_prefix = min(month_prefixes)
+
+    # Label for progress
+    if len(months) == 1:
+        period_label = month_names[0]
+    else:
+        period_label = f"{month_names[0]}-{month_names[-1]}"
 
     # Crawl
     if on_progress:
-        on_progress(f"🔍 Crawl des annonces {month_name} {current_year}...")
+        on_progress(f"🔍 Crawl des annonces {period_label} {current_year}...")
 
     all_items = []
     for page_num in range(50):
@@ -128,9 +140,9 @@ def generate_whats_new(month, category_filter=None, on_progress=None):
             except (ValueError, KeyError):
                 date_formatted = post_dt[:10]
 
-            if post_dt[:7] == month_prefix:
+            if post_dt[:7] in month_prefixes:
                 all_items.append((item_url, date_formatted, headline))
-            elif post_dt[:7] < month_prefix:
+            elif post_dt[:7] < earliest_prefix:
                 stop = True
                 break
 
@@ -160,7 +172,7 @@ def generate_whats_new(month, category_filter=None, on_progress=None):
     # If category_filter is set, only include that category
     filter_cats = [category_filter] if category_filter else categories
     title_suffix = f" — {category_filter}" if category_filter else ""
-    md_parts = [f"# What's New — {month_name.capitalize()} {current_year}{title_suffix}\n"]
+    md_parts = [f"# What's New — {period_label.capitalize()} {current_year}{title_suffix}\n"]
     total_included = 0
     for cat in filter_cats:
         items = by_category.get(cat, [])
@@ -193,11 +205,16 @@ def generate_whats_new(month, category_filter=None, on_progress=None):
     inbox = config.get('INBOX_FOLDER', os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'inbox'))
     output_dir = Path(inbox) / "aws" / "aws-whats-new"
     output_dir.mkdir(parents=True, exist_ok=True)
+    # Build filename
+    if len(months) == 1:
+        period_slug = month_names[0]
+    else:
+        period_slug = f"{month_names[0]}-{month_names[-1]}"
     if category_filter:
         cat_slug = category_filter.lower().replace(' & ', '-').replace(', ', '-').replace(' ', '-')
-        output_path = output_dir / f"whatsnew-{month_name}-{cat_slug}.pdf"
+        output_path = output_dir / f"whatsnew-{period_slug}-{cat_slug}.pdf"
     else:
-        output_path = output_dir / f"whatsnew-{month_name}.pdf"
+        output_path = output_dir / f"whatsnew-{period_slug}.pdf"
 
     HTML(string=html_full).write_pdf(str(output_path))
 
