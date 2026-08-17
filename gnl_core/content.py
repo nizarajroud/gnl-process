@@ -71,8 +71,16 @@ def _fetch_content(url):
         return f"(erreur: {e})"
 
 
-def generate_whats_new(month, on_progress=None):
-    """Generate What's New PDF for a given month. Returns output path or None."""
+def generate_whats_new(month, category_filter=None, on_progress=None):
+    """Generate What's New PDF for a given month. Optionally filter by category.
+    
+    Args:
+        month: Month number (1-12)
+        category_filter: If set, only include articles in this category
+        on_progress: Callback for progress updates
+    Returns:
+        Output path or None
+    """
     from weasyprint import HTML
 
     month = str(month).zfill(2)
@@ -149,8 +157,12 @@ def generate_whats_new(month, on_progress=None):
             on_progress(f"  {i+1}/{len(all_items)} classifiés...")
 
     # Generate markdown grouped by category (priority order)
-    md_parts = [f"# What's New — {month_name.capitalize()} {current_year}\n"]
-    for cat in categories:
+    # If category_filter is set, only include that category
+    filter_cats = [category_filter] if category_filter else categories
+    title_suffix = f" — {category_filter}" if category_filter else ""
+    md_parts = [f"# What's New — {month_name.capitalize()} {current_year}{title_suffix}\n"]
+    total_included = 0
+    for cat in filter_cats:
         items = by_category.get(cat, [])
         if not items:
             continue
@@ -160,6 +172,7 @@ def generate_whats_new(month, on_progress=None):
             md_parts.append(f"*{date_fmt}*\n")
             md_parts.append(f"{content}\n")
             md_parts.append("---\n")
+        total_included += len(items)
 
     # Generate PDF
     if on_progress:
@@ -180,11 +193,15 @@ def generate_whats_new(month, on_progress=None):
     inbox = config.get('INBOX_FOLDER', os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'inbox'))
     output_dir = Path(inbox) / "aws" / "aws-whats-new"
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f"whatsnew-{month_name}.pdf"
+    if category_filter:
+        cat_slug = category_filter.lower().replace(' & ', '-').replace(', ', '-').replace(' ', '-')
+        output_path = output_dir / f"whatsnew-{month_name}-{cat_slug}.pdf"
+    else:
+        output_path = output_dir / f"whatsnew-{month_name}.pdf"
 
     HTML(string=html_full).write_pdf(str(output_path))
 
     if on_progress:
-        on_progress(f"✅ {output_path.name} ({len(all_items)} annonces)")
+        on_progress(f"✅ {output_path.name} ({total_included} annonces)")
 
     return str(output_path)

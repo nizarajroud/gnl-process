@@ -605,11 +605,13 @@
             });
         }
 
-        function generateContent(source, param) {
+        function generateContent(source, param, category) {
+            let body = `source=${source}&param=${param}`;
+            if (category) body += `&category=${encodeURIComponent(category)}`;
             fetch('/content/generate', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: `source=${source}&param=${param}`
+                body: body
             });
         }
 
@@ -653,7 +655,7 @@
 
                     let html = '';
                     if (mode === 'generate' && sub === 'aws-whats-new') {
-                        html += `<div class="mb-4 p-3 border border-gray-700 rounded"><div class="flex items-end gap-3"><div><label class="text-xs text-gray-400">Mois</label><select id="wn-month" class="bg-gray-700 rounded px-2 py-1 text-sm"><option value="01">Janvier</option><option value="02">Février</option><option value="03">Mars</option><option value="04">Avril</option><option value="05">Mai</option><option value="06">Juin</option><option value="07">Juillet</option><option value="08">Août</option><option value="09">Septembre</option><option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Décembre</option></select></div><button onclick="generateContent('whats-new', document.getElementById('wn-month').value)" class="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">Générer PDF</button></div></div>`;
+                        html += `<div class="mb-4 p-3 border border-gray-700 rounded"><div class="flex items-end gap-3"><div><label class="text-xs text-gray-400">Mois</label><select id="wn-month" class="bg-gray-700 rounded px-2 py-1 text-sm"><option value="01">Janvier</option><option value="02">Février</option><option value="03">Mars</option><option value="04">Avril</option><option value="05">Mai</option><option value="06">Juin</option><option value="07">Juillet</option><option value="08">Août</option><option value="09">Septembre</option><option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Décembre</option></select></div><div><label class="text-xs text-gray-400">Catégorie</label><select id="wn-category" class="bg-gray-700 rounded px-2 py-1 text-sm"><option value="">Toutes</option><option value="Machine Learning & AI">ML & AI</option><option value="Compute">Compute</option><option value="Networking & Content Delivery">Networking</option><option value="Storage">Storage</option><option value="Database">Database</option><option value="Security, Identity & Compliance">Security</option><option value="Analytics">Analytics</option><option value="Application Integration">Integration</option><option value="Containers">Containers</option><option value="Serverless">Serverless</option></select></div><button onclick="generateContent('whats-new', document.getElementById('wn-month').value, document.getElementById('wn-category').value)" class="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">Générer PDF</button></div></div>`;
                         html += `<div id="filelist-${theme}-${sub}" class="text-sm text-gray-400">Chargement...</div>`;
                         subPanel.innerHTML = html;
                         loadFileList(theme, sub);

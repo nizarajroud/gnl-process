@@ -1216,14 +1216,16 @@ async def generate_content(request: Request):
     form = await request.form()
     source = form.get("source")
     param = form.get("param")
+    category = form.get("category", "")
 
-    asyncio.create_task(_generate_content(source, param))
+    asyncio.create_task(_generate_content(source, param, category))
     return {"status": "started"}
 
 
-async def _generate_content(source, param):
+async def _generate_content(source, param, category=""):
     loop = asyncio.get_event_loop()
-    await broadcast_log(f"▶ Génération contenu: {source} ({param})")
+    cat_label = f" [{category}]" if category else ""
+    await broadcast_log(f"▶ Génération contenu: {source} ({param}){cat_label}")
     try:
         if source == "whats-new":
             from gnl_core.content import generate_whats_new
@@ -1231,7 +1233,7 @@ async def _generate_content(source, param):
             def on_progress(msg):
                 asyncio.run_coroutine_threadsafe(broadcast_log(msg), loop)
 
-            result = await loop.run_in_executor(None, lambda: generate_whats_new(param, on_progress=on_progress))
+            result = await loop.run_in_executor(None, lambda: generate_whats_new(param, category_filter=category or None, on_progress=on_progress))
             if result:
                 await broadcast_log(f"✓ PDF généré: {result}")
             else:
