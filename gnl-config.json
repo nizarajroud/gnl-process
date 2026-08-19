@@ -46,5 +46,22 @@
   "DEBUG_NLM": "0",
   "EXAM_NLM_BATCH_SIZE": "15",
   "EXAM_USE_NLM": "0",
-  "NLM_QUOTA_RESET_LOCAL": "20:00"
+  "NLM_QUOTA_RESET_LOCAL": "20:00",
+  "WHATSNEW_CATEGORIES": [
+    "Machine Learning & AI",
+    "Compute",
+    "Networking & Content Delivery",
+    "Storage",
+    "Database",
+    "Security, Identity & Compliance",
+    "Analytics",
+    "Application Integration",
+    "Management & Governance",
+    "Containers",
+    "Serverless",
+    "Developer Tools",
+    "Migration & Transfer",
+    "Cost Management",
+    "Other"
+  ]
 }
