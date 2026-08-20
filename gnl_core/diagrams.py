@@ -65,7 +65,8 @@ ADDITIONAL INSTRUCTIONS:
 - Do NOT illustrate the solution or correct answer
 - Do NOT show which option is correct
 - Include a title with the question number
-- Return ONLY the XML content, no explanation, no markdown fences
+- Return ONLY valid draw.io XML starting with <mxfile and ending with </mxfile>
+- NO text before or after the XML. NO explanations. NO markdown fences. ONLY XML.
 """
     
     # Multi-turn conversation
@@ -86,7 +87,7 @@ ADDITIONAL INSTRUCTIONS:
             scenario_lines.append(line)
         scenario = '\n'.join(scenario_lines).strip()
         
-        user_msg = f"""Generate a draw.io diagram for the SCENARIO of this exam question (do NOT include the solution):
+        user_msg = f"""Generate a draw.io XML diagram for the SCENARIO of this exam question. Output ONLY the <mxfile>...</mxfile> XML, nothing else.
 
 Question {num}:
 {scenario[:2000]}"""
@@ -103,10 +104,22 @@ Question {num}:
             
             xml_content = response['output']['message']['content'][0]['text']
             
-            # Clean up: remove markdown fences if present
-            xml_content = re.sub(r'^```xml\s*', '', xml_content.strip())
-            xml_content = re.sub(r'^```\s*', '', xml_content.strip())
-            xml_content = re.sub(r'\s*```$', '', xml_content.strip())
+            # Extract XML: find <mxfile...>...</mxfile> block
+            xml_match = re.search(r'(<mxfile[\s\S]*?</mxfile>)', xml_content)
+            if xml_match:
+                xml_content = xml_match.group(1)
+            else:
+                # Fallback: strip markdown fences
+                xml_content = re.sub(r'^```xml\s*', '', xml_content.strip())
+                xml_content = re.sub(r'^```\s*', '', xml_content.strip())
+                xml_content = re.sub(r'\s*```$', '', xml_content.strip())
+            
+            # Validate: must start with <mxfile
+            if not xml_content.strip().startswith('<mxfile'):
+                if on_progress:
+                    on_progress(f"  diagram Q{num} ⚠ invalid XML (no <mxfile>)")
+                messages.append({"role": "assistant", "content": [{"text": "(invalid)"}]})
+                continue
             
             # Save .drawio
             drawio_path = diagrams_dir / f"Q{num}.drawio"
