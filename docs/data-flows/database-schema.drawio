@@ -1,0 +1,55 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Database Schema" id="db-schema">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="&lt;b&gt;GNL Process — Database Schema (SQLite)&lt;/b&gt;" style="text;html=1;align=center;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="400" y="20" width="400" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- parent_configuration -->
+        <mxCell id="t1" value="&lt;b&gt;parent_configuration&lt;/b&gt;&lt;hr&gt;&lt;div style='text-align:left;font-size:11px;'&gt;🔑 id INTEGER PK&lt;br&gt;parent_file TEXT&lt;br&gt;source_path TEXT&lt;br&gt;source_type TEXT&lt;br&gt;podcast_theme TEXT&lt;br&gt;podcast_subtheme TEXT&lt;br&gt;split_configuration TEXT (JSON)&lt;br&gt;generation_mode TEXT&lt;br&gt;combination_state INTEGER&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="80" y="80" width="250" height="200" as="geometry" />
+        </mxCell>
+
+        <!-- podcast_download -->
+        <mxCell id="t2" value="&lt;b&gt;podcast_download&lt;/b&gt;&lt;hr&gt;&lt;div style='text-align:left;font-size:11px;'&gt;🔑 id INTEGER PK&lt;br&gt;🔗 parent_configuration_id INTEGER FK&lt;br&gt;source_id TEXT (NLM notebook ID)&lt;br&gt;podcast_name TEXT&lt;br&gt;generation_state INTEGER (0/1)&lt;br&gt;download_state INTEGER (0/1)&lt;br&gt;conversion_state INTEGER (0/1)&lt;br&gt;date TEXT&lt;br&gt;retry_count INTEGER&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="80" y="330" width="250" height="210" as="geometry" />
+        </mxCell>
+
+        <!-- FK arrow -->
+        <mxCell id="fk1" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#6c8ebf;endArrow=ERmandOne;startArrow=ERmany;" edge="1" parent="1" source="t2" target="t1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- saved_articles -->
+        <mxCell id="t3" value="&lt;b&gt;saved_articles&lt;/b&gt;&lt;hr&gt;&lt;div style='text-align:left;font-size:11px;'&gt;🔑 id INTEGER PK&lt;br&gt;source TEXT (linkedin)&lt;br&gt;source_id TEXT (URL, UNIQUE)&lt;br&gt;title TEXT&lt;br&gt;content TEXT&lt;br&gt;source_url TEXT&lt;br&gt;saved_date TEXT&lt;br&gt;fetched_at TEXT&lt;br&gt;processed INTEGER (0/1)&lt;br&gt;output_path TEXT (text file)&lt;br&gt;audio_path TEXT (MP3)&lt;br&gt;combined_at TEXT (NULL=not combined)&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="450" y="80" width="260" height="260" as="geometry" />
+        </mxCell>
+
+        <!-- crawl_source -->
+        <mxCell id="t4" value="&lt;b&gt;crawl_source&lt;/b&gt;&lt;hr&gt;&lt;div style='text-align:left;font-size:11px;'&gt;🔑 id INTEGER PK&lt;br&gt;theme TEXT&lt;br&gt;subtheme TEXT&lt;br&gt;crawl_source_url TEXT&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="830" y="80" width="220" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- crawl_item -->
+        <mxCell id="t5" value="&lt;b&gt;crawl_item&lt;/b&gt;&lt;hr&gt;&lt;div style='text-align:left;font-size:11px;'&gt;🔑 id INTEGER PK&lt;br&gt;🔗 crawl_source_id INTEGER FK&lt;br&gt;url_hash TEXT&lt;br&gt;crawl_item_url TEXT&lt;br&gt;post_date TEXT&lt;br&gt;headline TEXT&lt;br&gt;processed_state TEXT&lt;br&gt;aggregation_state TEXT&lt;br&gt;category TEXT (Bedrock classified)&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="830" y="250" width="250" height="210" as="geometry" />
+        </mxCell>
+
+        <!-- FK arrow crawl -->
+        <mxCell id="fk2" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d6b656;endArrow=ERmandOne;startArrow=ERmany;" edge="1" parent="1" source="t5" target="t4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- series_catalog -->
+        <mxCell id="t6" value="&lt;b&gt;series_catalog&lt;/b&gt;&lt;hr&gt;&lt;div style='text-align:left;font-size:11px;'&gt;🔑 id INTEGER PK&lt;br&gt;theme TEXT&lt;br&gt;subtheme TEXT&lt;br&gt;prompt TEXT&lt;br&gt;content_mode TEXT&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="450" y="400" width="220" height="130" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
