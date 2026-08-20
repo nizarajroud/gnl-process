@@ -1614,17 +1614,20 @@ async def prepare_from_inbox(request: Request):
                 answers = await loop.run_in_executor(None, lambda: step3_highlight(md_path, on_progress=on_p))
                 await broadcast_log(f"  ✓ {len(answers)} questions")
 
-                await broadcast_log("▶ [ANKI] Génération .apkg")
-                anki_path = await loop.run_in_executor(None, lambda: step5_anki(answers, md_path, theme, subtheme, on_progress=on_p))
-                await broadcast_log(f"  ✓ {anki_path}")
-
-                # Optional: generate draw.io diagrams
+                # Optional: generate draw.io diagrams BEFORE Anki
                 from gnl_core.config import get_config as _gc
-                if _gc().get('EXAM_GENERATE_DIAGRAMS', '0') == '1':
+                _cfg = _gc()
+                diagrams = None
+                diagram_placement = _cfg.get('EXAM_DIAGRAM_PLACEMENT', 'front')
+                if _cfg.get('EXAM_GENERATE_DIAGRAMS', '0') == '1':
                     await broadcast_log("▶ [DIAGRAMS] Génération draw.io")
                     from gnl_core.diagrams import generate_exam_diagrams
-                    diagrams_path = await loop.run_in_executor(None, lambda: generate_exam_diagrams(md_path, answers, theme, subtheme, on_progress=on_p))
-                    await broadcast_log(f"  ✓ {diagrams_path}")
+                    diagrams = await loop.run_in_executor(None, lambda: generate_exam_diagrams(md_path, answers, theme, subtheme, on_progress=on_p))
+                    await broadcast_log(f"  ✓ {len(diagrams)} diagrammes")
+
+                await broadcast_log("▶ [ANKI] Génération .apkg")
+                anki_path = await loop.run_in_executor(None, lambda: step5_anki(answers, md_path, theme, subtheme, on_progress=on_p, diagrams=diagrams, diagram_placement=diagram_placement))
+                await broadcast_log(f"  ✓ {anki_path}")
 
             # === BRANCHE GÉNÉRATION ===
             if do_generate:

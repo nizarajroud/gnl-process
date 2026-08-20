@@ -3,6 +3,7 @@
 import os
 import re
 import json
+import subprocess
 import boto3
 from pathlib import Path
 from .config import get_config
@@ -20,7 +21,7 @@ def generate_exam_diagrams(source_path, answers, theme, subtheme, on_progress=No
         theme, subtheme: For output path
         on_progress: Callback
     Returns:
-        Path to diagrams directory
+        Dict {num: {'drawio': path, 'png': path}} for generated diagrams
     """
     config = get_config()
     model_id = config.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
@@ -50,36 +51,45 @@ def generate_exam_diagrams(source_path, answers, theme, subtheme, on_progress=No
     # Bedrock client
     client = boto3.client('bedrock-runtime', region_name='us-east-1')
     
-    # System prompt: skill + instructions
+    # System prompt: skill + instructions for SCENARIO ONLY (not solution)
     system_prompt = f"""{skill_content}
 
 ---
 ADDITIONAL INSTRUCTIONS:
 - For each question I send you, generate a COMPLETE draw.io XML file (.drawio format)
-- Illustrate the AWS architecture scenario described in the question
-- Highlight the correct answer's components in green (#d5e8d4 fill)
+- Illustrate ONLY the SCENARIO and CONTEXT of the question:
+  • AWS services mentioned in the current architecture
+  • Data flows between services
+  • Annotate constraints: HA, scalability, cost, latency, security, DR
+  • Show the PROBLEM or requirement that needs to be solved
+- Do NOT illustrate the solution or correct answer
+- Do NOT show which option is correct
 - Include a title with the question number
 - Return ONLY the XML content, no explanation, no markdown fences
 """
     
     # Multi-turn conversation
     messages = []
-    generated = 0
+    results = {}
     
     for num in sorted(answers.keys(), key=lambda x: int(x)):
         q_text = question_texts.get(num, '')
         if not q_text:
             continue
         
-        correct = answers[num].get('correct', [])
-        correct_text = '; '.join(correct) if correct else 'Unknown'
+        # Only send the scenario part (before options)
+        lines = q_text.split('\n')
+        scenario_lines = []
+        for line in lines:
+            if line.strip().startswith('- '):
+                break
+            scenario_lines.append(line)
+        scenario = '\n'.join(scenario_lines).strip()
         
-        user_msg = f"""Generate a draw.io architecture diagram for this exam question:
+        user_msg = f"""Generate a draw.io diagram for the SCENARIO of this exam question (do NOT include the solution):
 
 Question {num}:
-{q_text[:2000]}
-
-Correct answer: {correct_text[:500]}"""
+{scenario[:2000]}"""
         
         messages.append({"role": "user", "content": [{"text": user_msg}]})
         
@@ -95,14 +105,26 @@ Correct answer: {correct_text[:500]}"""
             
             # Clean up: remove markdown fences if present
             xml_content = re.sub(r'^```xml\s*', '', xml_content.strip())
+            xml_content = re.sub(r'^```\s*', '', xml_content.strip())
             xml_content = re.sub(r'\s*```$', '', xml_content.strip())
             
             # Save .drawio
-            output_path = diagrams_dir / f"Q{num}.drawio"
-            output_path.write_text(xml_content, encoding='utf-8')
-            generated += 1
+            drawio_path = diagrams_dir / f"Q{num}.drawio"
+            drawio_path.write_text(xml_content, encoding='utf-8')
             
-            # Add assistant response to conversation (for context continuity)
+            # Export to PNG
+            png_path = diagrams_dir / f"Q{num}.png"
+            export_result = subprocess.run(
+                ['drawio', '--export', '--format', 'png', '--output', str(png_path), str(drawio_path)],
+                capture_output=True, timeout=30
+            )
+            
+            if export_result.returncode == 0 and png_path.exists():
+                results[num] = {'drawio': str(drawio_path), 'png': str(png_path)}
+            else:
+                results[num] = {'drawio': str(drawio_path), 'png': None}
+            
+            # Add assistant response to conversation
             messages.append({"role": "assistant", "content": [{"text": xml_content}]})
             
             if on_progress:
@@ -111,14 +133,13 @@ Correct answer: {correct_text[:500]}"""
         except Exception as e:
             if on_progress:
                 on_progress(f"  diagram Q{num} ⚠ {str(e)[:60]}")
-            # Add placeholder to keep conversation valid
             messages.append({"role": "assistant", "content": [{"text": "(error)"}]})
         
-        # Trim conversation if too long (keep system + last 10 exchanges)
+        # Trim conversation if too long (keep last 10 exchanges)
         if len(messages) > 20:
             messages = messages[-10:]
     
     if on_progress:
-        on_progress(f"diagrams → {generated} générés dans {diagrams_dir}")
+        on_progress(f"diagrams → {len(results)} générés")
     
-    return str(diagrams_dir)
+    return results
