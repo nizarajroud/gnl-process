@@ -64,6 +64,6 @@
     "Cost Management",
     "Other"
   ],
-  "EXAM_GENERATE_DIAGRAMS": "0",
+  "EXAM_GENERATE_DIAGRAMS": "1",
   "EXAM_DIAGRAM_PLACEMENT": "front"
 }

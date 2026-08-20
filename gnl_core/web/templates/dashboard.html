@@ -566,6 +566,7 @@
                     // Simplified dialog for exams — no total count
                     document.getElementById('prep-dialog-mode-row').classList.add('hidden');
                     document.getElementById('prep-dialog-pipeline-row').classList.remove('hidden');
+                    document.getElementById('prep-dialog-diagrams-row').classList.remove('hidden');
                     document.getElementById('prep-dialog-pipeline').value = 'anki';
                     document.getElementById('prep-dialog-pages-label').textContent = 'Questions par épisode';
                     document.getElementById('prep-dialog-pages').value = 5;
@@ -573,6 +574,10 @@
                     document.getElementById('prep-dialog-info').textContent = '';
                     document.getElementById('prep-dialog-pipeline').onchange = function() {
                         document.getElementById('prep-dialog-pages').parentElement.style.display = this.value === 'anki' ? 'none' : '';
+                    };
+                    // Diagram checkbox toggle
+                    document.getElementById('prep-dialog-diagrams').onchange = function() {
+                        document.getElementById('prep-dialog-placement-row').classList.toggle('hidden', !this.checked);
                     };
                 } else {
                     document.getElementById('prep-dialog-mode-row').classList.remove('hidden');
@@ -594,7 +599,9 @@
         function confirmPrepare() {
             const dlg = document.getElementById('prep-dialog');
             const pipeline = document.getElementById('prep-dialog-pipeline').value || '';
-            const body = `theme=${dlg.dataset.theme}&subtheme=${dlg.dataset.sub}&filename=${dlg.dataset.file}&mode=${document.getElementById('prep-dialog-mode').value}&pages=${document.getElementById('prep-dialog-pages').value}&name=${document.getElementById('prep-dialog-name').value}&pipeline=${pipeline}`;
+            const diagrams = document.getElementById('prep-dialog-diagrams').checked ? '1' : '0';
+            const placement = document.querySelector('input[name="diagram-placement"]:checked')?.value || 'front';
+            const body = `theme=${dlg.dataset.theme}&subtheme=${dlg.dataset.sub}&filename=${dlg.dataset.file}&mode=${document.getElementById('prep-dialog-mode').value}&pages=${document.getElementById('prep-dialog-pages').value}&name=${document.getElementById('prep-dialog-name').value}&pipeline=${pipeline}&diagrams=${diagrams}&diagram_placement=${placement}`;
             closePrepDialog();
             fetch('/prepare-from-inbox', {
                 method: 'POST',
@@ -981,6 +988,19 @@
                         <option value="generate">📻 Génération uniquement</option>
                         <option value="both">🎴 Anki + 📻 Génération</option>
                     </select>
+                </div>
+                <div id="prep-dialog-diagrams-row" class="hidden">
+                    <label class="text-xs text-gray-400 flex items-center gap-2">
+                        <input type="checkbox" id="prep-dialog-diagrams" class="rounded">
+                        Générer diagrammes d'architecture
+                    </label>
+                    <div id="prep-dialog-placement-row" class="mt-2 ml-5 hidden">
+                        <label class="text-xs text-gray-400">Placement dans la carte Anki:</label>
+                        <div class="flex gap-4 mt-1">
+                            <label class="text-xs flex items-center gap-1"><input type="radio" name="diagram-placement" value="front" checked> Front (question)</label>
+                            <label class="text-xs flex items-center gap-1"><input type="radio" name="diagram-placement" value="back"> Back (réponse)</label>
+                        </div>
+                    </div>
                 </div>
                 <div>
                     <label id="prep-dialog-pages-label" class="text-xs text-gray-400">Pages par épisode</label>

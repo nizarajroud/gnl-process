@@ -1566,6 +1566,8 @@ async def prepare_from_inbox(request: Request):
     pages_per_episode = int(form.get("pages", 0))
     custom_name = form.get("name", "")
     pipeline = form.get("pipeline", "both")
+    do_diagrams = form.get("diagrams", "0") == "1"
+    diagram_placement = form.get("diagram_placement", "front")
 
     from gnl_core.config import get_config
     config = get_config()
@@ -1618,8 +1620,7 @@ async def prepare_from_inbox(request: Request):
                 from gnl_core.config import get_config as _gc
                 _cfg = _gc()
                 diagrams = None
-                diagram_placement = _cfg.get('EXAM_DIAGRAM_PLACEMENT', 'front')
-                if _cfg.get('EXAM_GENERATE_DIAGRAMS', '0') == '1':
+                if do_diagrams:
                     await broadcast_log("▶ [DIAGRAMS] Génération draw.io")
                     from gnl_core.diagrams import generate_exam_diagrams
                     diagrams = await loop.run_in_executor(None, lambda: generate_exam_diagrams(md_path, answers, theme, subtheme, on_progress=on_p))
