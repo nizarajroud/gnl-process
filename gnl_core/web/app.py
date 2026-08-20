@@ -1618,6 +1618,14 @@ async def prepare_from_inbox(request: Request):
                 anki_path = await loop.run_in_executor(None, lambda: step5_anki(answers, md_path, theme, subtheme, on_progress=on_p))
                 await broadcast_log(f"  ✓ {anki_path}")
 
+                # Optional: generate draw.io diagrams
+                from gnl_core.config import get_config as _gc
+                if _gc().get('EXAM_GENERATE_DIAGRAMS', '0') == '1':
+                    await broadcast_log("▶ [DIAGRAMS] Génération draw.io")
+                    from gnl_core.diagrams import generate_exam_diagrams
+                    diagrams_path = await loop.run_in_executor(None, lambda: generate_exam_diagrams(md_path, answers, theme, subtheme, on_progress=on_p))
+                    await broadcast_log(f"  ✓ {diagrams_path}")
+
             # === BRANCHE GÉNÉRATION ===
             if do_generate:
                 await broadcast_log(f"▶ [SPLIT] Découpage ({questions_per_chunk} questions/épisode)")

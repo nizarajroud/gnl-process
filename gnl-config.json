@@ -63,5 +63,6 @@
     "Migration & Transfer",
     "Cost Management",
     "Other"
-  ]
+  ],
+  "EXAM_GENERATE_DIAGRAMS": "0"
 }
