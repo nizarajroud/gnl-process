@@ -600,8 +600,9 @@
             const dlg = document.getElementById('prep-dialog');
             const pipeline = document.getElementById('prep-dialog-pipeline').value || '';
             const diagrams = document.getElementById('prep-dialog-diagrams').checked ? '1' : '0';
-            const placement = document.querySelector('input[name="diagram-placement"]:checked')?.value || 'front';
-            const body = `theme=${dlg.dataset.theme}&subtheme=${dlg.dataset.sub}&filename=${dlg.dataset.file}&mode=${document.getElementById('prep-dialog-mode').value}&pages=${document.getElementById('prep-dialog-pages').value}&name=${document.getElementById('prep-dialog-name').value}&pipeline=${pipeline}&diagrams=${diagrams}&diagram_placement=${placement}`;
+            const diagramFront = document.getElementById('diagram-front')?.checked ? '1' : '0';
+            const diagramBack = document.getElementById('diagram-back')?.checked ? '1' : '0';
+            const body = `theme=${dlg.dataset.theme}&subtheme=${dlg.dataset.sub}&filename=${dlg.dataset.file}&mode=${document.getElementById('prep-dialog-mode').value}&pages=${document.getElementById('prep-dialog-pages').value}&name=${document.getElementById('prep-dialog-name').value}&pipeline=${pipeline}&diagrams=${diagrams}&diagram_front=${diagramFront}&diagram_back=${diagramBack}`;
             closePrepDialog();
             fetch('/prepare-from-inbox', {
                 method: 'POST',
@@ -997,8 +998,8 @@
                     <div id="prep-dialog-placement-row" class="mt-2 ml-5 hidden">
                         <label class="text-xs text-gray-400">Placement dans la carte Anki:</label>
                         <div class="flex gap-4 mt-1">
-                            <label class="text-xs flex items-center gap-1"><input type="radio" name="diagram-placement" value="front" checked> Front (question)</label>
-                            <label class="text-xs flex items-center gap-1"><input type="radio" name="diagram-placement" value="back"> Back (réponse)</label>
+                            <label class="text-xs flex items-center gap-1"><input type="checkbox" id="diagram-front" checked> Front (contexte)</label>
+                            <label class="text-xs flex items-center gap-1"><input type="checkbox" id="diagram-back" checked> Back (avec réponse)</label>
                         </div>
                     </div>
                 </div>

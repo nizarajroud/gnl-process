@@ -1567,7 +1567,8 @@ async def prepare_from_inbox(request: Request):
     custom_name = form.get("name", "")
     pipeline = form.get("pipeline", "both")
     do_diagrams = form.get("diagrams", "0") == "1"
-    diagram_placement = form.get("diagram_placement", "front")
+    diagram_front = form.get("diagram_front", "1") == "1"
+    diagram_back = form.get("diagram_back", "1") == "1"
 
     from gnl_core.config import get_config
     config = get_config()
@@ -1627,7 +1628,7 @@ async def prepare_from_inbox(request: Request):
                     await broadcast_log(f"  ✓ {len(diagrams)} diagrammes")
 
                 await broadcast_log("▶ [ANKI] Génération .apkg")
-                anki_path = await loop.run_in_executor(None, lambda: step5_anki(answers, md_path, theme, subtheme, on_progress=on_p, diagrams=diagrams))
+                anki_path = await loop.run_in_executor(None, lambda: step5_anki(answers, md_path, theme, subtheme, on_progress=on_p, diagrams=diagrams, diagram_front=diagram_front, diagram_back=diagram_back))
                 await broadcast_log(f"  ✓ {anki_path}")
 
             # === BRANCHE GÉNÉRATION ===

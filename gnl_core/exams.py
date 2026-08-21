@@ -678,7 +678,7 @@ def step4_compact(source_path, answers, theme, subtheme, on_progress=None):
     return str(md_path)
 
 
-def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams=None):
+def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams=None, diagram_front=True, diagram_back=True):
     """Step 5: Generate Anki .apkg package directly from answers dict.
     
     Args:
@@ -686,6 +686,8 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         source_path: Path to full markdown (for question text extraction)
         theme, subtheme: For path resolution
         diagrams: Optional dict {num: {'png_front': path, 'png_back': path}} from generate_exam_diagrams
+        diagram_front: Include neutral diagram on front (question side)
+        diagram_back: Include highlighted diagram on back (answer side)
     Returns:
         Path to .apkg file
     """
@@ -780,12 +782,12 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                     back_items.append(f"<div class='option'><input type='checkbox' disabled> {opt}</div>")
             back = f"<b>Question {num}:</b><br><br>{q_text}<br><br>{''.join(back_items)}"
 
-        # Add diagrams: front (neutral) on question, back (highlighted) on answer
+        # Add diagrams based on user selection
         if diagrams and num in diagrams:
             d = diagrams[num]
-            if d.get('png_front'):
+            if diagram_front and d.get('png_front'):
                 front += f"<br><br><img src='Q{num}.png'>"
-            if d.get('png_back'):
+            if diagram_back and d.get('png_back'):
                 back += f"<br><br><img src='Q{num}-answer.png'>"
 
         note = genanki.Note(model=model, fields=[front, back], guid=f"{name}-q{num}")
