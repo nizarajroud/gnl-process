@@ -1627,7 +1627,7 @@ async def prepare_from_inbox(request: Request):
                     await broadcast_log(f"  ✓ {len(diagrams)} diagrammes")
 
                 await broadcast_log("▶ [ANKI] Génération .apkg")
-                anki_path = await loop.run_in_executor(None, lambda: step5_anki(answers, md_path, theme, subtheme, on_progress=on_p, diagrams=diagrams, diagram_placement=diagram_placement))
+                anki_path = await loop.run_in_executor(None, lambda: step5_anki(answers, md_path, theme, subtheme, on_progress=on_p, diagrams=diagrams))
                 await broadcast_log(f"  ✓ {anki_path}")
 
             # === BRANCHE GÉNÉRATION ===

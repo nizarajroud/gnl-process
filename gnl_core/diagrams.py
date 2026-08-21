@@ -57,13 +57,13 @@ def generate_exam_diagrams(source_path, answers, theme, subtheme, on_progress=No
 ---
 ADDITIONAL INSTRUCTIONS:
 - For each question I send you, generate a COMPLETE draw.io XML file (.drawio format)
-- Illustrate ONLY the SCENARIO and CONTEXT of the question:
+- Illustrate the FULL SCENARIO including the CORRECT SOLUTION:
   • AWS services mentioned in the current architecture
   • Data flows between services
   • Annotate constraints: HA, scalability, cost, latency, security, DR
-  • Show the PROBLEM or requirement that needs to be solved
-- Do NOT illustrate the solution or correct answer
-- Do NOT show which option is correct
+  • Show the correct solution components HIGHLIGHTED with fillColor="#d5e8d4" (light green) and strokeColor="#82b366"
+  • All non-solution components use their standard AWS category colors
+- IMPORTANT: Use EXACTLY fillColor="#d5e8d4" and strokeColor="#82b366" for solution elements — the code will detect and remove this highlight for the question side
 - Include a title with the question number
 - Return ONLY valid draw.io XML starting with <mxfile and ending with </mxfile>
 - NO text before or after the XML. NO explanations. NO markdown fences. ONLY XML.
@@ -87,10 +87,15 @@ ADDITIONAL INSTRUCTIONS:
             scenario_lines.append(line)
         scenario = '\n'.join(scenario_lines).strip()
         
-        user_msg = f"""Generate a draw.io XML diagram for the SCENARIO of this exam question. Output ONLY the <mxfile>...</mxfile> XML, nothing else.
+        correct = answers[num].get('correct', [])
+        correct_text = '; '.join(correct[:2]) if correct else ''
+        
+        user_msg = f"""Generate a draw.io XML diagram for this exam question. Show the scenario AND highlight the correct solution in green (fillColor="#d5e8d4"). Output ONLY the <mxfile>...</mxfile> XML.
 
 Question {num}:
-{scenario[:2000]}"""
+{scenario[:2000]}
+
+Correct answer: {correct_text[:500]}"""
         
         messages.append({"role": "user", "content": [{"text": user_msg}]})
         
@@ -121,21 +126,40 @@ Question {num}:
                 messages.append({"role": "assistant", "content": [{"text": "(invalid)"}]})
                 continue
             
-            # Save .drawio
+            # Save .drawio (with solution highlighted)
             drawio_path = diagrams_dir / f"Q{num}.drawio"
             drawio_path.write_text(xml_content, encoding='utf-8')
             
-            # Export to PNG
-            png_path = diagrams_dir / f"Q{num}.png"
-            export_result = subprocess.run(
-                ['drawio', '--export', '--format', 'png', '--output', str(png_path), str(drawio_path)],
+            # Export BACK PNG (with green highlight = answer side)
+            png_back = diagrams_dir / f"Q{num}-answer.png"
+            subprocess.run(
+                ['drawio', '--export', '--format', 'png', '--output', str(png_back), str(drawio_path)],
                 capture_output=True, timeout=30
             )
             
-            if export_result.returncode == 0 and png_path.exists():
-                results[num] = {'drawio': str(drawio_path), 'png': str(png_path)}
+            # Create FRONT version (remove green highlight → neutral)
+            xml_front = xml_content.replace('fillColor=#d5e8d4', 'fillColor=#f5f5f5')
+            xml_front = xml_front.replace('fillColor="#d5e8d4"', 'fillColor="#f5f5f5"')
+            xml_front = xml_front.replace('strokeColor=#82b366', 'strokeColor=#666666')
+            xml_front = xml_front.replace('strokeColor="#82b366"', 'strokeColor="#666666"')
+            drawio_front_path = diagrams_dir / f"Q{num}-front.drawio"
+            drawio_front_path.write_text(xml_front, encoding='utf-8')
+            
+            # Export FRONT PNG (neutral = question side)
+            png_front = diagrams_dir / f"Q{num}.png"
+            subprocess.run(
+                ['drawio', '--export', '--format', 'png', '--output', str(png_front), str(drawio_front_path)],
+                capture_output=True, timeout=30
+            )
+            # Clean up temp front drawio
+            drawio_front_path.unlink(missing_ok=True)
+            
+            if png_front.exists() and png_back.exists():
+                results[num] = {'drawio': str(drawio_path), 'png_front': str(png_front), 'png_back': str(png_back)}
+            elif png_front.exists():
+                results[num] = {'drawio': str(drawio_path), 'png_front': str(png_front), 'png_back': None}
             else:
-                results[num] = {'drawio': str(drawio_path), 'png': None}
+                results[num] = {'drawio': str(drawio_path), 'png_front': None, 'png_back': None}
             
             # Add assistant response to conversation
             messages.append({"role": "assistant", "content": [{"text": xml_content}]})

@@ -678,15 +678,14 @@ def step4_compact(source_path, answers, theme, subtheme, on_progress=None):
     return str(md_path)
 
 
-def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams=None, diagram_placement='front'):
+def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams=None):
     """Step 5: Generate Anki .apkg package directly from answers dict.
     
     Args:
         answers: Dict from step3_highlight {num: {type, options, correct}}
         source_path: Path to full markdown (for question text extraction)
         theme, subtheme: For path resolution
-        diagrams: Optional dict {num: {'drawio': path, 'png': path}} from generate_exam_diagrams
-        diagram_placement: 'front' (question side) or 'back' (answer side)
+        diagrams: Optional dict {num: {'png_front': path, 'png_back': path}} from generate_exam_diagrams
     Returns:
         Path to .apkg file
     """
@@ -781,16 +780,13 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                     back_items.append(f"<div class='option'><input type='checkbox' disabled> {opt}</div>")
             back = f"<b>Question {num}:</b><br><br>{q_text}<br><br>{''.join(back_items)}"
 
-        # Add diagram image if available
-        diagram_html = ''
-        if diagrams and num in diagrams and diagrams[num].get('png'):
-            png_filename = f"Q{num}.png"
-            diagram_html = f"<br><br><img src='{png_filename}'>"
-
-        if diagram_placement == 'front' and diagram_html:
-            front += diagram_html
-        elif diagram_placement == 'back' and diagram_html:
-            back += diagram_html
+        # Add diagrams: front (neutral) on question, back (highlighted) on answer
+        if diagrams and num in diagrams:
+            d = diagrams[num]
+            if d.get('png_front'):
+                front += f"<br><br><img src='Q{num}.png'>"
+            if d.get('png_back'):
+                back += f"<br><br><img src='Q{num}-answer.png'>"
 
         note = genanki.Note(model=model, fields=[front, back], guid=f"{name}-q{num}")
         deck.add_note(note)
@@ -805,7 +801,12 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
 
     package = genanki.Package(deck)
     if diagrams:
-        media_files = [diagrams[num]['png'] for num in diagrams if diagrams[num].get('png')]
+        media_files = []
+        for num in diagrams:
+            if diagrams[num].get('png_front'):
+                media_files.append(diagrams[num]['png_front'])
+            if diagrams[num].get('png_back'):
+                media_files.append(diagrams[num]['png_back'])
         package.media_files = media_files
     package.write_to_file(str(apkg_path))
 
