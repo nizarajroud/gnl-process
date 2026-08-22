@@ -685,9 +685,9 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         answers: Dict from step3_highlight {num: {type, options, correct}}
         source_path: Path to full markdown (for question text extraction)
         theme, subtheme: For path resolution
-        diagrams: Optional dict {num: {'png_front': path, 'png_back': path}} from generate_exam_diagrams
-        diagram_front: Include neutral diagram on front (question side)
-        diagram_back: Include highlighted diagram on back (answer side)
+        diagrams: Optional dict {num: {'png': path}} from generate_exam_diagrams
+        diagram_front: Include diagram on front (question side)
+        diagram_back: Include diagram on back (answer side)
     Returns:
         Path to .apkg file
     """
@@ -782,13 +782,13 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                     back_items.append(f"<div class='option'><input type='checkbox' disabled> {opt}</div>")
             back = f"<b>Question {num}:</b><br><br>{q_text}<br><br>{''.join(back_items)}"
 
-        # Add diagrams based on user selection
+        # Add diagram (same image on front and/or back based on user selection)
         if diagrams and num in diagrams:
             d = diagrams[num]
-            if diagram_front and d.get('png_front'):
+            if d.get('png') and diagram_front:
                 front += f"<br><br><img src='Q{num}.png'>"
-            if diagram_back and d.get('png_back'):
-                back += f"<br><br><img src='Q{num}-answer.png'>"
+            if d.get('png') and diagram_back:
+                back += f"<br><br><img src='Q{num}.png'>"
 
         note = genanki.Note(model=model, fields=[front, back], guid=f"{name}-q{num}")
         deck.add_note(note)
@@ -803,12 +803,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
 
     package = genanki.Package(deck)
     if diagrams:
-        media_files = []
-        for num in diagrams:
-            if diagrams[num].get('png_front'):
-                media_files.append(diagrams[num]['png_front'])
-            if diagrams[num].get('png_back'):
-                media_files.append(diagrams[num]['png_back'])
+        media_files = [diagrams[num]['png'] for num in diagrams if diagrams[num].get('png')]
         package.media_files = media_files
     package.write_to_file(str(apkg_path))
 
