@@ -1,0 +1,73 @@
+# Podcast Pipeline — Full Detail
+
+direction: down
+
+title: {
+  label: "🎙️ Pipeline Podcast"
+  style.font-size: 22
+  near: top-center
+}
+
+input: "PDF Source\n(uploaded via UI)" {style.fill: "#fff9c4"}
+
+# === PREPARE ===
+prepare: {
+  label: "PREPARE (gnl prepare)"
+  style.fill: "#e3f2fd"
+
+  split-pages: "Split by Pages\n(N pages per chunk)" {style.fill: "#bbdefb"}
+  split-semantic: "Split Semantic\n(Bedrock Claude)" {style.fill: "#bbdefb"}
+  db: "DB Insert\nparent_configuration +\npodcast_download (per episode)" {style.fill: "#bbdefb"}
+
+  split-pages -> db
+  split-semantic -> db
+}
+
+input -> prepare.split-pages: "mode=pages"
+input -> prepare.split-semantic: "mode=semantic"
+
+# === DELIVER ===
+deliver: {
+  label: "DELIVER (gnl deliver / scheduler)"
+  style.fill: "#e8f5e9"
+  style.stroke: "#2e7d32"
+
+  generate: "GENERATE\nNotebookLM API\n(max 20/day quota)" {style.fill: "#c8e6c9"}
+  wait-quota: "WAIT QUOTA\n(si épuisé → attend reset 20h)" {style.fill: "#fff9c4"}
+  download: "DOWNLOAD\n(polling MCP, timeout 3h)" {style.fill: "#c8e6c9"}
+  convert: "CONVERT\nM4A → MP3\n(ffmpeg, speed 1.37x)" {style.fill: "#c8e6c9"}
+  combine: "COMBINE\nConcat all MP3\n(ffmpeg)" {style.fill: "#c8e6c9"}
+
+  generate -> download: "audio ready"
+  generate -> wait-quota: "quota exhausted" {style.stroke: "#f57c00"}
+  wait-quota -> generate: "quota reset" {style.stroke: "#f57c00"}
+  download -> convert -> combine
+}
+
+prepare.db -> deliver.generate
+
+# === OUTPUT ===
+output: {
+  label: "Output"
+  style.fill: "#f5f5f5"
+
+  audio-parts: "Audio-Parts/\n(individual MP3)" {style.fill: "#a5d6a7"}
+  backlog: "GNL-BACKLOG/\n(Google Drive)\nfinal combined MP3" {style.fill: "#a5d6a7"}
+}
+
+deliver.download -> output.audio-parts
+deliver.combine -> output.backlog
+
+# === STATES ===
+states: {
+  label: "Episode States (podcast_download)"
+  style.fill: "#fafafa"
+  style.stroke: "#bbb"
+
+  s0: "generation_state=0\n(pending)"
+  s1: "generation_state=1\n(generated)"
+  s2: "download_state=1\n(downloaded)"
+  s3: "conversion_state=1\n(converted)"
+
+  s0 -> s1 -> s2 -> s3
+}

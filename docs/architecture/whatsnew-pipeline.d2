@@ -1,0 +1,73 @@
+# What's New Pipeline
+
+direction: down
+
+title: {
+  label: "📰 Pipeline AWS What's New"
+  style.font-size: 22
+  near: top-center
+}
+
+# === INPUT ===
+input: {
+  label: "UI Input"
+  style.fill: "#fff3e0"
+
+  months: "Sélection mois\n(checkboxes + Q1/Q2/Q3/Q4/All)" {style.fill: "#ffe0b2"}
+  category: "Filtre catégorie\n(Toutes / ML & AI / Compute / ...)" {style.fill: "#ffe0b2"}
+}
+
+# === CRAWL ===
+crawl: {
+  label: "CRAWL"
+  style.fill: "#e3f2fd"
+
+  api: "AWS What's New API\nhttps://aws.amazon.com/api/dirs/items/search\n(paginated, 25/page)" {style.fill: "#bbdefb"}
+  filter: "Filter by month prefix(es)\n2026-01, 2026-02, 2026-03..." {style.fill: "#bbdefb"}
+
+  api -> filter
+}
+
+input.months -> crawl.api
+
+# === CLASSIFY ===
+classify: {
+  label: "CLASSIFY (Bedrock)"
+  style.fill: "#e8f5e9"
+
+  bedrock: "Claude Sonnet\nPrompt: 'Classify into one category'\nInput: headline + 300 chars content" {style.fill: "#c8e6c9"}
+  categories: "WHATSNEW_CATEGORIES (priority order):\n1. Machine Learning & AI\n2. Compute\n3. Networking & Content Delivery\n4. Storage\n5. Database\n6. Security, Identity & Compliance\n7. Analytics\n8. Application Integration\n9. Management & Governance\n10. Containers\n11. Serverless\n12. Developer Tools\n13. Migration & Transfer\n14. Cost Management\n15. Other" {style.fill: "#f1f8e9"}
+
+  bedrock -> categories
+}
+
+crawl.filter -> classify.bedrock
+
+# === GENERATE PDF ===
+pdf: {
+  label: "GENERATE PDF"
+  style.fill: "#fce4ec"
+
+  filter-cat: "Filter by category\n(if category_filter set)" {style.fill: "#ffcdd2"}
+  markdown: "Build Markdown\n(grouped by category, priority order)" {style.fill: "#ffcdd2"}
+  weasyprint: "WeasyPrint\nMarkdown → HTML → PDF" {style.fill: "#ffcdd2"}
+
+  filter-cat -> markdown -> weasyprint
+}
+
+classify.categories -> pdf.filter-cat
+input.category -> pdf.filter-cat
+
+# === OUTPUT ===
+output: {
+  label: "Output"
+  style.fill: "#f5f5f5"
+
+  full: "whatsnew-mai.pdf\n(all categories)" {style.fill: "#a5d6a7"}
+  filtered: "whatsnew-mai-machine-learning-ai.pdf\n(single category)" {style.fill: "#a5d6a7"}
+  multi: "whatsnew-janvier-mars.pdf\n(multi-month)" {style.fill: "#a5d6a7"}
+}
+
+pdf.weasyprint -> output.full: "category=Toutes"
+pdf.weasyprint -> output.filtered: "category=ML & AI"
+pdf.weasyprint -> output.multi: "multi-month"

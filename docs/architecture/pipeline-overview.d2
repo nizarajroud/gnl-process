@@ -1,0 +1,105 @@
+# Pipeline Overview — All GNL Pipelines
+
+direction: right
+
+title: {
+  label: "GNL Process — Pipeline Overview"
+  style.font-size: 24
+  near: top-center
+}
+
+# === SOURCES ===
+sources: {
+  label: "Sources"
+  style.fill: "#f0f0f0"
+  style.stroke: "#999"
+
+  pdf: "PDF Document"
+  docx: "DOCX (Exam)"
+  linkedin: "LinkedIn Saved Posts"
+  aws-api: "AWS What's New API"
+}
+
+# === TRONC COMMUN (Podcast) ===
+podcast: {
+  label: "🎙️ Pipeline Podcast"
+  style.fill: "#e3f2fd"
+  style.stroke: "#1976d2"
+
+  split: "SPLIT\n(pages/semantic)" {style.fill: "#bbdefb"}
+  generate: "GENERATE\n(NotebookLM)" {style.fill: "#bbdefb"}
+  download: "DOWNLOAD\n(polling)" {style.fill: "#bbdefb"}
+  convert: "CONVERT\n(M4A → MP3)" {style.fill: "#bbdefb"}
+  combine: "COMBINE\n(ffmpeg concat)" {style.fill: "#bbdefb"}
+
+  split -> generate -> download -> convert -> combine
+}
+
+# === EXAM PIPELINE ===
+exam: {
+  label: "📝 Pipeline Examen"
+  style.fill: "#e8f5e9"
+  style.stroke: "#388e3c"
+
+  format: "FORMAT\n(origin → word)" {style.fill: "#c8e6c9"}
+  markdown: "MARKDOWN\n(word → .md)" {style.fill: "#c8e6c9"}
+  highlight: "HIGHLIGHT\n(Bedrock/NLM)" {style.fill: "#c8e6c9"}
+  anki: "ANKI\n(.apkg)" {style.fill: "#c8e6c9"}
+  split-exam: "SPLIT\n(.md chunks)" {style.fill: "#c8e6c9"}
+  generate-exam: "NLM GENERATE\n(podcast)" {style.fill: "#c8e6c9"}
+
+  format -> markdown
+  markdown -> highlight -> anki
+  markdown -> split-exam -> generate-exam
+}
+
+# === SAVED ARTICLES ===
+articles: {
+  label: "📄 Pipeline Saved Articles"
+  style.fill: "#fce4ec"
+  style.stroke: "#c62828"
+
+  fetch: "FETCH\n(LinkedIn MCP)" {style.fill: "#ffcdd2"}
+  classify-title: "TITLE\n(Bedrock)" {style.fill: "#ffcdd2"}
+  tts: "TTS\n(Gemini)" {style.fill: "#ffcdd2"}
+  combine-art: "COMBINE\n(manual select)" {style.fill: "#ffcdd2"}
+
+  fetch -> classify-title -> tts -> combine-art
+}
+
+# === WHAT'S NEW ===
+whatsnew: {
+  label: "📰 Pipeline What's New"
+  style.fill: "#fff3e0"
+  style.stroke: "#e65100"
+
+  crawl: "CRAWL\n(AWS API)" {style.fill: "#ffe0b2"}
+  classify: "CLASSIFY\n(Bedrock)" {style.fill: "#ffe0b2"}
+  pdf: "PDF\n(WeasyPrint)" {style.fill: "#ffe0b2"}
+
+  crawl -> classify -> pdf
+}
+
+# === CONNECTIONS FROM SOURCES ===
+sources.pdf -> podcast.split
+sources.docx -> exam.format
+sources.linkedin -> articles.fetch
+sources.aws-api -> whatsnew.crawl
+
+# === OUTPUTS ===
+outputs: {
+  label: "Outputs"
+  style.fill: "#f5f5f5"
+  style.stroke: "#999"
+
+  backlog: "GNL-BACKLOG\n(Google Drive)" {style.fill: "#c8e6c9"}
+  apkg: ".apkg\n(Anki file)" {style.fill: "#c8e6c9"}
+  pdf-out: "PDF\n(What's New)" {style.fill: "#c8e6c9"}
+  mp3: "MP3\n(individual)" {style.fill: "#c8e6c9"}
+}
+
+podcast.combine -> outputs.backlog
+exam.anki -> outputs.apkg
+exam.generate-exam -> outputs.backlog
+articles.combine-art -> outputs.backlog
+whatsnew.pdf -> outputs.pdf-out

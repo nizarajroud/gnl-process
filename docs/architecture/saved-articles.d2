@@ -1,0 +1,76 @@
+# Saved Articles Pipeline
+
+direction: down
+
+title: {
+  label: "📄 Pipeline Saved Articles (LinkedIn)"
+  style.font-size: 22
+  near: top-center
+}
+
+# === FETCH ===
+fetch: {
+  label: "FETCH (scheduled 02:00 ou manuel)"
+  style.fill: "#e3f2fd"
+
+  mcp: "LinkedIn MCP Server\n(stdio, timeout 600s)" {style.fill: "#bbdefb"}
+  cache: "~/.linkedin-mcp/saved_posts.db\n(SQLite cache)" {style.fill: "#bbdefb"}
+  import: "Import → saved_articles\n+ generate title (Bedrock)" {style.fill: "#bbdefb"}
+  inbox: "Save raw → INBOX_FOLDER/\nsaved-articles/linkedin/*.txt" {style.fill: "#bbdefb"}
+
+  mcp -> cache -> import -> inbox
+}
+
+# === GENERATE ===
+generate: {
+  label: "GENERATE (scheduled 03:00 ou 🚀 Générer lot)"
+  style.fill: "#e8f5e9"
+
+  select: "Select next N unprocessed\n(LINKEDIN_BATCH_SIZE=5)" {style.fill: "#c8e6c9"}
+  text: "Bedrock → Texte darija\n(article summary)" {style.fill: "#c8e6c9"}
+  tts: "Gemini TTS → Audio\n(PCM → MP3 via ffmpeg)" {style.fill: "#c8e6c9"}
+  mark: "Mark processed=1\nSave audio_path" {style.fill: "#c8e6c9"}
+
+  select -> text -> tts -> mark
+}
+
+fetch.import -> generate.select
+
+# === COMBINE ===
+combine: {
+  label: "COMBINE (🔗 Combiner — manual)"
+  style.fill: "#fce4ec"
+
+  popup: "Popup: checkboxes\nfiles with combined_at IS NULL" {style.fill: "#ffcdd2"}
+  ffmpeg: "ffmpeg concat\n(+ silence-3s.mp3 separator)" {style.fill: "#ffcdd2"}
+  mark-combined: "UPDATE combined_at\n(won't show again)" {style.fill: "#ffcdd2"}
+
+  popup -> ffmpeg -> mark-combined
+}
+
+generate.mark -> combine.popup
+
+# === OUTPUT ===
+output: {
+  label: "Output"
+  style.fill: "#f5f5f5"
+
+  parts: "Audio-Parts/saved-articles/linkedin/\n(individual MP3)" {style.fill: "#a5d6a7"}
+  backlog: "GNL-BACKLOG/saved-articles/linkedin/\nbatch-YYYY-MM-DD.mp3" {style.fill: "#a5d6a7"}
+}
+
+generate.tts -> output.parts
+combine.ffmpeg -> output.backlog
+
+# === STATES ===
+states: {
+  label: "Article States (saved_articles)"
+  style.fill: "#fafafa"
+
+  s0: "processed=0\ncombined_at=NULL"
+  s1: "processed=1\naudio_path set\ncombined_at=NULL"
+  s2: "processed=1\ncombined_at set"
+
+  s0 -> s1: "generate" 
+  s1 -> s2: "combine"
+}
