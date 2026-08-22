@@ -34,10 +34,18 @@ INBOX_FOLDER/exams/{subtheme}/origin/{nom}.docx
    - Mode Bedrock (défaut) : lit le DOCX, batch de 5 questions, 3 parallèles
    - Mode NLM (`EXAM_USE_NLM=1`) : query le markdown dans NotebookLM
    - Fallback : Bedrock → Regex
-2. **ANKI** : Génère depuis le dict `answers` :
+2. **DIAGRAMS** (optionnel, checkbox UI) : Génère un diagramme draw.io par question
+   - Bedrock Converse multi-turn (skill `drawio-skill.md` en system prompt, envoyé 1 fois)
+   - Génère un diagramme avec la solution en vert (`#d5e8d4`)
+   - Exporte 2 PNG via `drawio --export` :
+     - `Q{num}.png` — version neutre (vert remplacé par gris) pour le front
+     - `Q{num}-answer.png` — version avec solution highlightée pour le back
+   - Placement configurable : Front (contexte) / Back (avec réponse) / Les deux
+3. **ANKI** : Génère depuis le dict `answers` :
    - `.apkg` → `Anki-generation/anki/{nom}.apkg`
    - Compact `.md` → `Anki-generation/markdown/{nom}.md`
    - Cartes avec checkboxes interactives (front) + réponses cochées en vert (back)
+   - Si diagrammes activés : PNG intégrés comme media files dans le .apkg
 
 ### 4b. Branche Génération (podcast)
 1. **SPLIT** : Découpe le `.md` en chunks de N questions
@@ -51,6 +59,9 @@ INBOX_FOLDER/exams/{subtheme}/origin/{nom}.docx
 | Full markdown | `assets/exams/{sub}/pdf-formatting/full-markdown/{nom}.md` |
 | Anki package | `assets/exams/{sub}/Anki-generation/anki/{nom}.apkg` |
 | Compact markdown | `assets/exams/{sub}/Anki-generation/markdown/{nom}.md` |
+| Diagrammes draw.io | `assets/exams/{sub}/diagrams/Q{num}.drawio` |
+| Diagrammes PNG (front) | `assets/exams/{sub}/diagrams/Q{num}.png` |
+| Diagrammes PNG (back) | `assets/exams/{sub}/diagrams/Q{num}-answer.png` |
 | Podcast audio | `GNL-BACKLOG/exams/{sub}/{nom}.mp3` |
 
 ## Prompt podcast
@@ -73,6 +84,8 @@ Variante archivée : `prompts/exams-2phases.txt` (quiz sans réponse puis explic
   "EXAM_BATCH_SIZE": "5",       // Questions par batch Bedrock
   "EXAM_NLM_BATCH_SIZE": "15",  // Questions par batch NLM
   "EXAM_PARALLEL_BATCHES": "3", // Batches Bedrock en parallèle
+  "EXAM_GENERATE_DIAGRAMS": "1",// 1=activer génération diagrammes
+  "EXAM_DIAGRAM_PLACEMENT": "front", // "front", "back" (legacy, UI overrides)
   "DEBUG_NLM": "0",             // 1=logs détaillés
   "ANKI_FONT_SIZE": "16"        // Taille police cartes
 }

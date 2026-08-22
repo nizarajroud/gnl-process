@@ -35,6 +35,8 @@ Toutes les clés de configuration avec description, valeur par défaut et impact
 | `EXAM_NLM_BATCH_SIZE` | `15` | Questions par batch pour NotebookLM |
 | `EXAM_BATCH_SIZE` | `5` | Questions par batch pour Bedrock |
 | `EXAM_PARALLEL_BATCHES` | `3` | Nombre de batches Bedrock en parallèle |
+| `EXAM_GENERATE_DIAGRAMS` | `1` | `1` = générer diagrammes draw.io par question |
+| `EXAM_DIAGRAM_PLACEMENT` | `front` | Placement par défaut (overridé par UI checkboxes) |
 | `DEBUG_NLM` | `0` | `1` = logs détaillés NLM (raw response, bold items, parsed) |
 | `ANKI_FONT_SIZE` | `16` | Taille police dans les cartes Anki |
 

@@ -45,11 +45,14 @@ anki-branch: {
   highlight: "STEP 3: HIGHLIGHT\nIdentifier réponses correctes" {
     style.fill: "#c8e6c9"
   }
-  anki: "STEP 4: ANKI\nGénérer .apkg + compact .md" {
+  diagrams: "STEP 4: DIAGRAMS (optionnel)\nBedrock Converse + drawio CLI\n→ Q{num}.png (front neutral)\n→ Q{num}-answer.png (back highlighted)" {
+    style.fill: "#fff9c4"
+  }
+  anki: "STEP 5: ANKI\nGénérer .apkg + compact .md\n+ embed PNG diagrams" {
     style.fill: "#c8e6c9"
   }
 
-  highlight -> anki
+  highlight -> diagrams -> anki
 
   # Highlight detail
   highlight-detail: {
@@ -88,11 +91,13 @@ outputs: {
   label: "Outputs"
   style.fill: "#f5f5f5"
 
-  apkg: ".apkg\nassets/exams/{sub}/Anki-generation/anki/" {style.fill: "#a5d6a7"}
+  apkg: ".apkg (with embedded PNGs)\nassets/exams/{sub}/Anki-generation/anki/" {style.fill: "#a5d6a7"}
   compact-md: "compact .md\nassets/exams/{sub}/Anki-generation/markdown/" {style.fill: "#a5d6a7"}
+  diagrams-out: "diagrams/\nQ{num}.drawio + Q{num}.png + Q{num}-answer.png" {style.fill: "#fff9c4"}
   podcast: "Podcast audio\n→ GNL-BACKLOG" {style.fill: "#ef9a9a"}
 }
 
 anki-branch.anki -> outputs.apkg
 anki-branch.anki -> outputs.compact-md
+anki-branch.diagrams -> outputs.diagrams-out
 gen-branch.generate -> outputs.podcast
