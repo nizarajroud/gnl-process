@@ -9,11 +9,38 @@ from pathlib import Path
 from .config import get_config
 
 
+def _extract_xml(response_text):
+    """Extract <mxfile>...</mxfile> XML from Bedrock response."""
+    xml_match = re.search(r'(<mxfile[\s\S]*?</mxfile>)', response_text)
+    if xml_match:
+        return xml_match.group(1)
+    # Fallback: strip markdown fences
+    text = re.sub(r'^```xml\s*', '', response_text.strip())
+    text = re.sub(r'^```\s*', '', text.strip())
+    text = re.sub(r'\s*```$', '', text.strip())
+    return text
+
+
+def _export_png(drawio_path, png_path):
+    """Export .drawio to PNG via CLI. Returns True if success."""
+    try:
+        result = subprocess.run(
+            ['drawio', '--export', '--format', 'png', '--output', str(png_path), str(drawio_path)],
+            capture_output=True, timeout=30
+        )
+        return result.returncode == 0 and Path(png_path).exists()
+    except Exception:
+        return False
+
+
 def generate_exam_diagrams(source_path, answers, theme, subtheme, on_progress=None):
     """Generate draw.io architecture diagrams for exam questions.
     
+    Generates TWO diagrams per question:
+    - Front: scenario architecture + FR/NFR/Constraints (no solution)
+    - Back: full architecture with correct solution highlighted in green
+    
     Uses Bedrock Converse with the draw.io skill as system prompt (loaded once).
-    Each question is sent as a user message in the same conversation.
     
     Args:
         source_path: Path to the full markdown (.md)
@@ -21,7 +48,7 @@ def generate_exam_diagrams(source_path, answers, theme, subtheme, on_progress=No
         theme, subtheme: For output path
         on_progress: Callback
     Returns:
-        Dict {num: {'drawio': path, 'png': path}} for generated diagrams
+        Dict {num: {'png_front': path, 'png_back': path}} for generated diagrams
     """
     config = get_config()
     model_id = config.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
@@ -51,26 +78,40 @@ def generate_exam_diagrams(source_path, answers, theme, subtheme, on_progress=No
     # Bedrock client
     client = boto3.client('bedrock-runtime', region_name='us-east-1')
     
-    # System prompt: skill + instructions for SCENARIO ONLY (not solution)
-    system_prompt = f"""{skill_content}
+    # === SYSTEM PROMPTS ===
+    system_front = f"""{skill_content}
 
 ---
-ADDITIONAL INSTRUCTIONS:
-- For each question I send you, generate a COMPLETE draw.io XML file (.drawio format)
-- Illustrate the FULL SCENARIO including the CORRECT SOLUTION:
-  • AWS services mentioned in the current architecture
-  • Data flows between services
-  • Annotate constraints: HA, scalability, cost, latency, security, DR
-  • Show the correct solution components HIGHLIGHTED with fillColor="#d5e8d4" (light green) and strokeColor="#82b366"
-  • All non-solution components use their standard AWS category colors
-- IMPORTANT: Use EXACTLY fillColor="#d5e8d4" and strokeColor="#82b366" for solution elements — the code will detect and remove this highlight for the question side
+ADDITIONAL INSTRUCTIONS FOR FRONT (QUESTION SIDE):
+- Generate a draw.io XML diagram that shows ONLY the SCENARIO described in the question
+- Show the existing architecture: AWS services, data flows, integrations
+- Do NOT include ANY solution or answer options
+- Do NOT highlight anything in green
+- BELOW the architecture diagram, add THREE text boxes side by side (as a row):
+  1. "Functional Requirements" — bullet points of what the system must DO
+  2. "Non-Functional Requirements" — bullet points (HA, scalability, performance, cost, security, DR)
+  3. "Constraints" — bullet points of explicit constraints mentioned
+- Use style for these boxes: rounded=1;fillColor=#f5f5f5;strokeColor=#666666;align=left;verticalAlign=top;spacing=8;fontSize=11;
+- Return ONLY valid draw.io XML starting with <mxfile and ending with </mxfile>
+- NO text before or after the XML. ONLY XML.
+"""
+
+    system_back = f"""{skill_content}
+
+---
+ADDITIONAL INSTRUCTIONS FOR BACK (ANSWER SIDE):
+- Generate a draw.io XML diagram showing the COMPLETE architecture WITH the correct solution
+- Show the correct solution components HIGHLIGHTED with fillColor="#d5e8d4" (light green) and strokeColor="#82b366"
+- All non-solution components use their standard AWS category colors
+- Include arrows and labels showing how the solution resolves the problem
 - Include a title with the question number
 - Return ONLY valid draw.io XML starting with <mxfile and ending with </mxfile>
-- NO text before or after the XML. NO explanations. NO markdown fences. ONLY XML.
+- NO text before or after the XML. ONLY XML.
 """
-    
-    # Multi-turn conversation
-    messages = []
+
+    # Multi-turn conversations (separate for front and back)
+    messages_front = []
+    messages_back = []
     results = {}
     
     for num in sorted(answers.keys(), key=lambda x: int(x)):
@@ -78,7 +119,7 @@ ADDITIONAL INSTRUCTIONS:
         if not q_text:
             continue
         
-        # Only send the scenario part (before options)
+        # Extract scenario (before options)
         lines = q_text.split('\n')
         scenario_lines = []
         for line in lines:
@@ -90,91 +131,93 @@ ADDITIONAL INSTRUCTIONS:
         correct = answers[num].get('correct', [])
         correct_text = '; '.join(correct[:2]) if correct else ''
         
-        user_msg = f"""Generate a draw.io XML diagram for this exam question. Show the scenario AND highlight the correct solution in green (fillColor="#d5e8d4"). Output ONLY the <mxfile>...</mxfile> XML.
+        # === FRONT DIAGRAM (scenario + requirements) ===
+        front_msg = f"""Generate a draw.io XML for Question {num} FRONT side (scenario only, NO solution).
+Show the architecture described, then add 3 boxes below: Functional Requirements, Non-Functional Requirements, Constraints.
+Output ONLY <mxfile>...</mxfile> XML.
+
+Question {num}:
+{scenario[:2000]}"""
+        
+        messages_front.append({"role": "user", "content": [{"text": front_msg}]})
+        
+        png_front_path = None
+        try:
+            resp_front = client.converse(
+                modelId=model_id,
+                system=[{"text": system_front}],
+                messages=messages_front,
+                inferenceConfig={"maxTokens": 8000}
+            )
+            xml_front = _extract_xml(resp_front['output']['message']['content'][0]['text'])
+            
+            if xml_front.strip().startswith('<mxfile'):
+                front_drawio = diagrams_dir / f"Q{num}-front.drawio"
+                front_drawio.write_text(xml_front, encoding='utf-8')
+                png_front_path = diagrams_dir / f"Q{num}.png"
+                if _export_png(front_drawio, png_front_path):
+                    png_front_path = str(png_front_path)
+                else:
+                    png_front_path = None
+                messages_front.append({"role": "assistant", "content": [{"text": xml_front}]})
+            else:
+                messages_front.append({"role": "assistant", "content": [{"text": "(invalid)"}]})
+        except Exception as e:
+            if on_progress:
+                on_progress(f"  diagram Q{num} front ⚠ {str(e)[:50]}")
+            messages_front.append({"role": "assistant", "content": [{"text": "(error)"}]})
+
+        # === BACK DIAGRAM (with solution highlighted) ===
+        back_msg = f"""Generate a draw.io XML for Question {num} BACK side (with correct solution highlighted in green).
+Output ONLY <mxfile>...</mxfile> XML.
 
 Question {num}:
 {scenario[:2000]}
 
 Correct answer: {correct_text[:500]}"""
         
-        messages.append({"role": "user", "content": [{"text": user_msg}]})
+        messages_back.append({"role": "user", "content": [{"text": back_msg}]})
         
+        png_back_path = None
         try:
-            response = client.converse(
+            resp_back = client.converse(
                 modelId=model_id,
-                system=[{"text": system_prompt}],
-                messages=messages,
+                system=[{"text": system_back}],
+                messages=messages_back,
                 inferenceConfig={"maxTokens": 8000}
             )
+            xml_back = _extract_xml(resp_back['output']['message']['content'][0]['text'])
             
-            xml_content = response['output']['message']['content'][0]['text']
-            
-            # Extract XML: find <mxfile...>...</mxfile> block
-            xml_match = re.search(r'(<mxfile[\s\S]*?</mxfile>)', xml_content)
-            if xml_match:
-                xml_content = xml_match.group(1)
+            if xml_back.strip().startswith('<mxfile'):
+                back_drawio = diagrams_dir / f"Q{num}.drawio"
+                back_drawio.write_text(xml_back, encoding='utf-8')
+                png_back_path = diagrams_dir / f"Q{num}-answer.png"
+                if _export_png(back_drawio, png_back_path):
+                    png_back_path = str(png_back_path)
+                else:
+                    png_back_path = None
+                messages_back.append({"role": "assistant", "content": [{"text": xml_back}]})
             else:
-                # Fallback: strip markdown fences
-                xml_content = re.sub(r'^```xml\s*', '', xml_content.strip())
-                xml_content = re.sub(r'^```\s*', '', xml_content.strip())
-                xml_content = re.sub(r'\s*```$', '', xml_content.strip())
-            
-            # Validate: must start with <mxfile
-            if not xml_content.strip().startswith('<mxfile'):
-                if on_progress:
-                    on_progress(f"  diagram Q{num} ⚠ invalid XML (no <mxfile>)")
-                messages.append({"role": "assistant", "content": [{"text": "(invalid)"}]})
-                continue
-            
-            # Save .drawio (with solution highlighted)
-            drawio_path = diagrams_dir / f"Q{num}.drawio"
-            drawio_path.write_text(xml_content, encoding='utf-8')
-            
-            # Export BACK PNG (with green highlight = answer side)
-            png_back = diagrams_dir / f"Q{num}-answer.png"
-            subprocess.run(
-                ['drawio', '--export', '--format', 'png', '--output', str(png_back), str(drawio_path)],
-                capture_output=True, timeout=30
-            )
-            
-            # Create FRONT version (remove green highlight → neutral)
-            xml_front = xml_content.replace('fillColor=#d5e8d4', 'fillColor=#f5f5f5')
-            xml_front = xml_front.replace('fillColor="#d5e8d4"', 'fillColor="#f5f5f5"')
-            xml_front = xml_front.replace('strokeColor=#82b366', 'strokeColor=#666666')
-            xml_front = xml_front.replace('strokeColor="#82b366"', 'strokeColor="#666666"')
-            drawio_front_path = diagrams_dir / f"Q{num}-front.drawio"
-            drawio_front_path.write_text(xml_front, encoding='utf-8')
-            
-            # Export FRONT PNG (neutral = question side)
-            png_front = diagrams_dir / f"Q{num}.png"
-            subprocess.run(
-                ['drawio', '--export', '--format', 'png', '--output', str(png_front), str(drawio_front_path)],
-                capture_output=True, timeout=30
-            )
-            # Clean up temp front drawio
-            drawio_front_path.unlink(missing_ok=True)
-            
-            if png_front.exists() and png_back.exists():
-                results[num] = {'drawio': str(drawio_path), 'png_front': str(png_front), 'png_back': str(png_back)}
-            elif png_front.exists():
-                results[num] = {'drawio': str(drawio_path), 'png_front': str(png_front), 'png_back': None}
-            else:
-                results[num] = {'drawio': str(drawio_path), 'png_front': None, 'png_back': None}
-            
-            # Add assistant response to conversation
-            messages.append({"role": "assistant", "content": [{"text": xml_content}]})
-            
-            if on_progress:
-                on_progress(f"  diagram Q{num} ✓")
-                
+                messages_back.append({"role": "assistant", "content": [{"text": "(invalid)"}]})
         except Exception as e:
             if on_progress:
-                on_progress(f"  diagram Q{num} ⚠ {str(e)[:60]}")
-            messages.append({"role": "assistant", "content": [{"text": "(error)"}]})
+                on_progress(f"  diagram Q{num} back ⚠ {str(e)[:50]}")
+            messages_back.append({"role": "assistant", "content": [{"text": "(error)"}]})
+
+        # Store results
+        if png_front_path or png_back_path:
+            results[num] = {'png_front': png_front_path, 'png_back': png_back_path}
+            if on_progress:
+                on_progress(f"  diagram Q{num} ✓")
+        else:
+            if on_progress:
+                on_progress(f"  diagram Q{num} ⚠ no valid output")
         
-        # Trim conversation if too long (keep last 10 exchanges)
-        if len(messages) > 20:
-            messages = messages[-10:]
+        # Trim conversations if too long
+        if len(messages_front) > 20:
+            messages_front = messages_front[-10:]
+        if len(messages_back) > 20:
+            messages_back = messages_back[-10:]
     
     if on_progress:
         on_progress(f"diagrams → {len(results)} générés")
