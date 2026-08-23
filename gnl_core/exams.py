@@ -786,7 +786,10 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         if diagrams and num in diagrams:
             d = diagrams[num]
             if d.get('png') and diagram_front:
-                front += f"<br><br><img src='Q{num}.png'>"
+                front += f"""<br><br><div>
+<button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'; this.textContent=this.nextElementSibling.style.display==='none'?'▶ Afficher l\\'architecture':'▼ Masquer l\\'architecture'" style="cursor:pointer;background:#374151;color:#fff;border:none;padding:6px 12px;border-radius:4px;font-size:12px;">▶ Afficher l'architecture</button>
+<div style="display:none;"><img src='Q{num}.png'></div>
+</div>"""
             if d.get('png') and diagram_back:
                 back += f"<br><br><img src='Q{num}.png'>"
 
