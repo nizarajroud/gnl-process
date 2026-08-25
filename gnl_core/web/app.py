@@ -1566,6 +1566,9 @@ async def prepare_from_inbox(request: Request):
     pages_per_episode = int(form.get("pages", 0))
     custom_name = form.get("name", "")
     pipeline = form.get("pipeline", "both")
+    do_diagrams = form.get("diagrams", "0") == "1"
+    diagram_front = form.get("diagram_front", "1") == "1"
+    diagram_back = form.get("diagram_back", "1") == "1"
 
     from gnl_core.config import get_config
     config = get_config()
@@ -1614,8 +1617,18 @@ async def prepare_from_inbox(request: Request):
                 answers = await loop.run_in_executor(None, lambda: step3_highlight(md_path, on_progress=on_p))
                 await broadcast_log(f"  ✓ {len(answers)} questions")
 
+                # Optional: generate draw.io diagrams BEFORE Anki
+                from gnl_core.config import get_config as _gc
+                _cfg = _gc()
+                diagrams = None
+                if do_diagrams:
+                    await broadcast_log("▶ [DIAGRAMS] Génération draw.io")
+                    from gnl_core.diagrams import generate_exam_diagrams
+                    diagrams = await loop.run_in_executor(None, lambda: generate_exam_diagrams(md_path, answers, theme, subtheme, on_progress=on_p))
+                    await broadcast_log(f"  ✓ {len(diagrams)} diagrammes")
+
                 await broadcast_log("▶ [ANKI] Génération .apkg")
-                anki_path = await loop.run_in_executor(None, lambda: step5_anki(answers, md_path, theme, subtheme, on_progress=on_p))
+                anki_path = await loop.run_in_executor(None, lambda: step5_anki(answers, md_path, theme, subtheme, on_progress=on_p, diagrams=diagrams, diagram_front=diagram_front, diagram_back=diagram_back))
                 await broadcast_log(f"  ✓ {anki_path}")
 
             # === BRANCHE GÉNÉRATION ===

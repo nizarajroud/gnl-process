@@ -1,0 +1,61 @@
+# File Paths — All Data Flows
+
+direction: right
+
+title: {
+  label: "📂 Chemins fichiers — GNL Process"
+  style.font-size: 22
+  near: top-center
+}
+
+# === DRIVES ===
+d-drive: {
+  label: "D:\\ (Local SSD)"
+  style.fill: "#e3f2fd"
+  style.stroke: "#1565c0"
+
+  gnl-process: {
+    label: "/mnt/d/PERSONAL/SKILLS/Technical/GNL-PROCESS/"
+    style.fill: "#bbdefb"
+
+    main-docs: "Main-docs/ (INBOX_FOLDER)\n├── aws/aws-whats-new/whatsnew-*.pdf\n├── exams/sap-c02/assets/\n│   ├── origin/ (.docx source)\n│   ├── pdf-formatting/word/ (.docx formatted)\n│   ├── pdf-formatting/full-markdown/ (.md)\n│   ├── Anki-generation/anki/ (.apkg)\n│   └── Anki-generation/markdown/ (compact .md)\n└── saved-articles/linkedin/*.txt" {
+      style.fill: "#e1f5fe"
+    }
+
+    audio-parts: "Audio-Parts/ (AUDIO_PARTS_FOLDER)\n├── saved-articles/linkedin/*.mp3\n└── {theme}/{subtheme}/*.mp3" {
+      style.fill: "#e1f5fe"
+    }
+
+    pdf-parts: "PDF-Parts/ (PDF_PARTS_FOLDER)\n└── {theme}/{subtheme}/*.pdf" {
+      style.fill: "#e1f5fe"
+    }
+  }
+}
+
+g-drive: {
+  label: "G:\\ (Google Drive)"
+  style.fill: "#e8f5e9"
+  style.stroke: "#2e7d32"
+
+  backlog: "GNL-BACKLOG/ (mounted /mnt/g)\n├── {theme}/{subtheme}/{name}.mp3\n└── saved-articles/linkedin/batch-*.mp3" {
+    style.fill: "#c8e6c9"
+  }
+}
+
+home: {
+  label: "~ (Linux Home)"
+  style.fill: "#fce4ec"
+  style.stroke: "#c62828"
+
+  workspace: "/home/nizar/workspace/gnl-process/\n(source code — dev)" {style.fill: "#ffcdd2"}
+  prod: "/home/nizar/.gnl-process-prod/\n(prod venv + code)" {style.fill: "#ffcdd2"}
+  linkedin: "/home/nizar/.linkedin-mcp/\nsaved_posts.db (cache)" {style.fill: "#ffcdd2"}
+  db: "/home/nizar/workspace/gnl-process/\ngnl.db (shared dev+prod)" {style.fill: "#ffcdd2"}
+}
+
+# === FLOWS ===
+home.workspace -> d-drive.gnl-process.main-docs: "write PDFs, markdown, anki"
+home.workspace -> d-drive.gnl-process.audio-parts: "write individual MP3"
+d-drive.gnl-process.audio-parts -> g-drive.backlog: "COMBINE → final MP3"
+d-drive.gnl-process.pdf-parts -> home.workspace: "read PDF chunks for NLM"
+home.linkedin -> home.workspace: "import saved posts"

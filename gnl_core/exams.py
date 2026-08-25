@@ -678,13 +678,16 @@ def step4_compact(source_path, answers, theme, subtheme, on_progress=None):
     return str(md_path)
 
 
-def step5_anki(answers, source_path, theme, subtheme, on_progress=None):
+def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams=None, diagram_front=True, diagram_back=True):
     """Step 5: Generate Anki .apkg package directly from answers dict.
     
     Args:
         answers: Dict from step3_highlight {num: {type, options, correct}}
         source_path: Path to full markdown (for question text extraction)
         theme, subtheme: For path resolution
+        diagrams: Optional dict {num: {'png': path}} from generate_exam_diagrams
+        diagram_front: Include diagram on front (question side)
+        diagram_back: Include diagram on back (answer side)
     Returns:
         Path to .apkg file
     """
@@ -779,17 +782,33 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None):
                     back_items.append(f"<div class='option'><input type='checkbox' disabled> {opt}</div>")
             back = f"<b>Question {num}:</b><br><br>{q_text}<br><br>{''.join(back_items)}"
 
+        # Add diagram (same image on front and/or back based on user selection)
+        if diagrams and num in diagrams:
+            d = diagrams[num]
+            if d.get('png') and diagram_front:
+                front += f"""<br><br><div>
+<button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'; this.textContent=this.nextElementSibling.style.display==='none'?'▶ Afficher l\\'architecture':'▼ Masquer l\\'architecture'" style="cursor:pointer;background:#374151;color:#fff;border:none;padding:6px 12px;border-radius:4px;font-size:12px;">▶ Afficher l'architecture</button>
+<div style="display:none;"><img src='Q{num}.png'></div>
+</div>"""
+            if d.get('png') and diagram_back:
+                back += f"<br><br><img src='Q{num}.png'>"
+
         note = genanki.Note(model=model, fields=[front, back], guid=f"{name}-q{num}")
         deck.add_note(note)
         cards_count += 1
         if debug and on_progress:
             on_progress(f"[DEBUG] Card Q{num}: q_text={q_text[:50]}... options={len(options)} correct={len(correct)}")
 
-    # Save .apkg
+    # Save .apkg (with media files if diagrams present)
     anki_dir = base / 'Anki-generation' / 'anki'
     anki_dir.mkdir(parents=True, exist_ok=True)
     apkg_path = anki_dir / f"{name}.apkg"
-    genanki.Package(deck).write_to_file(str(apkg_path))
+
+    package = genanki.Package(deck)
+    if diagrams:
+        media_files = [diagrams[num]['png'] for num in diagrams if diagrams[num].get('png')]
+        package.media_files = media_files
+    package.write_to_file(str(apkg_path))
 
     # Generate compact markdown (questions with correct in bold)
     md_dir = base / 'Anki-generation' / 'markdown'

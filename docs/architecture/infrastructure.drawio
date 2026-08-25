@@ -1,0 +1,119 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Infrastructure" id="infra">
+    <mxGraphModel dx="1200" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="&lt;b&gt;GNL Process — Infrastructure Overview&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;fontSize=18;" vertex="1" parent="1">
+          <mxGeometry x="500" y="20" width="400" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- WSL2 Container -->
+        <mxCell id="wsl" value="" style="rounded=1;whiteSpace=wrap;fillColor=#f5f5f5;strokeColor=#333;strokeWidth=2;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="70" width="1100" height="600" as="geometry" />
+        </mxCell>
+        <mxCell id="wsl-label" value="&lt;b&gt;WSL2 (Ubuntu)&lt;/b&gt; — NIZAR-ENVY" style="text;html=1;align=left;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="60" y="80" width="300" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- DEV Server -->
+        <mxCell id="dev" value="&lt;b&gt;DEV&lt;/b&gt;&lt;br&gt;gnl serve&lt;br&gt;Port 8000&lt;br&gt;&lt;br&gt;~/workspace/gnl-process/" style="rounded=1;whiteSpace=wrap;fillColor=#dcedc8;strokeColor=#689f38;" vertex="1" parent="1">
+          <mxGeometry x="80" y="130" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- PROD Server -->
+        <mxCell id="prod" value="&lt;b&gt;PROD&lt;/b&gt;&lt;br&gt;systemd gnl-process.service&lt;br&gt;Port 8001&lt;br&gt;&lt;br&gt;~/.gnl-process-prod/" style="rounded=1;whiteSpace=wrap;fillColor=#bbdefb;strokeColor=#1565c0;" vertex="1" parent="1">
+          <mxGeometry x="80" y="260" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Shared DB -->
+        <mxCell id="db" value="&lt;b&gt;gnl.db&lt;/b&gt;&lt;br&gt;(SQLite, partagée)" style="shape=cylinder3;whiteSpace=wrap;boundedLbl=1;fillColor=#fff9c4;strokeColor=#f9a825;size=10;" vertex="1" parent="1">
+          <mxGeometry x="150" y="410" width="120" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="dev-db" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#689f38;" edge="1" parent="1" source="dev" target="db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="prod-db" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#1565c0;" edge="1" parent="1" source="prod" target="db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Bedrock Gateway -->
+        <mxCell id="bedrock-gw" value="&lt;b&gt;Bedrock Access Gateway&lt;/b&gt;&lt;br&gt;Port 8766&lt;br&gt;(OpenAI-compatible)" style="rounded=1;whiteSpace=wrap;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="80" y="540" width="200" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- External Services -->
+        <mxCell id="external" value="" style="rounded=1;whiteSpace=wrap;fillColor=#e1d5e7;strokeColor=#9673a6;strokeWidth=2;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="400" y="130" width="700" height="520" as="geometry" />
+        </mxCell>
+        <mxCell id="ext-label" value="&lt;b&gt;External Services&lt;/b&gt;" style="text;html=1;align=left;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="420" y="140" width="200" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- NLM -->
+        <mxCell id="nlm" value="&lt;b&gt;NotebookLM&lt;/b&gt;&lt;br&gt;Google AI Pro&lt;br&gt;20 audio/jour&lt;br&gt;Reset: 20h MTL" style="rounded=1;whiteSpace=wrap;fillColor=#fff3e0;strokeColor=#e65100;" vertex="1" parent="1">
+          <mxGeometry x="430" y="180" width="180" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- Bedrock -->
+        <mxCell id="bedrock" value="&lt;b&gt;Amazon Bedrock&lt;/b&gt;&lt;br&gt;Claude Sonnet 4&lt;br&gt;(highlight, classify, titles)" style="rounded=1;whiteSpace=wrap;fillColor=#fff3e0;strokeColor=#e65100;" vertex="1" parent="1">
+          <mxGeometry x="430" y="300" width="180" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- Gemini TTS -->
+        <mxCell id="tts" value="&lt;b&gt;Gemini TTS&lt;/b&gt;&lt;br&gt;gemini-2.5-flash-preview-tts&lt;br&gt;Voice: Orus" style="rounded=1;whiteSpace=wrap;fillColor=#fff3e0;strokeColor=#e65100;" vertex="1" parent="1">
+          <mxGeometry x="430" y="420" width="180" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- LinkedIn -->
+        <mxCell id="linkedin" value="&lt;b&gt;LinkedIn&lt;/b&gt;&lt;br&gt;(Saved Posts scraping)" style="rounded=1;whiteSpace=wrap;fillColor=#e3f2fd;strokeColor=#1565c0;" vertex="1" parent="1">
+          <mxGeometry x="700" y="180" width="160" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- AWS API -->
+        <mxCell id="aws-api" value="&lt;b&gt;AWS What's New API&lt;/b&gt;&lt;br&gt;(crawl mensuel)" style="rounded=1;whiteSpace=wrap;fillColor=#e3f2fd;strokeColor=#1565c0;" vertex="1" parent="1">
+          <mxGeometry x="700" y="280" width="160" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Google Drive -->
+        <mxCell id="gdrive" value="&lt;b&gt;Google Drive (G:)&lt;/b&gt;&lt;br&gt;/mnt/g/Mon Drive/GNL-BACKLOG/&lt;br&gt;(output final)" style="rounded=1;whiteSpace=wrap;fillColor=#e8f5e9;strokeColor=#388e3c;" vertex="1" parent="1">
+          <mxGeometry x="700" y="400" width="200" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- LinkedIn MCP -->
+        <mxCell id="linkedin-mcp" value="&lt;b&gt;LinkedIn MCP Server&lt;/b&gt;&lt;br&gt;(stdio, on-demand)&lt;br&gt;timeout: 600s" style="rounded=1;whiteSpace=wrap;fillColor=#fce4ec;strokeColor=#c62828;" vertex="1" parent="1">
+          <mxGeometry x="700" y="530" width="180" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Connections -->
+        <mxCell id="c1" style="strokeColor=#e65100;" edge="1" parent="1" source="dev" target="nlm">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c2" style="strokeColor=#e65100;" edge="1" parent="1" source="prod" target="nlm">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c3" style="strokeColor=#e65100;" edge="1" parent="1" source="dev" target="bedrock">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c4" style="strokeColor=#e65100;" edge="1" parent="1" source="dev" target="tts">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c5" style="strokeColor=#1565c0;" edge="1" parent="1" source="prod" target="linkedin-mcp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c6" style="strokeColor=#388e3c;" edge="1" parent="1" source="prod" target="gdrive">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Scheduler box -->
+        <mxCell id="scheduler" value="&lt;b&gt;Scheduler (APScheduler)&lt;/b&gt;&lt;br&gt;02:00 — fetch LinkedIn&lt;br&gt;03:00 — generate articles&lt;br&gt;08:00 — deliver (disabled)" style="rounded=1;whiteSpace=wrap;fillColor=#f3e5f5;strokeColor=#7b1fa2;" vertex="1" parent="1">
+          <mxGeometry x="80" y="130" width="200" height="80" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

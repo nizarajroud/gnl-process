@@ -541,7 +541,7 @@
                 const div = document.getElementById(`filelist-${theme}-${sub}`);
                 if (!files.length) { div.innerHTML = '<span class="text-gray-500">Aucun fichier PDF dans ce dossier.</span>'; return; }
                 div.innerHTML = '<table class="w-full text-xs"><thead><tr class="text-gray-400 border-b border-gray-700"><th class="text-left py-1">Fichier</th><th class="py-1">Statut</th><th class="text-right py-1">Action</th></tr></thead><tbody>' +
-                    files.map(f => `<tr class="border-b border-gray-800"><td class="py-1">${f.name} ${f.anki ? '🎴' : ''} ${f.in_production ? '📻' : ''}</td><td class="py-1"><button onclick="prepareFromInbox('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-orange-600 hover:bg-orange-500 rounded text-white">Traiter</button></td><td class="text-right py-1">${theme === 'exams' ? `<button onclick="cleanExam('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-red-600 hover:bg-red-500 rounded text-white">🗑</button>` : `<button onclick="launchInteractive('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-purple-600 hover:bg-purple-500 rounded text-white">🎙️ Interactif</button>`}</td></tr>`).join('') +
+                    files.map(f => `<tr class="border-b border-gray-800"><td class="py-1">${f.name} ${f.anki ? '<span class="text-xs bg-green-800 text-green-200 px-1 rounded">Anki</span>' : ''} ${f.in_production ? '<span class="text-xs bg-blue-800 text-blue-200 px-1 rounded">Podcast</span>' : ''}</td><td class="py-1"><button onclick="prepareFromInbox('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-orange-600 hover:bg-orange-500 rounded text-white">Traiter</button></td><td class="text-right py-1">${theme === 'exams' ? `<button onclick="cleanExam('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-red-600 hover:bg-red-500 rounded text-white">🗑</button>` : `<button onclick="launchInteractive('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-purple-600 hover:bg-purple-500 rounded text-white">🎙️ Interactif</button>`}</td></tr>`).join('') +
                     '</tbody></table>';
             });
         }
@@ -566,6 +566,7 @@
                     // Simplified dialog for exams — no total count
                     document.getElementById('prep-dialog-mode-row').classList.add('hidden');
                     document.getElementById('prep-dialog-pipeline-row').classList.remove('hidden');
+                    document.getElementById('prep-dialog-diagrams-row').classList.remove('hidden');
                     document.getElementById('prep-dialog-pipeline').value = 'anki';
                     document.getElementById('prep-dialog-pages-label').textContent = 'Questions par épisode';
                     document.getElementById('prep-dialog-pages').value = 5;
@@ -573,6 +574,10 @@
                     document.getElementById('prep-dialog-info').textContent = '';
                     document.getElementById('prep-dialog-pipeline').onchange = function() {
                         document.getElementById('prep-dialog-pages').parentElement.style.display = this.value === 'anki' ? 'none' : '';
+                    };
+                    // Diagram checkbox toggle
+                    document.getElementById('prep-dialog-diagrams').onchange = function() {
+                        document.getElementById('prep-dialog-placement-row').classList.toggle('hidden', !this.checked);
                     };
                 } else {
                     document.getElementById('prep-dialog-mode-row').classList.remove('hidden');
@@ -594,7 +599,10 @@
         function confirmPrepare() {
             const dlg = document.getElementById('prep-dialog');
             const pipeline = document.getElementById('prep-dialog-pipeline').value || '';
-            const body = `theme=${dlg.dataset.theme}&subtheme=${dlg.dataset.sub}&filename=${dlg.dataset.file}&mode=${document.getElementById('prep-dialog-mode').value}&pages=${document.getElementById('prep-dialog-pages').value}&name=${document.getElementById('prep-dialog-name').value}&pipeline=${pipeline}`;
+            const diagrams = document.getElementById('prep-dialog-diagrams').checked ? '1' : '0';
+            const diagramFront = document.getElementById('diagram-front')?.checked ? '1' : '0';
+            const diagramBack = document.getElementById('diagram-back')?.checked ? '1' : '0';
+            const body = `theme=${dlg.dataset.theme}&subtheme=${dlg.dataset.sub}&filename=${dlg.dataset.file}&mode=${document.getElementById('prep-dialog-mode').value}&pages=${document.getElementById('prep-dialog-pages').value}&name=${document.getElementById('prep-dialog-name').value}&pipeline=${pipeline}&diagrams=${diagrams}&diagram_front=${diagramFront}&diagram_back=${diagramBack}`;
             closePrepDialog();
             fetch('/prepare-from-inbox', {
                 method: 'POST',
@@ -977,10 +985,23 @@
                 <div id="prep-dialog-pipeline-row" class="hidden">
                     <label class="text-xs text-gray-400">Pipeline</label>
                     <select id="prep-dialog-pipeline" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
-                        <option value="anki">🎴 Anki uniquement</option>
-                        <option value="generate">📻 Génération uniquement</option>
-                        <option value="both">🎴 Anki + 📻 Génération</option>
+                        <option value="anki">📝 Anki</option>
+                        <option value="generate">🎧 Podcast</option>
+                        <option value="both">📝 Anki + 🎧 Podcast</option>
                     </select>
+                </div>
+                <div id="prep-dialog-diagrams-row" class="hidden">
+                    <label class="text-xs text-gray-400 flex items-center gap-2">
+                        <input type="checkbox" id="prep-dialog-diagrams" class="rounded">
+                        Générer diagrammes d'architecture
+                    </label>
+                    <div id="prep-dialog-placement-row" class="mt-2 ml-5 hidden">
+                        <label class="text-xs text-gray-400">Placement dans la carte Anki:</label>
+                        <div class="flex gap-4 mt-1">
+                            <label class="text-xs flex items-center gap-1"><input type="checkbox" id="diagram-front" checked> Front (contexte)</label>
+                            <label class="text-xs flex items-center gap-1"><input type="checkbox" id="diagram-back" checked> Back (avec réponse)</label>
+                        </div>
+                    </div>
                 </div>
                 <div>
                     <label id="prep-dialog-pages-label" class="text-xs text-gray-400">Pages par épisode</label>
