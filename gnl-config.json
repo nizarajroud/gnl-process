@@ -65,5 +65,7 @@
     "Other"
   ],
   "EXAM_GENERATE_DIAGRAMS": "1",
-  "EXAM_DIAGRAM_PLACEMENT": "front"
+  "EXAM_DIAGRAM_PLACEMENT": "front",
+  "ARTICLES_AUDIO_MODE": "tts",
+  "ARTICLES_NLM_CUSTOMIZE": "Cover every single detail from the source. Do not summarize or skip any information. Present all facts, announcements, and technical details in the exact order they appear. Prioritize completeness over brevity. Target maximum length. Use the configured language."
 }

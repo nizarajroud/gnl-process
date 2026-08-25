@@ -868,13 +868,18 @@ async def _combine_selected(source: str, selected_files: list):
 
 
 @app.post("/saved-articles/batch/{source}")
-async def batch_generate_articles(source: str):
+async def batch_generate_articles(source: str, request: Request):
     """Generate text + audio for next 10 unprocessed articles."""
-    asyncio.create_task(_batch_generate(source))
+    try:
+        data = await request.json()
+        mode = data.get('mode', 'tts')
+    except Exception:
+        mode = 'tts'
+    asyncio.create_task(_batch_generate(source, mode=mode))
     return {"status": "started"}
 
 
-async def _batch_generate(source):
+async def _batch_generate(source, mode='tts'):
     from gnl_core.db import get_db
     from gnl_core.config import get_config
     import subprocess
@@ -892,7 +897,11 @@ async def _batch_generate(source):
         return
 
     total = len(rows)
-    await broadcast_log(f"▶ Batch: {total} articles à traiter")
+    await broadcast_log(f"▶ Batch: {total} articles à traiter ({mode.upper()})")
+
+    if mode == 'nlm':
+        await _batch_generate_nlm(source, rows)
+        return
 
     generated_audio_paths = []
 
@@ -1029,6 +1038,92 @@ async def _batch_generate(source):
 
         except Exception as e:
             await broadcast_log(f"  ⚠ Audio échoué: {str(e)[:60]}")
+            continue
+
+    await broadcast_log("__done__")
+
+
+async def _batch_generate_nlm(source, rows):
+    """Generate articles via NotebookLM (upload article → generate audio overview → download)."""
+    from gnl_core.db import get_db
+    from gnl_core.config import get_config
+    from notebooklm_tools.mcp.tools._utils import get_client
+    import time
+    import subprocess
+
+    config = get_config()
+    customize_prompt = config.get('ARTICLES_NLM_CUSTOMIZE', '')
+    audio_dir = os.path.join(config.get('AUDIO_PARTS_FOLDER', ''), 'saved-articles', source)
+    os.makedirs(audio_dir, exist_ok=True)
+    text_dir = os.path.join(config.get('PDF_PARTS_FOLDER', ''), 'saved-articles', source)
+    os.makedirs(text_dir, exist_ok=True)
+
+    total = len(rows)
+    client = get_client()
+
+    for i, row in enumerate(rows):
+        article_id = row['id']
+        article_title = row['title'] or ''
+        article_content = row['content'] or ''
+        safe_title = "".join(c if c.isalnum() or c in '-_ ' else '' for c in article_title)[:60]
+
+        await broadcast_log(f"▶ [{i+1}/{total}] {article_title[:50]}...")
+
+        try:
+            # Save article content as text file (source for NLM)
+            source_path = os.path.join(text_dir, f"{safe_title}.txt")
+            with open(source_path, 'w', encoding='utf-8') as f:
+                f.write(f"{article_title}\n\n{article_content}")
+
+            # Create notebook, upload source
+            nb_name = f"article-{safe_title[:30]}"
+            # Delete existing if any
+            for nb in client.list_notebooks():
+                if nb.title == nb_name:
+                    client.delete_notebook(nb.id)
+                    break
+
+            nb = client.create_notebook(title=nb_name)
+            nb_id = nb.notebook_id if hasattr(nb, 'notebook_id') else nb.id
+            client.add_source(notebook_id=nb_id, source_path=source_path)
+            time.sleep(5)  # Wait for source processing
+
+            # Generate audio overview with customize prompt
+            audio_result = client.generate_audio(notebook_id=nb_id, customize=customize_prompt)
+
+            # Download audio
+            if audio_result and hasattr(audio_result, 'audio_url'):
+                import requests as req
+                audio_resp = req.get(audio_result.audio_url, timeout=300)
+                if audio_resp.status_code == 200:
+                    # Save as M4A then convert to MP3
+                    m4a_path = os.path.join(audio_dir, f"{safe_title}.m4a")
+                    with open(m4a_path, 'wb') as f:
+                        f.write(audio_resp.content)
+
+                    audio_path = os.path.join(audio_dir, f"{safe_title}.mp3")
+                    subprocess.run(['ffmpeg', '-y', '-i', m4a_path, audio_path], capture_output=True)
+                    os.unlink(m4a_path)
+
+                    # Mark processed
+                    with get_db() as conn:
+                        conn.execute("UPDATE saved_articles SET processed=1, output_path=?, audio_path=? WHERE id=?", (source_path, audio_path, article_id))
+                        conn.commit()
+
+                    await broadcast_log(f"  ✓ [{i+1}/{total}] OK")
+                else:
+                    await broadcast_log(f"  ⚠ Download échoué: HTTP {audio_resp.status_code}")
+            else:
+                await broadcast_log(f"  ⚠ Génération audio échouée")
+
+            # Clean up notebook
+            try:
+                client.delete_notebook(nb_id)
+            except Exception:
+                pass
+
+        except Exception as e:
+            await broadcast_log(f"  ⚠ Erreur: {str(e)[:80]}")
             continue
 
     await broadcast_log("__done__")
