@@ -1295,15 +1295,15 @@ async def backlog_combine(request: Request):
     data = await request.json()
     folder = data.get('folder', '')
     selected_files = data.get('files', [])
-    asyncio.create_task(_combine_backlog(folder, selected_files))
+    name = data.get('name', '')
+    asyncio.create_task(_combine_backlog(folder, selected_files, name))
     return {"status": "combining"}
 
 
-async def _combine_backlog(folder: str, selected_files: list):
-    """Combine selected MP3 files from backlog into one."""
+async def _combine_backlog(folder: str, selected_files: list, name: str = ''):
+    """Combine selected MP3 files from backlog into one, then delete sources."""
     import subprocess
     import tempfile
-    from datetime import datetime
 
     paths = [os.path.join(folder, f) for f in selected_files if os.path.exists(os.path.join(folder, f))]
     if not paths:
@@ -1313,13 +1313,15 @@ async def _combine_backlog(folder: str, selected_files: list):
 
     await broadcast_log(f"▶ COMBINE ({len(paths)} épisodes)")
 
-    # Output in same folder
-    date_str = datetime.now().strftime('%Y-%m-%d')
-    output_file = os.path.join(folder, f"combined-{date_str}.mp3")
+    # Output filename from user input
+    safe_name = "".join(c if c.isalnum() or c in '-_ ' else '' for c in name).strip()
+    if not safe_name:
+        safe_name = 'combined'
+    output_file = os.path.join(folder, f"{safe_name}.mp3")
     counter = 1
     while os.path.exists(output_file):
         counter += 1
-        output_file = os.path.join(folder, f"combined-{date_str}-{counter}.mp3")
+        output_file = os.path.join(folder, f"{safe_name}-{counter}.mp3")
 
     # ffmpeg concat
     silence_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'assets', 'silence-3s.mp3')
@@ -1336,8 +1338,17 @@ async def _combine_backlog(folder: str, selected_files: list):
     )
     os.unlink(concat_path)
 
-    if result.returncode == 0:
+    if result.returncode == 0 and os.path.exists(output_file):
         await broadcast_log(f"✓ Combiné: {output_file}")
+        # Delete source files
+        deleted = 0
+        for p in paths:
+            try:
+                os.unlink(p)
+                deleted += 1
+            except Exception:
+                pass
+        await broadcast_log(f"✓ {deleted} fichiers sources supprimés")
     else:
         await broadcast_log(f"⚠ Erreur ffmpeg: {result.stderr.decode()[:100]}")
     await broadcast_log("__done__")

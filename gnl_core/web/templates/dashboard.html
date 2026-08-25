@@ -513,7 +513,6 @@
         }
 
         async function openCombineEpisodes() {
-            // Step 1: get available folders from backlog
             const res = await fetch('/backlog/folders');
             const folders = await res.json();
             if (!folders.length) { alert('Aucun dossier trouvé dans GNL-BACKLOG'); return; }
@@ -535,7 +534,7 @@
                     </div>
                     <div class="flex gap-2 justify-end">
                         <button onclick="document.getElementById('combine-ep-dialog').remove()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded">Annuler</button>
-                        <button onclick="doCombineEpisodes()" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded font-semibold">🔗 Combiner</button>
+                        <button id="combine-ep-btn" onclick="promptCombineName()" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded font-semibold opacity-50 cursor-not-allowed" disabled>🔗 Combiner</button>
                     </div>
                 </div>
             </div>`;
@@ -544,6 +543,8 @@
         }
 
         async function loadEpisodeFiles() {
+            const btn = document.getElementById('combine-ep-btn');
+            if (btn) { btn.disabled = true; btn.classList.add('opacity-50','cursor-not-allowed'); }
             const folder = document.getElementById('combine-ep-folder').value;
             const res = await fetch(`/backlog/files?folder=${encodeURIComponent(folder)}`);
             const files = await res.json();
@@ -564,6 +565,8 @@
                     <span class="text-xs text-gray-500">${f.duration || ''}</span>
                 </div>
             `).join('');
+            // Enable combine button after load
+            if (btn) { btn.disabled = false; btn.classList.remove('opacity-50','cursor-not-allowed'); }
         }
 
         function dropEpisode(event) {
@@ -583,17 +586,35 @@
             }
         }
 
-        function doCombineEpisodes() {
+        function promptCombineName() {
+            const checked = [...document.querySelectorAll('#combine-ep-list input:checked')];
+            if (!checked.length) { alert('Sélectionnez au moins un fichier'); return; }
+            // Show name input popup
+            const nameHtml = `<div class="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" id="combine-name-dialog">
+                <div class="bg-gray-800 rounded-lg p-5 w-96">
+                    <h4 class="font-semibold mb-3">Nom du fichier résultant</h4>
+                    <input type="text" id="combine-ep-name" class="w-full bg-gray-700 rounded px-3 py-2 text-sm mb-4" placeholder="ex: aws-papers-complete" value="">
+                    <div class="flex gap-2 justify-end">
+                        <button onclick="document.getElementById('combine-name-dialog').remove()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded">Annuler</button>
+                        <button onclick="executeCombineEpisodes()" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded font-semibold">✓ Valider</button>
+                    </div>
+                </div>
+            </div>`;
+            document.body.insertAdjacentHTML('beforeend', nameHtml);
+            document.getElementById('combine-ep-name').focus();
+        }
+
+        function executeCombineEpisodes() {
+            const name = document.getElementById('combine-ep-name').value.trim();
+            if (!name) { alert('Veuillez saisir un nom'); return; }
             const folder = document.getElementById('combine-ep-folder').value;
-            const items = [...document.querySelectorAll('#combine-ep-list input:checked')].map(c => c.value);
-            if (!items.length) { alert('Sélectionnez au moins un fichier'); return; }
-            // Get files in DOM order (respects drag-drop reorder)
             const ordered = [...document.querySelectorAll('#combine-ep-list input:checked')].map(c => c.value);
+            document.getElementById('combine-name-dialog').remove();
             document.getElementById('combine-ep-dialog').remove();
             fetch('/backlog/combine', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({folder: folder, files: ordered})
+                body: JSON.stringify({folder: folder, files: ordered, name: name})
             });
         }
 
