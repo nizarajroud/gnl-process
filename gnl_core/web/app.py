@@ -1289,6 +1289,37 @@ async def backlog_files(folder: str = ""):
     return files
 
 
+@app.post("/backlog/suggest-name")
+async def suggest_combine_name(request: Request):
+    """Use Bedrock to suggest a combined filename from file list."""
+    data = await request.json()
+    files = data.get('files', [])
+    if not files:
+        return {"name": ""}
+    try:
+        import boto3, json
+        from gnl_core.config import get_config
+        config = get_config()
+        model_id = config.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
+        client = boto3.client('bedrock-runtime', region_name='us-east-1')
+        file_list = '\n'.join(files[:20])
+        response = client.invoke_model(
+            modelId=model_id,
+            body=json.dumps({
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 30,
+                "messages": [{"role": "user", "content": f"Suggest a short filename (max 5 words, lowercase, hyphens, no extension) that summarizes these audio episodes:\n{file_list}"}]
+            })
+        )
+        result = json.loads(response['body'].read())
+        name = result['content'][0]['text'].strip().strip('"\'').replace(' ', '-').lower()
+        # Clean: only keep alnum and hyphens
+        name = ''.join(c if c.isalnum() or c == '-' else '' for c in name)[:60]
+        return {"name": name}
+    except Exception:
+        return {"name": ""}
+
+
 @app.post("/backlog/combine")
 async def backlog_combine(request: Request):
     """Combine selected MP3 files from a backlog folder."""

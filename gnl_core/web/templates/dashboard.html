@@ -586,14 +586,26 @@
             }
         }
 
-        function promptCombineName() {
+        async function promptCombineName() {
             const checked = [...document.querySelectorAll('#combine-ep-list input:checked')];
             if (!checked.length) { alert('Sélectionnez au moins un fichier'); return; }
+            // Get suggested name from Bedrock
+            const filenames = checked.map(c => c.value);
+            let suggestedName = '';
+            try {
+                const res = await fetch('/backlog/suggest-name', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({files: filenames})
+                });
+                const data = await res.json();
+                suggestedName = data.name || '';
+            } catch(e) {}
             // Show name input popup
             const nameHtml = `<div class="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" id="combine-name-dialog">
                 <div class="bg-gray-800 rounded-lg p-5 w-96">
                     <h4 class="font-semibold mb-3">Nom du fichier résultant</h4>
-                    <input type="text" id="combine-ep-name" class="w-full bg-gray-700 rounded px-3 py-2 text-sm mb-4" placeholder="ex: aws-papers-complete" value="">
+                    <input type="text" id="combine-ep-name" class="w-full bg-gray-700 rounded px-3 py-2 text-sm mb-4" placeholder="ex: aws-papers-complete" value="${suggestedName}">
                     <div class="flex gap-2 justify-end">
                         <button onclick="document.getElementById('combine-name-dialog').remove()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded">Annuler</button>
                         <button onclick="executeCombineEpisodes()" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded font-semibold">✓ Valider</button>
@@ -602,6 +614,7 @@
             </div>`;
             document.body.insertAdjacentHTML('beforeend', nameHtml);
             document.getElementById('combine-ep-name').focus();
+            document.getElementById('combine-ep-name').select();
         }
 
         function executeCombineEpisodes() {
