@@ -554,36 +554,73 @@
                 return;
             }
             container.innerHTML = files.map((f, i) => `
-                <div class="flex items-center gap-2 p-1 hover:bg-gray-700 rounded cursor-move" draggable="true" data-idx="${i}"
-                     ondragstart="event.dataTransfer.setData('text/plain',event.target.dataset.idx)"
-                     ondragover="event.preventDefault();event.currentTarget.classList.add('border','border-blue-500')"
-                     ondragleave="event.currentTarget.classList.remove('border','border-blue-500')"
-                     ondrop="dropEpisode(event)">
+                <div class="flex items-center gap-2 p-2 hover:bg-gray-700 rounded cursor-move ep-drag-item" draggable="true" data-idx="${i}">
                     <span class="text-gray-500 cursor-move">☰</span>
                     <input type="checkbox" value="${f.filename}" checked class="rounded">
                     <span class="text-sm truncate flex-1">${f.filename}</span>
                     <span class="text-xs text-gray-500">${f.duration || ''}</span>
                 </div>
             `).join('');
+            // Setup drag-drop with insertion line
+            initEpisodeDragDrop();
             // Enable combine button after load
             if (btn) { btn.disabled = false; btn.classList.remove('opacity-50','cursor-not-allowed'); }
         }
 
-        function dropEpisode(event) {
-            event.preventDefault();
-            event.currentTarget.classList.remove('border','border-blue-500');
-            const fromIdx = parseInt(event.dataTransfer.getData('text/plain'));
+        function initEpisodeDragDrop() {
             const container = document.getElementById('combine-ep-list');
-            const items = [...container.children];
-            const target = event.currentTarget;
-            const toIdx = items.indexOf(target);
-            if (fromIdx === toIdx) return;
-            const moved = items[fromIdx];
-            if (fromIdx < toIdx) {
-                target.after(moved);
-            } else {
-                target.before(moved);
-            }
+            let draggedEl = null;
+
+            container.addEventListener('dragstart', (e) => {
+                const item = e.target.closest('.ep-drag-item');
+                if (!item) return;
+                draggedEl = item;
+                item.style.opacity = '0.4';
+                e.dataTransfer.effectAllowed = 'move';
+            });
+
+            container.addEventListener('dragend', (e) => {
+                const item = e.target.closest('.ep-drag-item');
+                if (item) item.style.opacity = '1';
+                container.querySelectorAll('.ep-drag-item').forEach(el => {
+                    el.classList.remove('border-t-2', 'border-b-2', 'border-blue-400');
+                });
+                draggedEl = null;
+            });
+
+            container.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                const item = e.target.closest('.ep-drag-item');
+                if (!item || item === draggedEl) return;
+                // Clear all indicators
+                container.querySelectorAll('.ep-drag-item').forEach(el => {
+                    el.classList.remove('border-t-2', 'border-b-2', 'border-blue-400');
+                });
+                // Show insertion line (top or bottom half)
+                const rect = item.getBoundingClientRect();
+                const midY = rect.top + rect.height / 2;
+                if (e.clientY < midY) {
+                    item.classList.add('border-t-2', 'border-blue-400');
+                } else {
+                    item.classList.add('border-b-2', 'border-blue-400');
+                }
+            });
+
+            container.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const item = e.target.closest('.ep-drag-item');
+                if (!item || !draggedEl || item === draggedEl) return;
+                const rect = item.getBoundingClientRect();
+                const midY = rect.top + rect.height / 2;
+                if (e.clientY < midY) {
+                    item.before(draggedEl);
+                } else {
+                    item.after(draggedEl);
+                }
+                container.querySelectorAll('.ep-drag-item').forEach(el => {
+                    el.classList.remove('border-t-2', 'border-b-2', 'border-blue-400');
+                });
+            });
         }
 
         async function promptCombineName() {
