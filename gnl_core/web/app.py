@@ -1245,6 +1245,146 @@ async def _generate_content(source, param, category=""):
     await broadcast_log("__done__")
 
 
+@app.get("/backlog/folders")
+async def backlog_folders():
+    """List subfolders in GNL_BACKLOG that contain MP3 files."""
+    from gnl_core.config import get_config
+    config = get_config()
+    backlog = config.get('GNL_BACKLOG', '')
+    if not backlog or not os.path.isdir(backlog):
+        return []
+    folders = []
+    for root, dirs, files in os.walk(backlog):
+        mp3s = [f for f in files if f.endswith('.mp3')]
+        if mp3s:
+            rel = os.path.relpath(root, backlog)
+            folders.append({'path': root, 'label': rel})
+    folders.sort(key=lambda x: x['label'])
+    return folders
+
+
+@app.get("/backlog/files")
+async def backlog_files(folder: str = ""):
+    """List MP3 files in a backlog folder, sorted by creation date."""
+    if not folder or not os.path.isdir(folder):
+        return []
+    import subprocess
+    files = []
+    for f in sorted(os.listdir(folder)):
+        if f.endswith('.mp3'):
+            path = os.path.join(folder, f)
+            # Get duration via ffprobe
+            duration = ''
+            try:
+                result = subprocess.run(
+                    ['ffprobe', '-v', 'quiet', '-show_entries', 'format=duration', '-of', 'csv=p=0', path],
+                    capture_output=True, text=True, timeout=5
+                )
+                secs = float(result.stdout.strip())
+                mins = int(secs // 60)
+                duration = f"{mins // 60}h{mins % 60:02d}" if mins >= 60 else f"{mins}min"
+            except Exception:
+                pass
+            files.append({'filename': f, 'duration': duration})
+    return files
+
+
+@app.post("/backlog/suggest-name")
+async def suggest_combine_name(request: Request):
+    """Use Bedrock to suggest a combined filename from file list."""
+    data = await request.json()
+    files = data.get('files', [])
+    if not files:
+        return {"name": ""}
+    try:
+        import boto3, json
+        from gnl_core.config import get_config
+        config = get_config()
+        model_id = config.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
+        client = boto3.client('bedrock-runtime', region_name='us-east-1')
+        file_list = '\n'.join(files[:20])
+        response = client.invoke_model(
+            modelId=model_id,
+            body=json.dumps({
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 30,
+                "messages": [{"role": "user", "content": f"Suggest a short filename (max 5 words, lowercase, hyphens, no extension) that summarizes these audio episodes:\n{file_list}"}]
+            })
+        )
+        result = json.loads(response['body'].read())
+        name = result['content'][0]['text'].strip().strip('"\'').replace(' ', '-').lower()
+        # Clean: only keep alnum and hyphens
+        name = ''.join(c if c.isalnum() or c == '-' else '' for c in name)[:60]
+        return {"name": name}
+    except Exception:
+        return {"name": ""}
+
+
+@app.post("/backlog/combine")
+async def backlog_combine(request: Request):
+    """Combine selected MP3 files from a backlog folder."""
+    data = await request.json()
+    folder = data.get('folder', '')
+    selected_files = data.get('files', [])
+    name = data.get('name', '')
+    asyncio.create_task(_combine_backlog(folder, selected_files, name))
+    return {"status": "combining"}
+
+
+async def _combine_backlog(folder: str, selected_files: list, name: str = ''):
+    """Combine selected MP3 files from backlog into one, then delete sources."""
+    import subprocess
+    import tempfile
+
+    paths = [os.path.join(folder, f) for f in selected_files if os.path.exists(os.path.join(folder, f))]
+    if not paths:
+        await broadcast_log("⚠ Aucun fichier valide sélectionné")
+        await broadcast_log("__done__")
+        return
+
+    await broadcast_log(f"▶ COMBINE ({len(paths)} épisodes)")
+
+    # Output filename from user input
+    safe_name = "".join(c if c.isalnum() or c in '-_ ' else '' for c in name).strip()
+    if not safe_name:
+        safe_name = 'combined'
+    output_file = os.path.join(folder, f"{safe_name}.mp3")
+    counter = 1
+    while os.path.exists(output_file):
+        counter += 1
+        output_file = os.path.join(folder, f"{safe_name}-{counter}.mp3")
+
+    # ffmpeg concat
+    silence_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'assets', 'silence-3s.mp3')
+    concat_path = os.path.join(tempfile.gettempdir(), 'backlog_concat.txt')
+    with open(concat_path, 'w') as f:
+        for idx, p in enumerate(paths):
+            f.write(f"file '{p}'\n")
+            if idx < len(paths) - 1 and os.path.exists(silence_file):
+                f.write(f"file '{silence_file}'\n")
+
+    result = subprocess.run(
+        ['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', concat_path, '-c', 'copy', output_file],
+        capture_output=True
+    )
+    os.unlink(concat_path)
+
+    if result.returncode == 0 and os.path.exists(output_file):
+        await broadcast_log(f"✓ Combiné: {output_file}")
+        # Delete source files
+        deleted = 0
+        for p in paths:
+            try:
+                os.unlink(p)
+                deleted += 1
+            except Exception:
+                pass
+        await broadcast_log(f"✓ {deleted} fichiers sources supprimés")
+    else:
+        await broadcast_log(f"⚠ Erreur ffmpeg: {result.stderr.decode()[:100]}")
+    await broadcast_log("__done__")
+
+
 @app.post("/refresh")
 async def refresh():
     """Force UI refresh."""
