@@ -920,6 +920,7 @@ async def _batch_generate(source, mode='tts'):
 
             def _gen_text():
                 from gnl_core.config import get_config
+                from pathlib import Path
                 config = get_config()
                 model_id = config.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
                 region = config.get('AWS_REGION', 'ca-central-1')
@@ -928,27 +929,10 @@ async def _batch_generate(source, mode='tts'):
                 session = boto3.Session(profile_name=profile, region_name=region)
                 client = session.client('bedrock-runtime', config=BotoConfig(read_timeout=600))
 
-                prompt = f"""أنت خبير تقني تشرح بالعربي الدارج التونسي.
-
-القواعد الصارمة:
-- اكتب بالحروف العربية فقط (مش بالحروف اللاتينية/الفرنسية)
-- المصطلحات التقنية بالإنجليزية كيما هي (API, cloud, container, deployment, agent, model...)
-- الأسلوب: نثر محادثة طبيعي، كأنك تشرح لزميلك التونسي شفاهياً
-- كل فقرة = جملة كاملة بالتونسي، والمصطلح الإنجليزي يتحط في وسط الجملة بشكل طبيعي
-- اشرح كل النقاط بالتفصيل (مش ملخص)
-- ما تترجمش المصطلحات التقنية — خليها بالإنجليزية
-- كل مفهوم، كل أداة، كل ممارسة لازم تتشرح
-
-❌ ممنوع:
-- الكتابة بالحروف اللاتينية/الفرنسية
-- الفصحى الكلاسيكية
-- قوائم بنمط [مصطلح]: [شرح]
-- ترجمة المصطلحات التقنية
-
-المقال باش تشرحو:
-
-العنوان: {article_title}
-المحتوى: {article_content}"""
+                # Load prompt from file
+                prompt_path = Path(__file__).parent.parent.parent / 'prompts' / 'articles-tts.txt'
+                prompt_template = prompt_path.read_text(encoding='utf-8')
+                prompt = prompt_template.format(article_title=article_title, article_content=article_content)
 
                 response = client.converse(
                     modelId=model_id,
@@ -1052,7 +1036,10 @@ async def _batch_generate_nlm(source, rows):
     import subprocess
 
     config = get_config()
-    customize_prompt = config.get('ARTICLES_NLM_CUSTOMIZE', '')
+    # Load customize prompt from file
+    from pathlib import Path
+    customize_path = Path(__file__).parent.parent / 'prompts' / 'articles-nlm-customize.txt'
+    customize_prompt = customize_path.read_text(encoding='utf-8').strip() if customize_path.exists() else ''
     audio_dir = os.path.join(config.get('AUDIO_PARTS_FOLDER', ''), 'saved-articles', source)
     os.makedirs(audio_dir, exist_ok=True)
     text_dir = os.path.join(config.get('PDF_PARTS_FOLDER', ''), 'saved-articles', source)

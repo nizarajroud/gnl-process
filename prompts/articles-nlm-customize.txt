@@ -1,0 +1,1 @@
+Cover every single detail from the source. Do not summarize or skip any information. Present all facts, announcements, and technical details in the exact order they appear. Prioritize completeness over brevity. Target maximum length. Use the configured language.
