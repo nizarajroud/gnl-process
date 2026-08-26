@@ -1,1 +1,9 @@
-Cover every single detail from the source. Do not summarize or skip any information. Present all facts, announcements, and technical details in the exact order they appear. Prioritize completeness over brevity. Target maximum length. Use the configured language.
+Cover each article fully and separately in the following order. Do not summarize or skip any information from any article.
+
+For each article:
+1. Announce the article title clearly
+2. Present ALL facts, announcements, and technical details in the exact order they appear
+3. Do not paraphrase — cover every single point
+4. When done with one article, clearly announce the transition to the next one
+
+Prioritize completeness over brevity. Target maximum length. Use the configured language.

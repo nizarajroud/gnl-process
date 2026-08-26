@@ -1028,15 +1028,15 @@ async def _batch_generate(source, mode='tts'):
 
 
 async def _batch_generate_nlm(source, rows):
-    """Generate articles via NotebookLM (upload article → generate audio overview → download)."""
+    """Generate articles via NotebookLM — groups N articles into one notebook/audio."""
     from gnl_core.db import get_db
     from gnl_core.config import get_config
     from notebooklm_tools.mcp.tools._utils import get_client
     import time
     import subprocess
+    from datetime import datetime
 
     config = get_config()
-    # Load customize prompt from file
     from pathlib import Path
     customize_path = Path(__file__).parent.parent / 'prompts' / 'articles-nlm-customize.txt'
     customize_prompt = customize_path.read_text(encoding='utf-8').strip() if customize_path.exists() else ''
@@ -1045,25 +1045,33 @@ async def _batch_generate_nlm(source, rows):
     text_dir = os.path.join(config.get('PDF_PARTS_FOLDER', ''), 'saved-articles', source)
     os.makedirs(text_dir, exist_ok=True)
 
-    total = len(rows)
+    nlm_batch_size = int(config.get('ARTICLES_NLM_BATCH_SIZE', '5'))
     client = get_client()
 
-    for i, row in enumerate(rows):
-        article_id = row['id']
-        article_title = row['title'] or ''
-        article_content = row['content'] or ''
-        safe_title = "".join(c if c.isalnum() or c in '-_ ' else '' for c in article_title)[:60]
+    # Split rows into batches of N articles
+    batches = [rows[i:i + nlm_batch_size] for i in range(0, len(rows), nlm_batch_size)]
 
-        await broadcast_log(f"▶ [{i+1}/{total}] {article_title[:50]}...")
+    for batch_idx, batch in enumerate(batches):
+        batch_titles = [r['title'] or 'Sans titre' for r in batch]
+        await broadcast_log(f"▶ Batch {batch_idx+1}/{len(batches)} ({len(batch)} articles)")
 
         try:
-            # Save article content as text file (source for NLM)
-            source_path = os.path.join(text_dir, f"{safe_title}.txt")
-            with open(source_path, 'w', encoding='utf-8') as f:
-                f.write(f"{article_title}\n\n{article_content}")
+            # Save each article as separate .txt source files
+            source_paths = []
+            for i, row in enumerate(batch):
+                title = row['title'] or ''
+                content = row['content'] or ''
+                safe = "".join(c if c.isalnum() or c in '-_ ' else '' for c in title)[:60]
+                path = os.path.join(text_dir, f"{safe}.txt")
+                with open(path, 'w', encoding='utf-8') as f:
+                    f.write(f"=== Article {i+1}: {title} ===\n\n{content}")
+                source_paths.append(path)
+                await broadcast_log(f"  📄 {title[:50]}")
 
-            # Create notebook, upload source
-            nb_name = f"article-{safe_title[:30]}"
+            # Create notebook with all articles as sources
+            date_str = datetime.now().strftime('%Y%m%d-%H%M')
+            nb_name = f"articles-batch-{date_str}-{batch_idx+1}"
+
             # Delete existing if any
             for nb in client.list_notebooks():
                 if nb.title == nb_name:
@@ -1072,10 +1080,16 @@ async def _batch_generate_nlm(source, rows):
 
             nb = client.create_notebook(title=nb_name)
             nb_id = nb.notebook_id if hasattr(nb, 'notebook_id') else nb.id
-            client.add_source(notebook_id=nb_id, source_path=source_path)
-            time.sleep(5)  # Wait for source processing
 
-            # Generate audio overview with customize prompt
+            # Upload all sources
+            for sp in source_paths:
+                client.add_source(notebook_id=nb_id, source_path=sp)
+
+            await broadcast_log(f"  ⏳ Attente traitement sources...")
+            time.sleep(10)  # Wait for all sources to be processed
+
+            # Generate one audio for the batch
+            await broadcast_log(f"  🎙️ Génération audio...")
             audio_result = client.generate_audio(notebook_id=nb_id, customize=customize_prompt)
 
             # Download audio
@@ -1083,21 +1097,27 @@ async def _batch_generate_nlm(source, rows):
                 import requests as req
                 audio_resp = req.get(audio_result.audio_url, timeout=300)
                 if audio_resp.status_code == 200:
-                    # Save as M4A then convert to MP3
-                    m4a_path = os.path.join(audio_dir, f"{safe_title}.m4a")
+                    # Filename based on batch
+                    batch_name = f"batch-{date_str}-{batch_idx+1}"
+                    m4a_path = os.path.join(audio_dir, f"{batch_name}.m4a")
                     with open(m4a_path, 'wb') as f:
                         f.write(audio_resp.content)
 
-                    audio_path = os.path.join(audio_dir, f"{safe_title}.mp3")
+                    audio_path = os.path.join(audio_dir, f"{batch_name}.mp3")
                     subprocess.run(['ffmpeg', '-y', '-i', m4a_path, audio_path], capture_output=True)
-                    os.unlink(m4a_path)
+                    if os.path.exists(m4a_path):
+                        os.unlink(m4a_path)
 
-                    # Mark processed
+                    # Mark all articles in batch as processed
                     with get_db() as conn:
-                        conn.execute("UPDATE saved_articles SET processed=1, output_path=?, audio_path=? WHERE id=?", (source_path, audio_path, article_id))
+                        for idx, row in enumerate(batch):
+                            conn.execute(
+                                "UPDATE saved_articles SET processed=1, output_path=?, audio_path=? WHERE id=?",
+                                (source_paths[idx], audio_path, row['id'])
+                            )
                         conn.commit()
 
-                    await broadcast_log(f"  ✓ [{i+1}/{total}] OK")
+                    await broadcast_log(f"  ✓ Batch {batch_idx+1} OK → {batch_name}.mp3")
                 else:
                     await broadcast_log(f"  ⚠ Download échoué: HTTP {audio_resp.status_code}")
             else:
@@ -1110,7 +1130,7 @@ async def _batch_generate_nlm(source, rows):
                 pass
 
         except Exception as e:
-            await broadcast_log(f"  ⚠ Erreur: {str(e)[:80]}")
+            await broadcast_log(f"  ⚠ Erreur batch {batch_idx+1}: {str(e)[:80]}")
             continue
 
     await broadcast_log("__done__")
