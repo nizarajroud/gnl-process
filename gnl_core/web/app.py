@@ -613,7 +613,15 @@ async def _fetch_saved_articles(source):
         # Step 1: Call LinkedIn MCP to refresh cache
         await broadcast_log("🔄 Appel MCP LinkedIn (scraping)...")
         refresh_ok = await _call_linkedin_mcp()
-        if refresh_ok:
+        if refresh_ok == 'session_expired':
+            await broadcast_log("⚠ Session LinkedIn expirée — relancer: cd ~/HomeWspce/linkedin-mcp-fork && .venv/bin/python -m linkedin_mcp_server --login")
+            await broadcast_log("__done__")
+            return
+        elif refresh_ok == 'no_data':
+            await broadcast_log("⚠ Aucun article récupéré (session expirée ou profil vide)")
+            await broadcast_log("__done__")
+            return
+        elif refresh_ok is True:
             await broadcast_log("✓ Cache LinkedIn mis à jour")
         else:
             await broadcast_log("⚠ Scraping échoué — utilisation du cache existant")
@@ -650,7 +658,22 @@ async def _call_linkedin_mcp():
         async with stdio_client(server_params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
-                await session.call_tool('get_saved_posts', {'num_posts': int(os.environ.get('LINKEDIN_SCRAPE_COUNT', '50')), 'full_content': True})
+                result = await session.call_tool('get_saved_posts', {'num_posts': int(os.environ.get('LINKEDIN_SCRAPE_COUNT', '50')), 'full_content': True})
+                # Check if result indicates an error
+                if result and hasattr(result, 'content'):
+                    for block in result.content:
+                        if hasattr(block, 'text') and 'No valid LinkedIn session' in block.text:
+                            return 'session_expired'
+
+        # Verify that DB was actually created with data
+        if not cache_db.exists():
+            return 'no_data'
+        import sqlite3
+        conn = sqlite3.connect(cache_db)
+        count = conn.execute("SELECT count(*) FROM saved_posts").fetchone()[0]
+        conn.close()
+        if count == 0:
+            return 'no_data'
         return True
     except Exception as e:
         return False
