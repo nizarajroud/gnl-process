@@ -649,10 +649,11 @@ async def _call_linkedin_mcp():
         if cache_db.exists():
             cache_db.unlink()
 
+        linkedin_mcp_path = os.environ.get('LINKEDIN_MCP_PATH', '/home/nizar/HomeWspce/linkedin-mcp-fork')
         server_params = StdioServerParameters(
-            command='python3',
+            command=os.path.join(linkedin_mcp_path, '.venv', 'bin', 'python'),
             args=['-m', 'linkedin_mcp_server'],
-            env={**os.environ, 'PYTHONPATH': os.environ.get('LINKEDIN_MCP_PATH', '/home/nizar/HomeWspce/linkedin-mcp-fork')}
+            env={**os.environ, 'PYTHONPATH': linkedin_mcp_path}
         )
 
         async with stdio_client(server_params) as (read, write):
