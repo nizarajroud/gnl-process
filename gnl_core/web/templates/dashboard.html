@@ -470,10 +470,16 @@
 
         function batchGenerate(source) {
             const mode = document.getElementById(`audio-mode-${source}`)?.value || 'tts';
+            // Get checked article IDs in DOM order (respects drag-drop)
+            const container = document.getElementById(`articles-list-${source}`);
+            const selectedIds = container ?
+                [...container.querySelectorAll('.article-check:checked:not(:disabled)')].map(c => parseInt(c.value)) :
+                [];
+            if (!selectedIds.length) { alert('Sélectionnez au moins un article'); return; }
             fetch(`/saved-articles/batch/${source}`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({mode: mode})
+                body: JSON.stringify({mode: mode, article_ids: selectedIds})
             });
         }
 
@@ -688,9 +694,77 @@
             fetch(`/saved-articles/${source}`).then(r=>r.json()).then(articles => {
                 const div = document.getElementById(`articles-${source}`);
                 if (!articles.length) { div.innerHTML = '<span class="text-gray-500">Aucun article. Cliquez "🔄 Récupérer" pour importer.</span>'; return; }
-                div.innerHTML = '<table class="w-full text-xs"><thead><tr class="text-gray-400 border-b border-gray-700"><th class="text-left py-1">Titre</th><th class="py-1">Date</th><th class="text-right py-1">Action</th></tr></thead><tbody>' +
-                    articles.map(a => `<tr class="border-b border-gray-800"><td class="py-1 truncate max-w-xs"><a href="${a.source_url}" target="_blank" class="text-blue-400 hover:underline">${a.title || 'Sans titre'}</a></td><td class="py-1 text-gray-500">${a.saved_date || ''}</td><td class="text-right py-1">${a.processed ? '<span class="text-green-400">✅</span>' : `<button onclick="generateArticle(${a.id})" class="px-2 py-0.5 bg-purple-600 hover:bg-purple-500 rounded text-white">Générer</button>`}</td></tr>`).join('') +
-                    '</tbody></table>';
+                window._savedArticles = articles;
+                window._savedSource = source;
+                renderSavedArticles(source);
+            });
+        }
+
+        function renderSavedArticles(source) {
+            const articles = window._savedArticles || [];
+            const div = document.getElementById(`articles-${source}`);
+            const showProcessed = document.getElementById(`show-processed-${source}`)?.checked || false;
+            const filtered = showProcessed ? articles : articles.filter(a => !a.processed);
+
+            let html = `<div class="mb-2"><label class="text-xs flex items-center gap-1 text-gray-400"><input type="checkbox" id="show-processed-${source}" onchange="renderSavedArticles('${source}')" ${showProcessed ? 'checked' : ''}> Afficher les articles traités</label></div>`;
+            html += `<div id="articles-list-${source}" class="space-y-1">`;
+            filtered.forEach((a, i) => {
+                const disabled = a.processed;
+                html += `<div class="flex items-center gap-2 p-1 hover:bg-gray-700 rounded ${disabled ? 'opacity-50' : 'cursor-move'} article-drag-item" 
+                    ${!disabled ? `draggable="true"` : ''} data-id="${a.id}" data-idx="${i}">
+                    <span class="text-gray-500 ${disabled ? '' : 'cursor-move'}">☰</span>
+                    <input type="checkbox" value="${a.id}" ${disabled ? 'disabled checked' : 'checked'} class="rounded article-check">
+                    <a href="${a.source_url}" target="_blank" class="text-xs text-blue-400 hover:underline truncate flex-1">${a.title || 'Sans titre'}</a>
+                    <span class="text-xs text-gray-500">${a.saved_date || ''}</span>
+                    ${disabled ? '<span class="text-xs text-green-400">✅</span>' : ''}
+                </div>`;
+            });
+            html += `</div>`;
+            div.innerHTML = html;
+            // Init drag-drop for unprocessed items
+            if (!showProcessed || filtered.some(a => !a.processed)) {
+                initArticleDragDrop(source);
+            }
+        }
+
+        function initArticleDragDrop(source) {
+            const container = document.getElementById(`articles-list-${source}`);
+            if (!container) return;
+            let draggedEl = null;
+
+            container.addEventListener('dragstart', (e) => {
+                const item = e.target.closest('.article-drag-item');
+                if (!item || item.querySelector('input:disabled')) return;
+                draggedEl = item;
+                item.style.opacity = '0.4';
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            container.addEventListener('dragend', (e) => {
+                const item = e.target.closest('.article-drag-item');
+                if (item) item.style.opacity = '1';
+                container.querySelectorAll('.article-drag-item').forEach(el => el.classList.remove('border-t-2','border-b-2','border-blue-400'));
+                draggedEl = null;
+            });
+            container.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                const item = e.target.closest('.article-drag-item');
+                if (!item || item === draggedEl || item.querySelector('input:disabled')) return;
+                container.querySelectorAll('.article-drag-item').forEach(el => el.classList.remove('border-t-2','border-b-2','border-blue-400'));
+                const rect = item.getBoundingClientRect();
+                if (e.clientY < rect.top + rect.height / 2) {
+                    item.classList.add('border-t-2','border-blue-400');
+                } else {
+                    item.classList.add('border-b-2','border-blue-400');
+                }
+            });
+            container.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const item = e.target.closest('.article-drag-item');
+                if (!item || !draggedEl || item === draggedEl) return;
+                const rect = item.getBoundingClientRect();
+                if (e.clientY < rect.top + rect.height / 2) { item.before(draggedEl); }
+                else { item.after(draggedEl); }
+                container.querySelectorAll('.article-drag-item').forEach(el => el.classList.remove('border-t-2','border-b-2','border-blue-400'));
             });
         }
 

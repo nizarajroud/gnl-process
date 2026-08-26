@@ -893,27 +893,40 @@ async def _combine_selected(source: str, selected_files: list):
 
 @app.post("/saved-articles/batch/{source}")
 async def batch_generate_articles(source: str, request: Request):
-    """Generate text + audio for next 10 unprocessed articles."""
+    """Generate text + audio for selected articles."""
     try:
         data = await request.json()
         mode = data.get('mode', 'tts')
+        article_ids = data.get('article_ids', [])
     except Exception:
         mode = 'tts'
-    asyncio.create_task(_batch_generate(source, mode=mode))
+        article_ids = []
+    asyncio.create_task(_batch_generate(source, mode=mode, article_ids=article_ids))
     return {"status": "started"}
 
 
-async def _batch_generate(source, mode='tts'):
+async def _batch_generate(source, mode='tts', article_ids=None):
     from gnl_core.db import get_db
     from gnl_core.config import get_config
     import subprocess
 
     with get_db() as conn:
-        batch_size = int(os.environ.get('LINKEDIN_BATCH_SIZE', '10'))
-        rows = conn.execute(
-            "SELECT id, title, content FROM saved_articles WHERE source=? AND processed=0 ORDER BY saved_date DESC LIMIT ?",
-            (source, batch_size)
-        ).fetchall()
+        if article_ids:
+            # Use specific IDs in the order provided
+            placeholders = ','.join('?' * len(article_ids))
+            rows = conn.execute(
+                f"SELECT id, title, content FROM saved_articles WHERE id IN ({placeholders})",
+                article_ids
+            ).fetchall()
+            # Reorder rows to match article_ids order
+            rows_by_id = {r['id']: r for r in rows}
+            rows = [rows_by_id[aid] for aid in article_ids if aid in rows_by_id]
+        else:
+            batch_size = int(os.environ.get('LINKEDIN_BATCH_SIZE', '10'))
+            rows = conn.execute(
+                "SELECT id, title, content FROM saved_articles WHERE source=? AND processed=0 ORDER BY saved_date DESC LIMIT ?",
+                (source, batch_size)
+            ).fetchall()
 
     if not rows:
         await broadcast_log("⚠ Aucun article à traiter")
