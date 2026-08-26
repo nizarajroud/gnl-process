@@ -880,7 +880,7 @@
                         subPanel.innerHTML = html;
                         loadFileList(theme, sub);
                     } else if (mode === 'fetch') {
-                        html += `<div class="mb-4 flex flex-wrap items-center gap-2"><button onclick="fetchSavedArticles('${sub}')" data-source="${sub}" class="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">🔄 Récupérer</button><select id="audio-mode-${sub}" class="bg-gray-700 rounded px-2 py-1 text-sm"><option value="tts">🔊 TTS</option><option value="nlm">🎙️ NLM Podcast</option></select><button onclick="batchGenerate('${sub}')" class="px-4 py-1 bg-purple-600 hover:bg-purple-500 rounded text-sm">🚀 Générer lot</button><button onclick="openCombineDialog('${sub}')" class="px-4 py-1 bg-green-600 hover:bg-green-500 rounded text-sm">🔗 Combiner</button></div>`;
+                        html += `<div class="mb-4 flex flex-wrap items-center gap-2"><button onclick="fetchSavedArticles('${sub}')" data-source="${sub}" class="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">🔄 Récupérer</button><select id="audio-mode-${sub}" class="bg-gray-700 rounded px-2 py-1 text-sm"><option value="tts">🔊 TTS</option><option value="nlm">🎙️ NLM Podcast</option></select><button onclick="batchGenerate('${sub}')" class="px-4 py-1 bg-purple-600 hover:bg-purple-500 rounded text-sm">🚀 Générer lot</button></div>`;
                         html += `<div id="articles-${sub}" class="text-sm text-gray-400">Chargement...</div>`;
                         subPanel.innerHTML = html;
                         loadSavedArticles(sub);
