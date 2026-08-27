@@ -1061,6 +1061,36 @@ async def _batch_generate(source, mode='tts', article_ids=None):
             await broadcast_log(f"  ⚠ Audio échoué: {str(e)[:60]}")
             continue
 
+    # Auto-combine all generated MP3s into one batch file
+    if generated_audio_paths:
+        import subprocess as _sp
+        from datetime import datetime
+        await broadcast_log(f"▶ COMBINE ({len(generated_audio_paths)} articles)")
+        config = get_config()
+        backlog_dir = os.path.join(config.get('GNL_BACKLOG', ''), 'saved-articles', source)
+        os.makedirs(backlog_dir, exist_ok=True)
+        date_str = datetime.now().strftime('%Y-%m-%d')
+        output_file = os.path.join(backlog_dir, f"batch-{date_str}.mp3")
+        counter = 1
+        while os.path.exists(output_file):
+            counter += 1
+            output_file = os.path.join(backlog_dir, f"batch-{date_str}-{counter}.mp3")
+
+        import tempfile
+        silence_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'assets', 'silence-3s.mp3')
+        concat_path = os.path.join(tempfile.gettempdir(), 'tts_batch_concat.txt')
+        with open(concat_path, 'w') as f:
+            for idx, p in enumerate(generated_audio_paths):
+                f.write(f"file '{p}'\n")
+                if idx < len(generated_audio_paths) - 1 and os.path.exists(silence_file):
+                    f.write(f"file '{silence_file}'\n")
+        _sp.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', concat_path, '-c', 'copy', output_file], capture_output=True)
+        os.unlink(concat_path)
+        if os.path.exists(output_file):
+            await broadcast_log(f"✓ Combiné: {output_file}")
+        else:
+            await broadcast_log("⚠ Combine échoué")
+
     await broadcast_log("__done__")
 
 
