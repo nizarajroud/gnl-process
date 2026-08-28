@@ -708,8 +708,8 @@
 
             let html = `<div class="mb-2 flex items-center gap-3">
                 <label class="text-xs flex items-center gap-1 text-gray-400"><input type="checkbox" id="show-processed-${source}" onchange="renderSavedArticles('${source}')" ${showProcessed ? 'checked' : ''}> Afficher les articles traités</label>
-                <button onclick="document.querySelectorAll('#articles-list-${source} .article-check:not(:disabled)').forEach(c=>c.checked=true)" class="px-2 py-0.5 bg-blue-700 hover:bg-blue-600 rounded text-xs">✓ All</button>
-                <button onclick="document.querySelectorAll('#articles-list-${source} .article-check:not(:disabled)').forEach(c=>c.checked=false)" class="px-2 py-0.5 bg-gray-600 hover:bg-gray-500 rounded text-xs">✗ None</button>
+                <button onclick="document.querySelectorAll('#articles-list-${source} .article-check:not(:disabled)').forEach(c=>c.checked=true); updateBatchBtn('${source}')" class="px-2 py-0.5 bg-blue-700 hover:bg-blue-600 rounded text-xs">✓ All</button>
+                <button onclick="document.querySelectorAll('#articles-list-${source} .article-check:not(:disabled)').forEach(c=>c.checked=false); updateBatchBtn('${source}')" class="px-2 py-0.5 bg-gray-600 hover:bg-gray-500 rounded text-xs">✗ None</button>
             </div>`;
             html += `<div id="articles-list-${source}" class="space-y-1">`;
             filtered.forEach((a, i) => {
@@ -717,7 +717,7 @@
                 html += `<div class="flex items-center gap-2 p-1 hover:bg-gray-700 rounded ${disabled ? 'opacity-50' : 'cursor-move'} article-drag-item" 
                     ${!disabled ? `draggable="true"` : ''} data-id="${a.id}" data-idx="${i}">
                     <span class="text-gray-500 ${disabled ? '' : 'cursor-move'}">☰</span>
-                    <input type="checkbox" value="${a.id}" ${disabled ? 'disabled checked' : ''} class="rounded article-check">
+                    <input type="checkbox" value="${a.id}" ${disabled ? 'disabled checked' : ''} onchange="updateBatchBtn('${source}')" class="rounded article-check">
                     <a href="${a.source_url}" target="_blank" class="text-xs text-blue-400 hover:underline truncate flex-1">${a.title || 'Sans titre'}</a>
                     <span class="text-xs text-gray-500">${a.saved_date || ''}</span>
                     ${disabled ? '<span class="text-xs text-green-400">✅</span>' : ''}
@@ -728,6 +728,21 @@
             // Init drag-drop for unprocessed items
             if (!showProcessed || filtered.some(a => !a.processed)) {
                 initArticleDragDrop(source);
+            }
+            updateBatchBtn(source);
+        }
+
+        function updateBatchBtn(source) {
+            const container = document.getElementById(`articles-list-${source}`);
+            const btn = document.getElementById(`batch-btn-${source}`);
+            if (!container || !btn) return;
+            const checked = container.querySelectorAll('.article-check:checked:not(:disabled)').length;
+            if (checked >= 5) {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                btn.disabled = true;
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
             }
         }
 
@@ -958,7 +973,7 @@
                         subPanel.innerHTML = html;
                         loadFileList(theme, sub);
                     } else if (mode === 'fetch') {
-                        html += `<div class="mb-4 flex flex-wrap items-center gap-2"><button onclick="fetchSavedArticles('${sub}')" data-source="${sub}" class="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">🔄 Récupérer</button><select id="audio-mode-${sub}" class="bg-gray-700 rounded px-2 py-1 text-sm"><option value="tts">🔊 TTS</option><option value="nlm">🎙️ NLM Podcast</option></select><button onclick="batchGenerate('${sub}')" class="px-4 py-1 bg-purple-600 hover:bg-purple-500 rounded text-sm">🚀 Générer lot</button></div>`;
+                        html += `<div class="mb-4 flex flex-wrap items-center gap-2"><button onclick="fetchSavedArticles('${sub}')" data-source="${sub}" class="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">🔄 Récupérer</button><select id="audio-mode-${sub}" class="bg-gray-700 rounded px-2 py-1 text-sm"><option value="tts">🔊 TTS</option><option value="nlm">🎙️ NLM Podcast</option></select><button id="batch-btn-${sub}" onclick="batchGenerate('${sub}')" title="Minimum 5 articles cochés requis" class="px-4 py-1 bg-purple-600 hover:bg-purple-500 rounded text-sm opacity-50 cursor-not-allowed" disabled>🚀 Générer lot</button></div>`;
                         html += `<div id="articles-${sub}" class="text-sm text-gray-400">Chargement...</div>`;
                         subPanel.innerHTML = html;
                         loadSavedArticles(sub);
