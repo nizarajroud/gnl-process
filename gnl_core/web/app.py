@@ -592,7 +592,7 @@ async def get_saved_articles(source: str):
     from gnl_core.db import get_db
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT id, title, source_url, saved_date, processed, output_path FROM saved_articles WHERE source=? ORDER BY saved_date DESC, id ASC",
+            "SELECT id, title, source_url, saved_date, processed, output_path, category FROM saved_articles WHERE source=? ORDER BY saved_date DESC, id ASC",
             (source,)
         ).fetchall()
     return [dict(r) for r in rows]
@@ -682,27 +682,45 @@ async def _call_linkedin_mcp():
 
 def _generate_title_bedrock(content: str) -> str:
     """Generate a meaningful title for an article using Bedrock (Claude)."""
+    title, _ = _title_and_category_bedrock(content)
+    return title
+
+
+def _title_and_category_bedrock(content: str):
+    """Generate title AND category in a single Bedrock call. Returns (title, category)."""
     try:
         import boto3, json
         from gnl_core.config import get_config
         config = get_config()
         model_id = config.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
+        categories = config.get('ARTICLES_CATEGORIES', ['Other'])
         client = boto3.client('bedrock-runtime', region_name='us-east-1')
-        # Use first 800 chars for context
         snippet = content[:800]
+        cat_list = ', '.join(categories)
         response = client.invoke_model(
             modelId=model_id,
             body=json.dumps({
                 "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 50,
-                "messages": [{"role": "user", "content": f"Give a concise title (max 10 words, no quotes) that summarizes the main topic of this LinkedIn post:\n\n{snippet}"}]
+                "max_tokens": 80,
+                "messages": [{"role": "user", "content": f"For this LinkedIn post, return a JSON object with two fields:\n- \"title\": concise title (max 10 words, no quotes)\n- \"category\": exactly one of [{cat_list}]\n\nReturn ONLY the JSON, nothing else.\n\nPost:\n{snippet}"}]
             })
         )
         result = json.loads(response['body'].read())
-        title = result['content'][0]['text'].strip().strip('"\'')
-        return title[:100] if title else 'Sans titre'
+        text = result['content'][0]['text'].strip()
+        # Extract JSON
+        import re as _re
+        m = _re.search(r'\{[\s\S]*\}', text)
+        if m:
+            data = json.loads(m.group(0))
+            title = (data.get('title') or 'Sans titre').strip().strip('"\'')[:100]
+            category = data.get('category', 'Other')
+            if category not in categories:
+                # Fuzzy match
+                category = next((c for c in categories if c.lower() in category.lower() or category.lower() in c.lower()), 'Other')
+            return title, category
+        return text[:100], 'Other'
     except Exception:
-        return ''
+        return '', 'Other'
 
 
 def _fetch_linkedin_from_cache():
@@ -732,8 +750,8 @@ def _fetch_linkedin_from_cache():
             if not url or url.startswith('no-url'):
                 continue
             content = r['content'] or ''
-            # Generate title via Bedrock (fallback to first substantial line)
-            title = _generate_title_bedrock(content)
+            # Generate title + category via Bedrock (single call)
+            title, category = _title_and_category_bedrock(content)
             if not title:
                 lines = content.split('\n')
                 title = 'Sans titre'
@@ -764,9 +782,11 @@ def _fetch_linkedin_from_cache():
                 date_str = today.strftime('%Y-%m-%d')
             try:
                 conn.execute(
-                    "INSERT OR IGNORE INTO saved_articles (source, source_id, title, content, source_url, saved_date, fetched_at, processed) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
-                    ('linkedin', url, title, content, url, date_str, now)
+                    "INSERT OR IGNORE INTO saved_articles (source, source_id, title, content, source_url, saved_date, fetched_at, processed, category) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
+                    ('linkedin', url, title, content, url, date_str, now, category)
                 )
+                # Update category for existing rows
+                conn.execute("UPDATE saved_articles SET category=? WHERE source_id=? AND (category IS NULL OR category='')", (category, url))
                 # Update title for existing articles if Bedrock generated a better one
                 if title and title != 'Sans titre':
                     conn.execute(

@@ -712,20 +712,47 @@
                 <button onclick="document.querySelectorAll('#articles-list-${source} .article-check:not(:disabled)').forEach(c=>c.checked=false); updateBatchBtn('${source}')" class="px-2 py-0.5 bg-gray-600 hover:bg-gray-500 rounded text-xs">✗ None</button>
             </div>`;
             html += `<div id="articles-list-${source}" class="space-y-1">`;
-            filtered.forEach((a, i) => {
-                const disabled = a.processed;
-                html += `<div class="flex items-center gap-2 p-1 hover:bg-gray-700 rounded ${disabled ? 'opacity-50' : 'cursor-move'} article-drag-item" 
-                    ${!disabled ? `draggable="true"` : ''} data-id="${a.id}" data-idx="${i}">
-                    <span class="text-gray-500 ${disabled ? '' : 'cursor-move'}">☰</span>
-                    <input type="checkbox" value="${a.id}" ${disabled ? 'disabled checked' : ''} onchange="updateBatchBtn('${source}')" class="rounded article-check">
-                    <a href="${a.source_url}" target="_blank" class="text-xs text-blue-400 hover:underline truncate flex-1">${a.title || 'Sans titre'}</a>
-                    <span class="text-xs text-gray-500">${a.saved_date || ''}</span>
-                    ${disabled ? '<span class="text-xs text-green-400">✅</span>' : ''}
+
+            // Group by category
+            const catEmojis = {
+                'Machine Learning & AI': '🤖',
+                'Compute & Serverless': '☁️',
+                'Data & Analytics': '📊',
+                'Security & Identity': '🔐',
+                'DevOps & Infrastructure': '⚙️',
+                'Architecture & Best Practices': '🏛️',
+                'Career & Leadership': '💼',
+                'Other': '📌'
+            };
+            const groups = {};
+            filtered.forEach(a => {
+                const cat = a.category || 'Other';
+                if (!groups[cat]) groups[cat] = [];
+                groups[cat].push(a);
+            });
+
+            Object.keys(groups).sort().forEach(cat => {
+                const items = groups[cat];
+                const emoji = catEmojis[cat] || '📌';
+                const catId = cat.replace(/[^a-zA-Z]/g, '');
+                html += `<div class="mt-3 mb-1 flex items-center gap-2">
+                    <span class="text-sm font-semibold text-gray-300">${emoji} ${cat} (${items.length})</span>
+                    <button onclick="document.querySelectorAll('.cat-${catId}-${source}:not(:disabled)').forEach(c=>c.checked=true); updateBatchBtn('${source}')" class="text-xs text-blue-400 hover:underline">tout</button>
                 </div>`;
+                items.forEach((a, i) => {
+                    const disabled = a.processed;
+                    html += `<div class="flex items-center gap-2 p-1 ml-3 hover:bg-gray-700 rounded ${disabled ? 'opacity-50' : 'cursor-move'} article-drag-item" 
+                        ${!disabled ? `draggable="true"` : ''} data-id="${a.id}">
+                        <span class="text-gray-500 ${disabled ? '' : 'cursor-move'}">☰</span>
+                        <input type="checkbox" value="${a.id}" ${disabled ? 'disabled checked' : ''} onchange="updateBatchBtn('${source}')" class="rounded article-check cat-${catId}-${source}">
+                        <a href="${a.source_url}" target="_blank" class="text-xs text-blue-400 hover:underline truncate flex-1">${a.title || 'Sans titre'}</a>
+                        <span class="text-xs text-gray-500">${a.saved_date || ''}</span>
+                        ${disabled ? '<span class="text-xs text-green-400">✅</span>' : ''}
+                    </div>`;
+                });
             });
             html += `</div>`;
             div.innerHTML = html;
-            // Init drag-drop for unprocessed items
             if (!showProcessed || filtered.some(a => !a.processed)) {
                 initArticleDragDrop(source);
             }
