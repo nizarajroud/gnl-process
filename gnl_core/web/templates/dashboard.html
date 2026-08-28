@@ -706,14 +706,18 @@
             const showProcessed = document.getElementById(`show-processed-${source}`)?.checked || false;
             const filtered = showProcessed ? articles : articles.filter(a => !a.processed);
 
-            let html = `<div class="mb-2"><label class="text-xs flex items-center gap-1 text-gray-400"><input type="checkbox" id="show-processed-${source}" onchange="renderSavedArticles('${source}')" ${showProcessed ? 'checked' : ''}> Afficher les articles traités</label></div>`;
+            let html = `<div class="mb-2 flex items-center gap-3">
+                <label class="text-xs flex items-center gap-1 text-gray-400"><input type="checkbox" id="show-processed-${source}" onchange="renderSavedArticles('${source}')" ${showProcessed ? 'checked' : ''}> Afficher les articles traités</label>
+                <button onclick="document.querySelectorAll('#articles-list-${source} .article-check:not(:disabled)').forEach(c=>c.checked=true)" class="px-2 py-0.5 bg-blue-700 hover:bg-blue-600 rounded text-xs">✓ All</button>
+                <button onclick="document.querySelectorAll('#articles-list-${source} .article-check:not(:disabled)').forEach(c=>c.checked=false)" class="px-2 py-0.5 bg-gray-600 hover:bg-gray-500 rounded text-xs">✗ None</button>
+            </div>`;
             html += `<div id="articles-list-${source}" class="space-y-1">`;
             filtered.forEach((a, i) => {
                 const disabled = a.processed;
                 html += `<div class="flex items-center gap-2 p-1 hover:bg-gray-700 rounded ${disabled ? 'opacity-50' : 'cursor-move'} article-drag-item" 
                     ${!disabled ? `draggable="true"` : ''} data-id="${a.id}" data-idx="${i}">
                     <span class="text-gray-500 ${disabled ? '' : 'cursor-move'}">☰</span>
-                    <input type="checkbox" value="${a.id}" ${disabled ? 'disabled checked' : 'checked'} class="rounded article-check">
+                    <input type="checkbox" value="${a.id}" ${disabled ? 'disabled checked' : ''} class="rounded article-check">
                     <a href="${a.source_url}" target="_blank" class="text-xs text-blue-400 hover:underline truncate flex-1">${a.title || 'Sans titre'}</a>
                     <span class="text-xs text-gray-500">${a.saved_date || ''}</span>
                     ${disabled ? '<span class="text-xs text-green-400">✅</span>' : ''}
