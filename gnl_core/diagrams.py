@@ -13,11 +13,43 @@ def _extract_xml(response_text):
     """Extract <mxfile>...</mxfile> XML from Bedrock response."""
     xml_match = re.search(r'(<mxfile[\s\S]*?</mxfile>)', response_text)
     if xml_match:
-        return xml_match.group(1)
+        return _fix_html_cells(xml_match.group(1))
     text = re.sub(r'^```xml\s*', '', response_text.strip())
     text = re.sub(r'^```\s*', '', text.strip())
     text = re.sub(r'\s*```$', '', text.strip())
-    return text
+    return _fix_html_cells(text)
+
+
+def _fix_html_cells(xml):
+    """Ensure cells whose value contains HTML tags have html=1 in their style.
+
+    Bedrock sometimes generates value="&lt;b&gt;Title&lt;/b&gt;" without html=1
+    in the style, causing draw.io to render the raw HTML markup literally.
+    """
+    def fix_cell(match):
+        cell = match.group(0)
+        # Does the value contain HTML entities/tags?
+        value_match = re.search(r'value="([^"]*)"', cell)
+        if not value_match:
+            return cell
+        value = value_match.group(1)
+        has_html = '&lt;' in value or '<br' in value or '&amp;lt;' in value
+        if not has_html:
+            return cell
+        # Fix double-escaped entities
+        if '&amp;lt;' in value:
+            new_value = value.replace('&amp;lt;', '&lt;').replace('&amp;gt;', '&gt;')
+            cell = cell.replace(f'value="{value}"', f'value="{new_value}"')
+        # Ensure html=1 in style
+        style_match = re.search(r'style="([^"]*)"', cell)
+        if style_match:
+            style = style_match.group(1)
+            if 'html=1' not in style:
+                new_style = style.rstrip(';') + ';html=1;'
+                cell = cell.replace(f'style="{style}"', f'style="{new_style}"')
+        return cell
+
+    return re.sub(r'<mxCell[^>]*>', fix_cell, xml)
 
 
 def _export_png(drawio_path, png_path):
