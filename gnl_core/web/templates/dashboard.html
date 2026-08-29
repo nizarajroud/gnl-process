@@ -476,6 +476,40 @@
                 [...container.querySelectorAll('.article-check:checked:not(:disabled)')].map(c => parseInt(c.value)) :
                 [];
             if (!selectedIds.length) { alert('Sélectionnez au moins un article'); return; }
+
+            if (mode === 'nlm') {
+                // Show confirmation with batch count + quota
+                const batchSize = 5;
+                const nbBatches = Math.ceil(selectedIds.length / batchSize);
+                const quotaText = document.getElementById('quota')?.textContent || '';
+                const quotaMatch = quotaText.match(/(\d+)\/20/);
+                const quotaRemaining = quotaMatch ? parseInt(quotaMatch[1]) : null;
+                const insufficient = quotaRemaining !== null && nbBatches > quotaRemaining;
+
+                const html = `<div class="fixed inset-0 bg-black/60 flex items-center justify-center z-[70]" id="nlm-confirm-dialog">
+                    <div class="bg-gray-800 rounded-lg p-6 w-96">
+                        <h3 class="text-lg font-semibold mb-3">🎙️ Génération NLM Podcast</h3>
+                        <div class="text-sm text-gray-300 space-y-2 mb-4">
+                            <p><b>${selectedIds.length}</b> articles sélectionnés</p>
+                            <p>→ <b>${nbBatches}</b> batch(es) (${batchSize} articles/batch)</p>
+                            <p class="text-yellow-400">⚠️ Consommera <b>${nbBatches}</b> crédit(s) du quota NLM</p>
+                            ${quotaRemaining !== null ? `<p class="${insufficient ? 'text-red-400' : 'text-green-400'}">Quota restant : ${quotaRemaining}/20 ${insufficient ? '(insuffisant !)' : ''}</p>` : ''}
+                        </div>
+                        <div class="flex gap-2 justify-end">
+                            <button onclick="document.getElementById('nlm-confirm-dialog').remove()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded">Annuler</button>
+                            <button onclick="doBatchGenerate('${source}', 'nlm', [${selectedIds.join(',')}])" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded font-semibold">Procéder ✓</button>
+                        </div>
+                    </div>
+                </div>`;
+                document.body.insertAdjacentHTML('beforeend', html);
+            } else {
+                doBatchGenerate(source, mode, selectedIds);
+            }
+        }
+
+        function doBatchGenerate(source, mode, selectedIds) {
+            const dlg = document.getElementById('nlm-confirm-dialog');
+            if (dlg) dlg.remove();
             fetch(`/saved-articles/batch/${source}`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
