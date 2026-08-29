@@ -70,11 +70,11 @@
   "ARTICLES_NLM_BATCH_SIZE": "5",
   "ARTICLES_CATEGORIES": [
     "Machine Learning & AI",
+    "Security & Identity",
+    "Architecture & Best Practices",
     "Compute & Serverless",
     "Data & Analytics",
-    "Security & Identity",
     "DevOps & Infrastructure",
-    "Architecture & Best Practices",
     "Career & Leadership",
     "Other"
   ]

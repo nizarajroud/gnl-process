@@ -724,6 +724,17 @@
                 'Career & Leadership': '💼',
                 'Other': '📌'
             };
+            // Priority display order (matches ARTICLES_CATEGORIES config)
+            const catOrder = [
+                'Machine Learning & AI',
+                'Security & Identity',
+                'Architecture & Best Practices',
+                'Compute & Serverless',
+                'Data & Analytics',
+                'DevOps & Infrastructure',
+                'Career & Leadership',
+                'Other'
+            ];
             const groups = {};
             filtered.forEach(a => {
                 const cat = a.category || 'Other';
@@ -731,7 +742,12 @@
                 groups[cat].push(a);
             });
 
-            Object.keys(groups).sort().forEach(cat => {
+            // Sort by priority order, unknown categories at the end
+            const sortedCats = Object.keys(groups).sort((a, b) => {
+                const ia = catOrder.indexOf(a); const ib = catOrder.indexOf(b);
+                return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+            });
+            sortedCats.forEach(cat => {
                 const items = groups[cat];
                 const emoji = catEmojis[cat] || '📌';
                 const catId = cat.replace(/[^a-zA-Z]/g, '');
