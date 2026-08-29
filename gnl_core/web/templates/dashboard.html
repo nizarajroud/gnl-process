@@ -752,9 +752,12 @@
                 const emoji = catEmojis[cat] || '📌';
                 const catId = cat.replace(/[^a-zA-Z]/g, '');
                 html += `<div class="mt-3 mb-1 flex items-center gap-2">
-                    <span class="text-sm font-semibold text-gray-300">${emoji} ${cat} (${items.length})</span>
+                    <span onclick="toggleCategory('${catId}-${source}')" class="text-sm font-semibold text-gray-300 cursor-pointer select-none hover:text-white">
+                        <span id="chevron-${catId}-${source}">▼</span> ${emoji} ${cat} (${items.length})
+                    </span>
                     <button onclick="document.querySelectorAll('.cat-${catId}-${source}:not(:disabled)').forEach(c=>c.checked=true); updateBatchBtn('${source}')" class="text-xs text-blue-400 hover:underline">tout</button>
                 </div>`;
+                html += `<div id="catbody-${catId}-${source}" class="space-y-1">`;
                 items.forEach((a, i) => {
                     const disabled = a.processed;
                     html += `<div class="flex items-center gap-2 p-1 ml-3 hover:bg-gray-700 rounded ${disabled ? 'opacity-50' : 'cursor-move'} article-drag-item" 
@@ -766,6 +769,7 @@
                         ${disabled ? '<span class="text-xs text-green-400">✅</span>' : ''}
                     </div>`;
                 });
+                html += `</div>`;
             });
             html += `</div>`;
             div.innerHTML = html;
@@ -775,8 +779,16 @@
             updateBatchBtn(source);
         }
 
-        function updateBatchBtn(source) {
-            const container = document.getElementById(`articles-list-${source}`);
+        function toggleCategory(key) {
+            const body = document.getElementById(`catbody-${key}`);
+            const chevron = document.getElementById(`chevron-${key}`);
+            if (!body) return;
+            const hidden = body.style.display === 'none';
+            body.style.display = hidden ? '' : 'none';
+            if (chevron) chevron.textContent = hidden ? '▼' : '▶';
+        }
+
+        function updateBatchBtn(source) {            const container = document.getElementById(`articles-list-${source}`);
             const btn = document.getElementById(`batch-btn-${source}`);
             if (!container || !btn) return;
             const checked = container.querySelectorAll('.article-check:checked:not(:disabled)').length;
