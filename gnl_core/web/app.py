@@ -1133,33 +1133,20 @@ async def _batch_generate_nlm(source, rows):
     os.makedirs(text_dir, exist_ok=True)
 
     nlm_batch_size = int(config.get('ARTICLES_NLM_BATCH_SIZE', '5'))
+    language = config.get('NOTEBOOKLM_LANGUAGE', 'en')
     client = get_client()
 
     # Split rows into batches of N articles
     batches = [rows[i:i + nlm_batch_size] for i in range(0, len(rows), nlm_batch_size)]
 
     for batch_idx, batch in enumerate(batches):
-        batch_titles = [r['title'] or 'Sans titre' for r in batch]
         await broadcast_log(f"▶ Batch {batch_idx+1}/{len(batches)} ({len(batch)} articles)")
 
         try:
-            # Save each article as separate .txt source files
-            source_paths = []
-            for i, row in enumerate(batch):
-                title = row['title'] or ''
-                content = row['content'] or ''
-                safe = "".join(c if c.isalnum() or c in '-_ ' else '' for c in title)[:60]
-                path = os.path.join(text_dir, f"{safe}.txt")
-                with open(path, 'w', encoding='utf-8') as f:
-                    f.write(f"=== Article {i+1}: {title} ===\n\n{content}")
-                source_paths.append(path)
-                await broadcast_log(f"  📄 {title[:50]}")
-
-            # Create notebook with all articles as sources
             date_str = datetime.now().strftime('%Y%m%d-%H%M')
             nb_name = f"articles-batch-{date_str}-{batch_idx+1}"
 
-            # Delete existing if any
+            # Delete existing notebook with same name if any
             for nb in client.list_notebooks():
                 if nb.title == nb_name:
                     client.delete_notebook(nb.id)
@@ -1168,28 +1155,37 @@ async def _batch_generate_nlm(source, rows):
             nb = client.create_notebook(title=nb_name)
             nb_id = nb.notebook_id if hasattr(nb, 'notebook_id') else nb.id
 
-            # Upload all sources
-            for sp in source_paths:
-                client.add_source(notebook_id=nb_id, source_path=sp)
+            # Add each article as a text source
+            source_ids = []
+            for i, row in enumerate(batch):
+                title = row['title'] or ''
+                content = row['content'] or ''
+                await broadcast_log(f"  📄 {title[:50]}")
+                src = client.add_text_source(
+                    notebook_id=nb_id,
+                    text=f"{content}",
+                    title=f"Article {i+1}: {title}"[:100],
+                    wait=True
+                )
+                if src and src.get('source_id'):
+                    source_ids.append(src['source_id'])
 
-            await broadcast_log(f"  ⏳ Attente traitement sources...")
-            time.sleep(10)  # Wait for all sources to be processed
-
-            # Generate one audio for the batch
+            # Generate audio overview (focus_prompt = customize, language configured)
             await broadcast_log(f"  🎙️ Génération audio...")
-            audio_result = client.generate_audio(notebook_id=nb_id, customize=customize_prompt)
+            audio_result = client.create_audio_overview(
+                notebook_id=nb_id,
+                source_ids=source_ids or None,
+                language=language,
+                focus_prompt=customize_prompt
+            )
 
-            # Download audio
-            if audio_result and hasattr(audio_result, 'audio_url'):
-                import requests as req
-                audio_resp = req.get(audio_result.audio_url, timeout=300)
-                if audio_resp.status_code == 200:
-                    # Filename based on batch
-                    batch_name = f"batch-{date_str}-{batch_idx+1}"
-                    m4a_path = os.path.join(audio_dir, f"{batch_name}.m4a")
-                    with open(m4a_path, 'wb') as f:
-                        f.write(audio_resp.content)
+            if audio_result:
+                batch_name = f"batch-{date_str}-{batch_idx+1}"
+                m4a_path = os.path.join(audio_dir, f"{batch_name}.m4a")
+                # Download audio
+                client.download_audio(notebook_id=nb_id, output_path=m4a_path)
 
+                if os.path.exists(m4a_path):
                     audio_path = os.path.join(audio_dir, f"{batch_name}.mp3")
                     subprocess.run(['ffmpeg', '-y', '-i', m4a_path, audio_path], capture_output=True)
                     if os.path.exists(m4a_path):
@@ -1197,16 +1193,16 @@ async def _batch_generate_nlm(source, rows):
 
                     # Mark all articles in batch as processed
                     with get_db() as conn:
-                        for idx, row in enumerate(batch):
+                        for row in batch:
                             conn.execute(
-                                "UPDATE saved_articles SET processed=1, output_path=?, audio_path=? WHERE id=?",
-                                (source_paths[idx], audio_path, row['id'])
+                                "UPDATE saved_articles SET processed=1, audio_path=? WHERE id=?",
+                                (audio_path, row['id'])
                             )
                         conn.commit()
 
                     await broadcast_log(f"  ✓ Batch {batch_idx+1} OK → {batch_name}.mp3")
                 else:
-                    await broadcast_log(f"  ⚠ Download échoué: HTTP {audio_resp.status_code}")
+                    await broadcast_log(f"  ⚠ Download échoué (pas de fichier)")
             else:
                 await broadcast_log(f"  ⚠ Génération audio échouée")
 
