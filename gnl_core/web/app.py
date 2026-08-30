@@ -1140,79 +1140,81 @@ async def _batch_generate_nlm(source, rows):
     batches = [rows[i:i + nlm_batch_size] for i in range(0, len(rows), nlm_batch_size)]
 
     generated_audio_paths = []
+    loop = asyncio.get_event_loop()
+
+    def _process_batch_sync(batch, batch_idx, date_str):
+        """Blocking NLM operations for one batch — runs in executor thread."""
+        nb_name = f"articles-batch-{date_str}-{batch_idx+1}"
+        # Delete existing notebook with same name if any
+        for nb in client.list_notebooks():
+            if nb.title == nb_name:
+                client.delete_notebook(nb.id)
+                break
+        nb = client.create_notebook(title=nb_name)
+        nb_id = nb.notebook_id if hasattr(nb, 'notebook_id') else nb.id
+
+        # Add each article as a text source
+        source_ids = []
+        for i, row in enumerate(batch):
+            title = row['title'] or ''
+            content = row['content'] or ''
+            src = client.add_text_source(
+                notebook_id=nb_id,
+                text=f"{content}",
+                title=f"Article {i+1}: {title}"[:100],
+                wait=True
+            )
+            if src and src.get('source_id'):
+                source_ids.append(src['source_id'])
+
+        # Generate audio overview
+        audio_result = client.create_audio_overview(
+            notebook_id=nb_id,
+            source_ids=source_ids or None,
+            language=language,
+            focus_prompt=customize_prompt
+        )
+
+        audio_path = None
+        if audio_result:
+            batch_name = f"batch-{date_str}-{batch_idx+1}"
+            m4a_path = os.path.join(audio_dir, f"{batch_name}.m4a")
+            client.download_audio(notebook_id=nb_id, output_path=m4a_path)
+            if os.path.exists(m4a_path):
+                audio_path = os.path.join(audio_dir, f"{batch_name}.mp3")
+                subprocess.run(['ffmpeg', '-y', '-i', m4a_path, audio_path], capture_output=True)
+                if os.path.exists(m4a_path):
+                    os.unlink(m4a_path)
+
+        # Clean up notebook
+        try:
+            client.delete_notebook(nb_id)
+        except Exception:
+            pass
+        return audio_path
+
     for batch_idx, batch in enumerate(batches):
         await broadcast_log(f"▶ Batch {batch_idx+1}/{len(batches)} ({len(batch)} articles)")
+        for row in batch:
+            await broadcast_log(f"  📄 {(row['title'] or '')[:50]}")
+        await broadcast_log(f"  🎙️ Génération audio...")
 
         try:
-            date_str = datetime.now().strftime('%Y%m%d-%H%M')
-            nb_name = f"articles-batch-{date_str}-{batch_idx+1}"
+            date_str = datetime.now().strftime('%Y%m%d-%H%M%S')
+            audio_path = await loop.run_in_executor(None, lambda: _process_batch_sync(batch, batch_idx, date_str))
 
-            # Delete existing notebook with same name if any
-            for nb in client.list_notebooks():
-                if nb.title == nb_name:
-                    client.delete_notebook(nb.id)
-                    break
-
-            nb = client.create_notebook(title=nb_name)
-            nb_id = nb.notebook_id if hasattr(nb, 'notebook_id') else nb.id
-
-            # Add each article as a text source
-            source_ids = []
-            for i, row in enumerate(batch):
-                title = row['title'] or ''
-                content = row['content'] or ''
-                await broadcast_log(f"  📄 {title[:50]}")
-                src = client.add_text_source(
-                    notebook_id=nb_id,
-                    text=f"{content}",
-                    title=f"Article {i+1}: {title}"[:100],
-                    wait=True
-                )
-                if src and src.get('source_id'):
-                    source_ids.append(src['source_id'])
-
-            # Generate audio overview (focus_prompt = customize, language configured)
-            await broadcast_log(f"  🎙️ Génération audio...")
-            audio_result = client.create_audio_overview(
-                notebook_id=nb_id,
-                source_ids=source_ids or None,
-                language=language,
-                focus_prompt=customize_prompt
-            )
-
-            if audio_result:
-                batch_name = f"batch-{date_str}-{batch_idx+1}"
-                m4a_path = os.path.join(audio_dir, f"{batch_name}.m4a")
-                # Download audio
-                client.download_audio(notebook_id=nb_id, output_path=m4a_path)
-
-                if os.path.exists(m4a_path):
-                    audio_path = os.path.join(audio_dir, f"{batch_name}.mp3")
-                    subprocess.run(['ffmpeg', '-y', '-i', m4a_path, audio_path], capture_output=True)
-                    if os.path.exists(m4a_path):
-                        os.unlink(m4a_path)
-
-                    # Mark all articles in batch as processed
-                    with get_db() as conn:
-                        for row in batch:
-                            conn.execute(
-                                "UPDATE saved_articles SET processed=1, audio_path=? WHERE id=?",
-                                (audio_path, row['id'])
-                            )
-                        conn.commit()
-
-                    await broadcast_log(f"  ✓ Batch {batch_idx+1} OK → {batch_name}.mp3")
-                    generated_audio_paths.append(audio_path)
-                else:
-                    await broadcast_log(f"  ⚠ Download échoué (pas de fichier)")
+            if audio_path and os.path.exists(audio_path):
+                with get_db() as conn:
+                    for row in batch:
+                        conn.execute(
+                            "UPDATE saved_articles SET processed=1, audio_path=? WHERE id=?",
+                            (audio_path, row['id'])
+                        )
+                    conn.commit()
+                await broadcast_log(f"  ✓ Batch {batch_idx+1} OK")
+                generated_audio_paths.append(audio_path)
             else:
-                await broadcast_log(f"  ⚠ Génération audio échouée")
-
-            # Clean up notebook
-            try:
-                client.delete_notebook(nb_id)
-            except Exception:
-                pass
+                await broadcast_log(f"  ⚠ Génération/download échoué")
 
         except Exception as e:
             await broadcast_log(f"  ⚠ Erreur batch {batch_idx+1}: {str(e)[:80]}")
