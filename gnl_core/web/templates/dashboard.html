@@ -477,6 +477,9 @@
                 [];
             if (!selectedIds.length) { alert('Sélectionnez au moins un article'); return; }
 
+            // Remove any existing dialog first (prevent stacking / missing popup)
+            document.getElementById('nlm-confirm-dialog')?.remove();
+
             if (mode === 'nlm') {
                 // Show confirmation with batch count + quota
                 const batchSize = 5;
@@ -822,10 +825,12 @@
             if (chevron) chevron.textContent = hidden ? '▼' : '▶';
         }
 
-        function updateBatchBtn(source) {            const container = document.getElementById(`articles-list-${source}`);
+        function updateBatchBtn(source) {
+            const container = document.getElementById(`articles-list-${source}`);
             const btn = document.getElementById(`batch-btn-${source}`);
             if (!container || !btn) return;
             const checked = container.querySelectorAll('.article-check:checked:not(:disabled)').length;
+            btn.textContent = `🚀 Générer lot (${checked})`;
             if (checked >= 5) {
                 btn.disabled = false;
                 btn.classList.remove('opacity-50', 'cursor-not-allowed');
