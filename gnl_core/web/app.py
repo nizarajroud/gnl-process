@@ -18,6 +18,27 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 ws_clients: list[WebSocket] = []
 scheduler = AsyncIOScheduler()
+
+
+def _resolve_file(directory, filename):
+    """Resolve a filename in a directory, handling Unicode normalization (NFC/NFD)
+    mismatches (e.g. accented chars like 'août' from browser form submission).
+    Returns the full path if found, else None."""
+    import unicodedata
+    direct = os.path.join(directory, filename)
+    if os.path.isfile(direct):
+        return direct
+    if not os.path.isdir(directory):
+        return None
+    # Compare against directory listing using normalized forms
+    target_nfc = unicodedata.normalize('NFC', filename)
+    target_nfd = unicodedata.normalize('NFD', filename)
+    for f in os.listdir(directory):
+        if f == filename:
+            return os.path.join(directory, f)
+        if unicodedata.normalize('NFC', f) == target_nfc or unicodedata.normalize('NFD', f) == target_nfd:
+            return os.path.join(directory, f)
+    return None
 _stop_signal = False
 def _deliver_all_sync(loop=None):
     """Run deliver for all active parents (called by scheduler/startup)."""
@@ -553,10 +574,10 @@ async def _launch_interactive(theme, subtheme, filename):
     from gnl_core.config import get_config
     config = get_config()
     inbox = config.get('INBOX_FOLDER', '')
-    pdf_path = os.path.join(inbox, theme, subtheme, filename)
+    pdf_path = _resolve_file(os.path.join(inbox, theme, subtheme), filename)
 
-    if not os.path.isfile(pdf_path):
-        await broadcast_log(f"⚠ Fichier introuvable: {pdf_path}")
+    if not pdf_path:
+        await broadcast_log(f"⚠ Fichier introuvable: {filename}")
         await broadcast_log("__done__")
         return
 
@@ -1894,8 +1915,8 @@ async def preview_prepare(theme: str, subtheme: str, filename: str):
     from PyPDF2 import PdfReader
     config = get_config()
     inbox = config.get('INBOX_FOLDER', '')
-    pdf_path = os.path.join(inbox, theme, subtheme, filename)
-    if not os.path.isfile(pdf_path):
+    pdf_path = _resolve_file(os.path.join(inbox, theme, subtheme), filename)
+    if not pdf_path:
         return {"error": "File not found"}
     name = os.path.splitext(filename)[0]
 
@@ -1952,9 +1973,9 @@ async def prepare_from_inbox(request: Request):
     from gnl_core.config import get_config
     config = get_config()
     inbox = config.get('INBOX_FOLDER', '')
-    pdf_path = os.path.join(inbox, theme, subtheme, filename)
+    pdf_path = _resolve_file(os.path.join(inbox, theme, subtheme), filename)
 
-    if not os.path.isfile(pdf_path):
+    if not pdf_path:
         return {"status": "error", "error": "File not found"}
 
     name = custom_name or os.path.splitext(filename)[0]
