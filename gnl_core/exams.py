@@ -738,6 +738,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
             .option {{ margin-bottom: 8px; line-height: 1.4; }}
             .option input[type='checkbox'] {{ margin-right: 8px; transform: scale(1.2); vertical-align: middle; }}
             .correct {{ color: #28a745; font-weight: bold; }}
+            .wrong {{ color: #dc3545; font-weight: bold; text-decoration: line-through; }}
             b {{ color: #0073bb; }}
         """
     )
@@ -764,23 +765,43 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
             order_html = "".join(f"<li><span class='correct'>{o}</span></li>" for o in correct)
             back = f"<b>Question {num}:</b><br><br>{q_text}<br><br><b>Correct order:</b><ol>{order_html}</ol>"
         else:
-            # Front: interactive checkboxes (user can check before flipping)
+            # Front: interactive checkboxes that save state to sessionStorage
             front_items = "".join(
-                f"<div class='option'><input type='checkbox' id='q{num}o{i}'> <label for='q{num}o{i}'>{o}</label></div>"
+                f"<div class='option'><input type='checkbox' id='q{num}o{i}' onchange=\"sessionStorage.setItem('q{num}o{i}', this.checked?'1':'0')\"> <label for='q{num}o{i}'>{o}</label></div>"
                 for i, o in enumerate(options)
             )
             front = f"<b>Question {num}:</b><br><br>{q_text}<br><br>{front_items}"
 
-            # Back: checkboxes with correct ones checked + green
+            # Back: mark correct (green), and user's wrong picks (red)
             back_items = []
             for i, opt in enumerate(options):
                 opt_norm = opt.lower().strip()
                 is_correct = any(opt_norm == cn or (len(cn) > 20 and cn in opt_norm) or (len(opt_norm) > 20 and opt_norm in cn) for cn in correct_norm)
                 if is_correct:
-                    back_items.append(f"<div class='option'><input type='checkbox' checked disabled> <span class='correct'>{opt}</span></div>")
+                    # Correct answer — always green, checked
+                    back_items.append(
+                        f"<div class='option' data-qkey='q{num}o{i}' data-correct='1'>"
+                        f"<input type='checkbox' checked disabled> "
+                        f"<span class='correct'>{opt}</span></div>"
+                    )
                 else:
-                    back_items.append(f"<div class='option'><input type='checkbox' disabled> {opt}</div>")
-            back = f"<b>Question {num}:</b><br><br>{q_text}<br><br>{''.join(back_items)}"
+                    # Incorrect option — will turn red if user had checked it
+                    back_items.append(
+                        f"<div class='option' data-qkey='q{num}o{i}' data-correct='0'>"
+                        f"<input type='checkbox' disabled> "
+                        f"<span class='opt-text'>{opt}</span></div>"
+                    )
+            # Script: read sessionStorage, color user's wrong choices in red
+            feedback_script = (
+                "<script>(function(){"
+                "document.querySelectorAll('.option[data-qkey]').forEach(function(el){"
+                "var picked=sessionStorage.getItem(el.getAttribute('data-qkey'))==='1';"
+                "var correct=el.getAttribute('data-correct')==='1';"
+                "if(picked){el.querySelector('input').checked=true;"
+                "if(!correct){var s=el.querySelector('.opt-text');if(s){s.classList.add('wrong');}}}"
+                "});})();</script>"
+            )
+            back = f"<b>Question {num}:</b><br><br>{q_text}<br><br>{''.join(back_items)}{feedback_script}"
 
         # Add diagram (same image on front and/or back based on user selection)
         if diagrams and num in diagrams:
