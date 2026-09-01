@@ -904,7 +904,7 @@
         }
 
         function prepareFromInbox(theme, sub, filename) {
-            fetch(`/content/preview/${theme}/${sub}/${filename}`).then(r=>r.json()).then(info => {
+            fetch(`/content/preview/${theme}/${sub}/${encodeURIComponent(filename)}`).then(r=>r.json()).then(info => {
                 document.getElementById('prep-dialog-filename').textContent = filename;
                 document.getElementById('prep-dialog-name').value = info.name;
                 document.getElementById('prep-dialog').dataset.theme = theme;
@@ -951,7 +951,18 @@
             const diagrams = document.getElementById('prep-dialog-diagrams').checked ? '1' : '0';
             const diagramFront = document.getElementById('diagram-front')?.checked ? '1' : '0';
             const diagramBack = document.getElementById('diagram-back')?.checked ? '1' : '0';
-            const body = `theme=${dlg.dataset.theme}&subtheme=${dlg.dataset.sub}&filename=${dlg.dataset.file}&mode=${document.getElementById('prep-dialog-mode').value}&pages=${document.getElementById('prep-dialog-pages').value}&name=${document.getElementById('prep-dialog-name').value}&pipeline=${pipeline}&diagrams=${diagrams}&diagram_front=${diagramFront}&diagram_back=${diagramBack}`;
+            const body = new URLSearchParams({
+                theme: dlg.dataset.theme,
+                subtheme: dlg.dataset.sub,
+                filename: dlg.dataset.file,
+                mode: document.getElementById('prep-dialog-mode').value,
+                pages: document.getElementById('prep-dialog-pages').value,
+                name: document.getElementById('prep-dialog-name').value,
+                pipeline: pipeline,
+                diagrams: diagrams,
+                diagram_front: diagramFront,
+                diagram_back: diagramBack
+            }).toString();
             closePrepDialog();
             fetch('/prepare-from-inbox', {
                 method: 'POST',
