@@ -1179,12 +1179,35 @@ async def _batch_generate_nlm(source, rows):
         if audio_result:
             batch_name = f"batch-{date_str}-{batch_idx+1}"
             m4a_path = os.path.join(audio_dir, f"{batch_name}.m4a")
-            client.download_audio(notebook_id=nb_id, output_path=m4a_path)
-            if os.path.exists(m4a_path):
-                audio_path = os.path.join(audio_dir, f"{batch_name}.mp3")
-                subprocess.run(['ffmpeg', '-y', '-i', m4a_path, audio_path], capture_output=True)
+
+            # Poll until audio is ready (generation is async, takes several minutes)
+            import time as _t
+            from notebooklm_tools.services.studio import get_studio_status
+            download_timeout = int(config.get('MCP_DOWNLOAD_TIMEOUT', '10800'))
+            poll_start = _t.time()
+            ready = False
+            while _t.time() - poll_start < download_timeout:
+                try:
+                    status = get_studio_status(client, nb_id)
+                    arts = status.get('artifacts', []) if isinstance(status, dict) else []
+                    completed = next((a for a in arts if a.get('type') == 'audio' and a.get('status') == 'completed'), None)
+                    if completed:
+                        ready = True
+                        break
+                    failed_art = next((a for a in arts if a.get('type') == 'audio' and a.get('status') == 'failed'), None)
+                    if failed_art:
+                        break
+                except Exception:
+                    pass
+                _t.sleep(15)
+
+            if ready:
+                client.download_audio(notebook_id=nb_id, output_path=m4a_path)
                 if os.path.exists(m4a_path):
-                    os.unlink(m4a_path)
+                    audio_path = os.path.join(audio_dir, f"{batch_name}.mp3")
+                    subprocess.run(['ffmpeg', '-y', '-i', m4a_path, audio_path], capture_output=True)
+                    if os.path.exists(m4a_path):
+                        os.unlink(m4a_path)
 
         # Clean up notebook
         try:
