@@ -18,6 +18,27 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 ws_clients: list[WebSocket] = []
 scheduler = AsyncIOScheduler()
+
+
+def _resolve_file(directory, filename):
+    """Resolve a filename in a directory, handling Unicode normalization (NFC/NFD)
+    mismatches (e.g. accented chars like 'août' from browser form submission).
+    Returns the full path if found, else None."""
+    import unicodedata
+    direct = os.path.join(directory, filename)
+    if os.path.isfile(direct):
+        return direct
+    if not os.path.isdir(directory):
+        return None
+    # Compare against directory listing using normalized forms
+    target_nfc = unicodedata.normalize('NFC', filename)
+    target_nfd = unicodedata.normalize('NFD', filename)
+    for f in os.listdir(directory):
+        if f == filename:
+            return os.path.join(directory, f)
+        if unicodedata.normalize('NFC', f) == target_nfc or unicodedata.normalize('NFD', f) == target_nfd:
+            return os.path.join(directory, f)
+    return None
 _stop_signal = False
 def _deliver_all_sync(loop=None):
     """Run deliver for all active parents (called by scheduler/startup)."""
@@ -553,10 +574,10 @@ async def _launch_interactive(theme, subtheme, filename):
     from gnl_core.config import get_config
     config = get_config()
     inbox = config.get('INBOX_FOLDER', '')
-    pdf_path = os.path.join(inbox, theme, subtheme, filename)
+    pdf_path = _resolve_file(os.path.join(inbox, theme, subtheme), filename)
 
-    if not os.path.isfile(pdf_path):
-        await broadcast_log(f"⚠ Fichier introuvable: {pdf_path}")
+    if not pdf_path:
+        await broadcast_log(f"⚠ Fichier introuvable: {filename}")
         await broadcast_log("__done__")
         return
 
@@ -592,7 +613,7 @@ async def get_saved_articles(source: str):
     from gnl_core.db import get_db
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT id, title, source_url, saved_date, processed, output_path FROM saved_articles WHERE source=? ORDER BY saved_date DESC, id ASC",
+            "SELECT id, title, source_url, saved_date, processed, output_path, category FROM saved_articles WHERE source=? ORDER BY saved_date DESC, id ASC",
             (source,)
         ).fetchall()
     return [dict(r) for r in rows]
@@ -613,7 +634,15 @@ async def _fetch_saved_articles(source):
         # Step 1: Call LinkedIn MCP to refresh cache
         await broadcast_log("🔄 Appel MCP LinkedIn (scraping)...")
         refresh_ok = await _call_linkedin_mcp()
-        if refresh_ok:
+        if refresh_ok == 'session_expired':
+            await broadcast_log("⚠ Session LinkedIn expirée — relancer: cd ~/HomeWspce/linkedin-mcp-fork && .venv/bin/python -m linkedin_mcp_server --login")
+            await broadcast_log("__done__")
+            return
+        elif refresh_ok == 'no_data':
+            await broadcast_log("⚠ Aucun article récupéré (session expirée ou profil vide)")
+            await broadcast_log("__done__")
+            return
+        elif refresh_ok is True:
             await broadcast_log("✓ Cache LinkedIn mis à jour")
         else:
             await broadcast_log("⚠ Scraping échoué — utilisation du cache existant")
@@ -641,16 +670,32 @@ async def _call_linkedin_mcp():
         if cache_db.exists():
             cache_db.unlink()
 
+        linkedin_mcp_path = os.environ.get('LINKEDIN_MCP_PATH', '/home/nizar/HomeWspce/linkedin-mcp-fork')
         server_params = StdioServerParameters(
-            command='python3',
+            command=os.path.join(linkedin_mcp_path, '.venv', 'bin', 'python'),
             args=['-m', 'linkedin_mcp_server'],
-            env={**os.environ, 'PYTHONPATH': os.environ.get('LINKEDIN_MCP_PATH', '/home/nizar/HomeWspce/linkedin-mcp-fork')}
+            env={**os.environ, 'PYTHONPATH': linkedin_mcp_path}
         )
 
         async with stdio_client(server_params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
-                await session.call_tool('get_saved_posts', {'num_posts': int(os.environ.get('LINKEDIN_SCRAPE_COUNT', '50')), 'full_content': True})
+                result = await session.call_tool('get_saved_posts', {'num_posts': int(os.environ.get('LINKEDIN_SCRAPE_COUNT', '50')), 'full_content': True})
+                # Check if result indicates an error
+                if result and hasattr(result, 'content'):
+                    for block in result.content:
+                        if hasattr(block, 'text') and 'No valid LinkedIn session' in block.text:
+                            return 'session_expired'
+
+        # Verify that DB was actually created with data
+        if not cache_db.exists():
+            return 'no_data'
+        import sqlite3
+        conn = sqlite3.connect(cache_db)
+        count = conn.execute("SELECT count(*) FROM saved_posts").fetchone()[0]
+        conn.close()
+        if count == 0:
+            return 'no_data'
         return True
     except Exception as e:
         return False
@@ -658,27 +703,45 @@ async def _call_linkedin_mcp():
 
 def _generate_title_bedrock(content: str) -> str:
     """Generate a meaningful title for an article using Bedrock (Claude)."""
+    title, _ = _title_and_category_bedrock(content)
+    return title
+
+
+def _title_and_category_bedrock(content: str):
+    """Generate title AND category in a single Bedrock call. Returns (title, category)."""
     try:
         import boto3, json
         from gnl_core.config import get_config
         config = get_config()
         model_id = config.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
+        categories = config.get('ARTICLES_CATEGORIES', ['Other'])
         client = boto3.client('bedrock-runtime', region_name='us-east-1')
-        # Use first 800 chars for context
         snippet = content[:800]
+        cat_list = ', '.join(categories)
         response = client.invoke_model(
             modelId=model_id,
             body=json.dumps({
                 "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 50,
-                "messages": [{"role": "user", "content": f"Give a concise title (max 10 words, no quotes) that summarizes the main topic of this LinkedIn post:\n\n{snippet}"}]
+                "max_tokens": 80,
+                "messages": [{"role": "user", "content": f"For this LinkedIn post, return a JSON object with two fields:\n- \"title\": concise title (max 10 words, no quotes)\n- \"category\": exactly one of [{cat_list}]\n\nReturn ONLY the JSON, nothing else.\n\nPost:\n{snippet}"}]
             })
         )
         result = json.loads(response['body'].read())
-        title = result['content'][0]['text'].strip().strip('"\'')
-        return title[:100] if title else 'Sans titre'
+        text = result['content'][0]['text'].strip()
+        # Extract JSON
+        import re as _re
+        m = _re.search(r'\{[\s\S]*\}', text)
+        if m:
+            data = json.loads(m.group(0))
+            title = (data.get('title') or 'Sans titre').strip().strip('"\'')[:100]
+            category = data.get('category', 'Other')
+            if category not in categories:
+                # Fuzzy match
+                category = next((c for c in categories if c.lower() in category.lower() or category.lower() in c.lower()), 'Other')
+            return title, category
+        return text[:100], 'Other'
     except Exception:
-        return ''
+        return '', 'Other'
 
 
 def _fetch_linkedin_from_cache():
@@ -708,8 +771,8 @@ def _fetch_linkedin_from_cache():
             if not url or url.startswith('no-url'):
                 continue
             content = r['content'] or ''
-            # Generate title via Bedrock (fallback to first substantial line)
-            title = _generate_title_bedrock(content)
+            # Generate title + category via Bedrock (single call)
+            title, category = _title_and_category_bedrock(content)
             if not title:
                 lines = content.split('\n')
                 title = 'Sans titre'
@@ -740,9 +803,11 @@ def _fetch_linkedin_from_cache():
                 date_str = today.strftime('%Y-%m-%d')
             try:
                 conn.execute(
-                    "INSERT OR IGNORE INTO saved_articles (source, source_id, title, content, source_url, saved_date, fetched_at, processed) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
-                    ('linkedin', url, title, content, url, date_str, now)
+                    "INSERT OR IGNORE INTO saved_articles (source, source_id, title, content, source_url, saved_date, fetched_at, processed, category) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
+                    ('linkedin', url, title, content, url, date_str, now, category)
                 )
+                # Update category for existing rows
+                conn.execute("UPDATE saved_articles SET category=? WHERE source_id=? AND (category IS NULL OR category='')", (category, url))
                 # Update title for existing articles if Bedrock generated a better one
                 if title and title != 'Sans titre':
                     conn.execute(
@@ -868,23 +933,41 @@ async def _combine_selected(source: str, selected_files: list):
 
 
 @app.post("/saved-articles/batch/{source}")
-async def batch_generate_articles(source: str):
-    """Generate text + audio for next 10 unprocessed articles."""
-    asyncio.create_task(_batch_generate(source))
+async def batch_generate_articles(source: str, request: Request):
+    """Generate text + audio for selected articles."""
+    try:
+        data = await request.json()
+        mode = data.get('mode', 'tts')
+        article_ids = data.get('article_ids', [])
+    except Exception:
+        mode = 'tts'
+        article_ids = []
+    asyncio.create_task(_batch_generate(source, mode=mode, article_ids=article_ids))
     return {"status": "started"}
 
 
-async def _batch_generate(source):
+async def _batch_generate(source, mode='tts', article_ids=None):
     from gnl_core.db import get_db
     from gnl_core.config import get_config
     import subprocess
 
     with get_db() as conn:
-        batch_size = int(os.environ.get('LINKEDIN_BATCH_SIZE', '10'))
-        rows = conn.execute(
-            "SELECT id, title, content FROM saved_articles WHERE source=? AND processed=0 ORDER BY saved_date DESC LIMIT ?",
-            (source, batch_size)
-        ).fetchall()
+        if article_ids:
+            # Use specific IDs in the order provided
+            placeholders = ','.join('?' * len(article_ids))
+            rows = conn.execute(
+                f"SELECT id, title, content FROM saved_articles WHERE id IN ({placeholders})",
+                article_ids
+            ).fetchall()
+            # Reorder rows to match article_ids order
+            rows_by_id = {r['id']: r for r in rows}
+            rows = [rows_by_id[aid] for aid in article_ids if aid in rows_by_id]
+        else:
+            batch_size = int(os.environ.get('LINKEDIN_BATCH_SIZE', '10'))
+            rows = conn.execute(
+                "SELECT id, title, content FROM saved_articles WHERE source=? AND processed=0 ORDER BY saved_date DESC LIMIT ?",
+                (source, batch_size)
+            ).fetchall()
 
     if not rows:
         await broadcast_log("⚠ Aucun article à traiter")
@@ -892,7 +975,11 @@ async def _batch_generate(source):
         return
 
     total = len(rows)
-    await broadcast_log(f"▶ Batch: {total} articles à traiter")
+    await broadcast_log(f"▶ Batch: {total} articles à traiter ({mode.upper()})")
+
+    if mode == 'nlm':
+        await _batch_generate_nlm(source, rows)
+        return
 
     generated_audio_paths = []
 
@@ -911,6 +998,7 @@ async def _batch_generate(source):
 
             def _gen_text():
                 from gnl_core.config import get_config
+                from pathlib import Path
                 config = get_config()
                 model_id = config.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
                 region = config.get('AWS_REGION', 'ca-central-1')
@@ -919,27 +1007,10 @@ async def _batch_generate(source):
                 session = boto3.Session(profile_name=profile, region_name=region)
                 client = session.client('bedrock-runtime', config=BotoConfig(read_timeout=600))
 
-                prompt = f"""أنت خبير تقني تشرح بالعربي الدارج التونسي.
-
-القواعد الصارمة:
-- اكتب بالحروف العربية فقط (مش بالحروف اللاتينية/الفرنسية)
-- المصطلحات التقنية بالإنجليزية كيما هي (API, cloud, container, deployment, agent, model...)
-- الأسلوب: نثر محادثة طبيعي، كأنك تشرح لزميلك التونسي شفاهياً
-- كل فقرة = جملة كاملة بالتونسي، والمصطلح الإنجليزي يتحط في وسط الجملة بشكل طبيعي
-- اشرح كل النقاط بالتفصيل (مش ملخص)
-- ما تترجمش المصطلحات التقنية — خليها بالإنجليزية
-- كل مفهوم، كل أداة، كل ممارسة لازم تتشرح
-
-❌ ممنوع:
-- الكتابة بالحروف اللاتينية/الفرنسية
-- الفصحى الكلاسيكية
-- قوائم بنمط [مصطلح]: [شرح]
-- ترجمة المصطلحات التقنية
-
-المقال باش تشرحو:
-
-العنوان: {article_title}
-المحتوى: {article_content}"""
+                # Load prompt from file
+                prompt_path = Path(__file__).parent.parent.parent / 'prompts' / 'articles-tts.txt'
+                prompt_template = prompt_path.read_text(encoding='utf-8')
+                prompt = prompt_template.format(article_title=article_title, article_content=article_content)
 
                 response = client.converse(
                     modelId=model_id,
@@ -1030,6 +1101,195 @@ async def _batch_generate(source):
         except Exception as e:
             await broadcast_log(f"  ⚠ Audio échoué: {str(e)[:60]}")
             continue
+
+    # Auto-combine all generated MP3s into one batch file
+    if generated_audio_paths:
+        import subprocess as _sp
+        from datetime import datetime
+        await broadcast_log(f"▶ COMBINE ({len(generated_audio_paths)} articles)")
+        config = get_config()
+        backlog_dir = os.path.join(config.get('GNL_BACKLOG', ''), 'saved-articles', source)
+        os.makedirs(backlog_dir, exist_ok=True)
+        date_str = datetime.now().strftime('%Y-%m-%d')
+        output_file = os.path.join(backlog_dir, f"batch-{date_str}.mp3")
+        counter = 1
+        while os.path.exists(output_file):
+            counter += 1
+            output_file = os.path.join(backlog_dir, f"batch-{date_str}-{counter}.mp3")
+
+        import tempfile
+        silence_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'assets', 'silence-3s.mp3')
+        concat_path = os.path.join(tempfile.gettempdir(), 'tts_batch_concat.txt')
+        with open(concat_path, 'w') as f:
+            for idx, p in enumerate(generated_audio_paths):
+                f.write(f"file '{p}'\n")
+                if idx < len(generated_audio_paths) - 1 and os.path.exists(silence_file):
+                    f.write(f"file '{silence_file}'\n")
+        _sp.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', concat_path, '-c', 'copy', output_file], capture_output=True)
+        os.unlink(concat_path)
+        if os.path.exists(output_file):
+            await broadcast_log(f"✓ Combiné: {output_file}")
+        else:
+            await broadcast_log("⚠ Combine échoué")
+
+    await broadcast_log("__done__")
+
+
+async def _batch_generate_nlm(source, rows):
+    """Generate articles via NotebookLM — groups N articles into one notebook/audio."""
+    from gnl_core.db import get_db
+    from gnl_core.config import get_config
+    from notebooklm_tools.mcp.tools._utils import get_client
+    import time
+    import subprocess
+    from datetime import datetime
+
+    config = get_config()
+    from pathlib import Path
+    customize_path = Path(__file__).parent.parent / 'prompts' / 'articles-nlm-customize.txt'
+    customize_prompt = customize_path.read_text(encoding='utf-8').strip() if customize_path.exists() else ''
+    audio_dir = os.path.join(config.get('AUDIO_PARTS_FOLDER', ''), 'saved-articles', source)
+    os.makedirs(audio_dir, exist_ok=True)
+    text_dir = os.path.join(config.get('PDF_PARTS_FOLDER', ''), 'saved-articles', source)
+    os.makedirs(text_dir, exist_ok=True)
+
+    nlm_batch_size = int(config.get('ARTICLES_NLM_BATCH_SIZE', '5'))
+    language = config.get('NOTEBOOKLM_LANGUAGE', 'en')
+    client = get_client()
+
+    # Split rows into batches of N articles
+    batches = [rows[i:i + nlm_batch_size] for i in range(0, len(rows), nlm_batch_size)]
+
+    generated_audio_paths = []
+    loop = asyncio.get_event_loop()
+
+    def _process_batch_sync(batch, batch_idx, date_str):
+        """Blocking NLM operations for one batch — runs in executor thread."""
+        nb_name = f"articles-batch-{date_str}-{batch_idx+1}"
+        # Delete existing notebook with same name if any
+        for nb in client.list_notebooks():
+            if nb.title == nb_name:
+                client.delete_notebook(nb.id)
+                break
+        nb = client.create_notebook(title=nb_name)
+        nb_id = nb.notebook_id if hasattr(nb, 'notebook_id') else nb.id
+
+        # Add each article as a text source
+        source_ids = []
+        for i, row in enumerate(batch):
+            title = row['title'] or ''
+            content = row['content'] or ''
+            src = client.add_text_source(
+                notebook_id=nb_id,
+                text=f"{content}",
+                title=f"Article {i+1}: {title}"[:100],
+                wait=True
+            )
+            if src and src.get('source_id'):
+                source_ids.append(src['source_id'])
+
+        # Generate audio overview
+        audio_result = client.create_audio_overview(
+            notebook_id=nb_id,
+            source_ids=source_ids or None,
+            language=language,
+            focus_prompt=customize_prompt
+        )
+
+        audio_path = None
+        if audio_result:
+            batch_name = f"batch-{date_str}-{batch_idx+1}"
+            m4a_path = os.path.join(audio_dir, f"{batch_name}.m4a")
+
+            # Poll until audio is ready (generation is async, takes several minutes)
+            import time as _t
+            from notebooklm_tools.services.studio import get_studio_status
+            download_timeout = int(config.get('MCP_DOWNLOAD_TIMEOUT', '10800'))
+            poll_start = _t.time()
+            ready = False
+            while _t.time() - poll_start < download_timeout:
+                try:
+                    status = get_studio_status(client, nb_id)
+                    arts = status.get('artifacts', []) if isinstance(status, dict) else []
+                    completed = next((a for a in arts if a.get('type') == 'audio' and a.get('status') == 'completed'), None)
+                    if completed:
+                        ready = True
+                        break
+                    failed_art = next((a for a in arts if a.get('type') == 'audio' and a.get('status') == 'failed'), None)
+                    if failed_art:
+                        break
+                except Exception:
+                    pass
+                _t.sleep(15)
+
+            if ready:
+                client.download_audio(notebook_id=nb_id, output_path=m4a_path)
+                if os.path.exists(m4a_path):
+                    audio_path = os.path.join(audio_dir, f"{batch_name}.mp3")
+                    subprocess.run(['ffmpeg', '-y', '-i', m4a_path, audio_path], capture_output=True)
+                    if os.path.exists(m4a_path):
+                        os.unlink(m4a_path)
+
+        # Clean up notebook
+        try:
+            client.delete_notebook(nb_id)
+        except Exception:
+            pass
+        return audio_path
+
+    for batch_idx, batch in enumerate(batches):
+        await broadcast_log(f"▶ Batch {batch_idx+1}/{len(batches)} ({len(batch)} articles)")
+        for row in batch:
+            await broadcast_log(f"  📄 {(row['title'] or '')[:50]}")
+        await broadcast_log(f"  🎙️ Génération audio...")
+
+        try:
+            date_str = datetime.now().strftime('%Y%m%d-%H%M%S')
+            audio_path = await loop.run_in_executor(None, lambda: _process_batch_sync(batch, batch_idx, date_str))
+
+            if audio_path and os.path.exists(audio_path):
+                with get_db() as conn:
+                    for row in batch:
+                        conn.execute(
+                            "UPDATE saved_articles SET processed=1, audio_path=? WHERE id=?",
+                            (audio_path, row['id'])
+                        )
+                    conn.commit()
+                await broadcast_log(f"  ✓ Batch {batch_idx+1} OK")
+                generated_audio_paths.append(audio_path)
+            else:
+                await broadcast_log(f"  ⚠ Génération/download échoué")
+
+        except Exception as e:
+            await broadcast_log(f"  ⚠ Erreur batch {batch_idx+1}: {str(e)[:80]}")
+            continue
+
+    # Auto-combine all batch MP3s into one final file on Drive
+    if generated_audio_paths:
+        await broadcast_log(f"▶ COMBINE ({len(generated_audio_paths)} batches)")
+        backlog_dir = os.path.join(config.get('GNL_BACKLOG', ''), 'saved-articles', source)
+        os.makedirs(backlog_dir, exist_ok=True)
+        final_date = datetime.now().strftime('%Y-%m-%d')
+        output_file = os.path.join(backlog_dir, f"batch-{final_date}.mp3")
+        counter = 1
+        while os.path.exists(output_file):
+            counter += 1
+            output_file = os.path.join(backlog_dir, f"batch-{final_date}-{counter}.mp3")
+
+        import tempfile
+        silence_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'assets', 'silence-3s.mp3')
+        concat_path = os.path.join(tempfile.gettempdir(), 'nlm_batch_concat.txt')
+        with open(concat_path, 'w') as f:
+            for idx, p in enumerate(generated_audio_paths):
+                f.write(f"file '{p}'\n")
+                if idx < len(generated_audio_paths) - 1 and os.path.exists(silence_file):
+                    f.write(f"file '{silence_file}'\n")
+        subprocess.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', concat_path, '-c', 'copy', output_file], capture_output=True)
+        os.unlink(concat_path)
+        if os.path.exists(output_file):
+            await broadcast_log(f"✓ Combiné sur Drive: {output_file}")
+        else:
+            await broadcast_log("⚠ Combine échoué")
 
     await broadcast_log("__done__")
 
@@ -1655,8 +1915,8 @@ async def preview_prepare(theme: str, subtheme: str, filename: str):
     from PyPDF2 import PdfReader
     config = get_config()
     inbox = config.get('INBOX_FOLDER', '')
-    pdf_path = os.path.join(inbox, theme, subtheme, filename)
-    if not os.path.isfile(pdf_path):
+    pdf_path = _resolve_file(os.path.join(inbox, theme, subtheme), filename)
+    if not pdf_path:
         return {"error": "File not found"}
     name = os.path.splitext(filename)[0]
 
@@ -1713,9 +1973,9 @@ async def prepare_from_inbox(request: Request):
     from gnl_core.config import get_config
     config = get_config()
     inbox = config.get('INBOX_FOLDER', '')
-    pdf_path = os.path.join(inbox, theme, subtheme, filename)
+    pdf_path = _resolve_file(os.path.join(inbox, theme, subtheme), filename)
 
-    if not os.path.isfile(pdf_path):
+    if not pdf_path:
         return {"status": "error", "error": "File not found"}
 
     name = custom_name or os.path.splitext(filename)[0]

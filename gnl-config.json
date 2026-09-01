@@ -65,5 +65,17 @@
     "Other"
   ],
   "EXAM_GENERATE_DIAGRAMS": "1",
-  "EXAM_DIAGRAM_PLACEMENT": "front"
+  "EXAM_DIAGRAM_PLACEMENT": "front",
+  "ARTICLES_AUDIO_MODE": "tts",
+  "ARTICLES_NLM_BATCH_SIZE": "5",
+  "ARTICLES_CATEGORIES": [
+    "Machine Learning & AI",
+    "Security & Identity",
+    "Architecture & Best Practices",
+    "Compute & Serverless",
+    "Data & Analytics",
+    "DevOps & Infrastructure",
+    "Career & Leadership",
+    "Other"
+  ]
 }

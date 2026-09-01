@@ -469,7 +469,55 @@
         }
 
         function batchGenerate(source) {
-            fetch(`/saved-articles/batch/${source}`, {method: 'POST'});
+            const mode = document.getElementById(`audio-mode-${source}`)?.value || 'tts';
+            // Get checked article IDs in DOM order (respects drag-drop)
+            const container = document.getElementById(`articles-list-${source}`);
+            const selectedIds = container ?
+                [...container.querySelectorAll('.article-check:checked:not(:disabled)')].map(c => parseInt(c.value)) :
+                [];
+            if (!selectedIds.length) { alert('Sélectionnez au moins un article'); return; }
+
+            // Remove any existing dialog first (prevent stacking / missing popup)
+            document.getElementById('nlm-confirm-dialog')?.remove();
+
+            if (mode === 'nlm') {
+                // Show confirmation with batch count + quota
+                const batchSize = 5;
+                const nbBatches = Math.ceil(selectedIds.length / batchSize);
+                const quotaText = document.getElementById('quota')?.textContent || '';
+                const quotaMatch = quotaText.match(/(\d+)\/20/);
+                const quotaRemaining = quotaMatch ? parseInt(quotaMatch[1]) : null;
+                const insufficient = quotaRemaining !== null && nbBatches > quotaRemaining;
+
+                const html = `<div class="fixed inset-0 bg-black/60 flex items-center justify-center z-[70]" id="nlm-confirm-dialog">
+                    <div class="bg-gray-800 rounded-lg p-6 w-96">
+                        <h3 class="text-lg font-semibold mb-3">🎙️ Génération NLM Podcast</h3>
+                        <div class="text-sm text-gray-300 space-y-2 mb-4">
+                            <p><b>${selectedIds.length}</b> articles sélectionnés</p>
+                            <p>→ <b>${nbBatches}</b> batch(es) (${batchSize} articles/batch)</p>
+                            <p class="text-yellow-400">⚠️ Consommera <b>${nbBatches}</b> crédit(s) du quota NLM</p>
+                            ${quotaRemaining !== null ? `<p class="${insufficient ? 'text-red-400' : 'text-green-400'}">Quota restant : ${quotaRemaining}/20 ${insufficient ? '(insuffisant !)' : ''}</p>` : ''}
+                        </div>
+                        <div class="flex gap-2 justify-end">
+                            <button onclick="document.getElementById('nlm-confirm-dialog').remove()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded">Annuler</button>
+                            <button onclick="doBatchGenerate('${source}', 'nlm', [${selectedIds.join(',')}])" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded font-semibold">Procéder ✓</button>
+                        </div>
+                    </div>
+                </div>`;
+                document.body.insertAdjacentHTML('beforeend', html);
+            } else {
+                doBatchGenerate(source, mode, selectedIds);
+            }
+        }
+
+        function doBatchGenerate(source, mode, selectedIds) {
+            const dlg = document.getElementById('nlm-confirm-dialog');
+            if (dlg) dlg.remove();
+            fetch(`/saved-articles/batch/${source}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({mode: mode, article_ids: selectedIds})
+            });
         }
 
         async function openCombineDialog(source) {
@@ -683,9 +731,153 @@
             fetch(`/saved-articles/${source}`).then(r=>r.json()).then(articles => {
                 const div = document.getElementById(`articles-${source}`);
                 if (!articles.length) { div.innerHTML = '<span class="text-gray-500">Aucun article. Cliquez "🔄 Récupérer" pour importer.</span>'; return; }
-                div.innerHTML = '<table class="w-full text-xs"><thead><tr class="text-gray-400 border-b border-gray-700"><th class="text-left py-1">Titre</th><th class="py-1">Date</th><th class="text-right py-1">Action</th></tr></thead><tbody>' +
-                    articles.map(a => `<tr class="border-b border-gray-800"><td class="py-1 truncate max-w-xs"><a href="${a.source_url}" target="_blank" class="text-blue-400 hover:underline">${a.title || 'Sans titre'}</a></td><td class="py-1 text-gray-500">${a.saved_date || ''}</td><td class="text-right py-1">${a.processed ? '<span class="text-green-400">✅</span>' : `<button onclick="generateArticle(${a.id})" class="px-2 py-0.5 bg-purple-600 hover:bg-purple-500 rounded text-white">Générer</button>`}</td></tr>`).join('') +
-                    '</tbody></table>';
+                window._savedArticles = articles;
+                window._savedSource = source;
+                renderSavedArticles(source);
+            });
+        }
+
+        function renderSavedArticles(source) {
+            const articles = window._savedArticles || [];
+            const div = document.getElementById(`articles-${source}`);
+            const showProcessed = document.getElementById(`show-processed-${source}`)?.checked || false;
+            const filtered = showProcessed ? articles : articles.filter(a => !a.processed);
+
+            let html = `<div class="mb-2 flex items-center gap-3">
+                <label class="text-xs flex items-center gap-1 text-gray-400"><input type="checkbox" id="show-processed-${source}" onchange="renderSavedArticles('${source}')" ${showProcessed ? 'checked' : ''}> Afficher les articles traités</label>
+                <button onclick="document.querySelectorAll('#articles-list-${source} .article-check:not(:disabled)').forEach(c=>c.checked=true); updateBatchBtn('${source}')" class="px-2 py-0.5 bg-blue-700 hover:bg-blue-600 rounded text-xs">✓ All</button>
+                <button onclick="document.querySelectorAll('#articles-list-${source} .article-check:not(:disabled)').forEach(c=>c.checked=false); updateBatchBtn('${source}')" class="px-2 py-0.5 bg-gray-600 hover:bg-gray-500 rounded text-xs">✗ None</button>
+            </div>`;
+            html += `<div id="articles-list-${source}" class="space-y-1">`;
+
+            // Group by category
+            const catEmojis = {
+                'Machine Learning & AI': '🤖',
+                'Compute & Serverless': '☁️',
+                'Data & Analytics': '📊',
+                'Security & Identity': '🔐',
+                'DevOps & Infrastructure': '⚙️',
+                'Architecture & Best Practices': '🏛️',
+                'Career & Leadership': '💼',
+                'Other': '📌'
+            };
+            // Priority display order (matches ARTICLES_CATEGORIES config)
+            const catOrder = [
+                'Machine Learning & AI',
+                'Security & Identity',
+                'Architecture & Best Practices',
+                'Compute & Serverless',
+                'Data & Analytics',
+                'DevOps & Infrastructure',
+                'Career & Leadership',
+                'Other'
+            ];
+            const groups = {};
+            filtered.forEach(a => {
+                const cat = a.category || 'Other';
+                if (!groups[cat]) groups[cat] = [];
+                groups[cat].push(a);
+            });
+
+            // Sort by priority order, unknown categories at the end
+            const sortedCats = Object.keys(groups).sort((a, b) => {
+                const ia = catOrder.indexOf(a); const ib = catOrder.indexOf(b);
+                return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+            });
+            sortedCats.forEach(cat => {
+                const items = groups[cat];
+                const emoji = catEmojis[cat] || '📌';
+                const catId = cat.replace(/[^a-zA-Z]/g, '');
+                html += `<div class="mt-3 mb-1 flex items-center gap-2">
+                    <span onclick="toggleCategory('${catId}-${source}')" class="text-sm font-semibold text-gray-300 cursor-pointer select-none hover:text-white">
+                        <span id="chevron-${catId}-${source}">▼</span> ${emoji} ${cat} (${items.length})
+                    </span>
+                    <button onclick="document.querySelectorAll('.cat-${catId}-${source}:not(:disabled)').forEach(c=>c.checked=true); updateBatchBtn('${source}')" class="text-xs text-blue-400 hover:underline">tout</button>
+                </div>`;
+                html += `<div id="catbody-${catId}-${source}" class="space-y-1">`;
+                items.forEach((a, i) => {
+                    const disabled = a.processed;
+                    html += `<div class="flex items-center gap-2 p-1 ml-3 hover:bg-gray-700 rounded ${disabled ? 'opacity-50' : 'cursor-move'} article-drag-item" 
+                        ${!disabled ? `draggable="true"` : ''} data-id="${a.id}">
+                        <span class="text-gray-500 ${disabled ? '' : 'cursor-move'}">☰</span>
+                        <input type="checkbox" value="${a.id}" ${disabled ? 'disabled checked' : ''} onchange="updateBatchBtn('${source}')" class="rounded article-check cat-${catId}-${source}">
+                        <a href="${a.source_url}" target="_blank" class="text-xs text-blue-400 hover:underline truncate flex-1">${a.title || 'Sans titre'}</a>
+                        <span class="text-xs text-gray-500">${a.saved_date || ''}</span>
+                        ${disabled ? '<span class="text-xs text-green-400">✅</span>' : ''}
+                    </div>`;
+                });
+                html += `</div>`;
+            });
+            html += `</div>`;
+            div.innerHTML = html;
+            if (!showProcessed || filtered.some(a => !a.processed)) {
+                initArticleDragDrop(source);
+            }
+            updateBatchBtn(source);
+        }
+
+        function toggleCategory(key) {
+            const body = document.getElementById(`catbody-${key}`);
+            const chevron = document.getElementById(`chevron-${key}`);
+            if (!body) return;
+            const hidden = body.style.display === 'none';
+            body.style.display = hidden ? '' : 'none';
+            if (chevron) chevron.textContent = hidden ? '▼' : '▶';
+        }
+
+        function updateBatchBtn(source) {
+            const container = document.getElementById(`articles-list-${source}`);
+            const btn = document.getElementById(`batch-btn-${source}`);
+            if (!container || !btn) return;
+            const checked = container.querySelectorAll('.article-check:checked:not(:disabled)').length;
+            btn.textContent = `🚀 Générer lot (${checked})`;
+            if (checked >= 5) {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                btn.disabled = true;
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        function initArticleDragDrop(source) {
+            const container = document.getElementById(`articles-list-${source}`);
+            if (!container) return;
+            let draggedEl = null;
+
+            container.addEventListener('dragstart', (e) => {
+                const item = e.target.closest('.article-drag-item');
+                if (!item || item.querySelector('input:disabled')) return;
+                draggedEl = item;
+                item.style.opacity = '0.4';
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            container.addEventListener('dragend', (e) => {
+                const item = e.target.closest('.article-drag-item');
+                if (item) item.style.opacity = '1';
+                container.querySelectorAll('.article-drag-item').forEach(el => el.classList.remove('border-t-2','border-b-2','border-blue-400'));
+                draggedEl = null;
+            });
+            container.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                const item = e.target.closest('.article-drag-item');
+                if (!item || item === draggedEl || item.querySelector('input:disabled')) return;
+                container.querySelectorAll('.article-drag-item').forEach(el => el.classList.remove('border-t-2','border-b-2','border-blue-400'));
+                const rect = item.getBoundingClientRect();
+                if (e.clientY < rect.top + rect.height / 2) {
+                    item.classList.add('border-t-2','border-blue-400');
+                } else {
+                    item.classList.add('border-b-2','border-blue-400');
+                }
+            });
+            container.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const item = e.target.closest('.article-drag-item');
+                if (!item || !draggedEl || item === draggedEl) return;
+                const rect = item.getBoundingClientRect();
+                if (e.clientY < rect.top + rect.height / 2) { item.before(draggedEl); }
+                else { item.after(draggedEl); }
+                container.querySelectorAll('.article-drag-item').forEach(el => el.classList.remove('border-t-2','border-b-2','border-blue-400'));
             });
         }
 
@@ -712,7 +904,7 @@
         }
 
         function prepareFromInbox(theme, sub, filename) {
-            fetch(`/content/preview/${theme}/${sub}/${filename}`).then(r=>r.json()).then(info => {
+            fetch(`/content/preview/${theme}/${sub}/${encodeURIComponent(filename)}`).then(r=>r.json()).then(info => {
                 document.getElementById('prep-dialog-filename').textContent = filename;
                 document.getElementById('prep-dialog-name').value = info.name;
                 document.getElementById('prep-dialog').dataset.theme = theme;
@@ -759,7 +951,18 @@
             const diagrams = document.getElementById('prep-dialog-diagrams').checked ? '1' : '0';
             const diagramFront = document.getElementById('diagram-front')?.checked ? '1' : '0';
             const diagramBack = document.getElementById('diagram-back')?.checked ? '1' : '0';
-            const body = `theme=${dlg.dataset.theme}&subtheme=${dlg.dataset.sub}&filename=${dlg.dataset.file}&mode=${document.getElementById('prep-dialog-mode').value}&pages=${document.getElementById('prep-dialog-pages').value}&name=${document.getElementById('prep-dialog-name').value}&pipeline=${pipeline}&diagrams=${diagrams}&diagram_front=${diagramFront}&diagram_back=${diagramBack}`;
+            const body = new URLSearchParams({
+                theme: dlg.dataset.theme,
+                subtheme: dlg.dataset.sub,
+                filename: dlg.dataset.file,
+                mode: document.getElementById('prep-dialog-mode').value,
+                pages: document.getElementById('prep-dialog-pages').value,
+                name: document.getElementById('prep-dialog-name').value,
+                pipeline: pipeline,
+                diagrams: diagrams,
+                diagram_front: diagramFront,
+                diagram_back: diagramBack
+            }).toString();
             closePrepDialog();
             fetch('/prepare-from-inbox', {
                 method: 'POST',
@@ -875,7 +1078,7 @@
                         subPanel.innerHTML = html;
                         loadFileList(theme, sub);
                     } else if (mode === 'fetch') {
-                        html += `<div class="mb-4 flex gap-2"><button onclick="fetchSavedArticles('${sub}')" data-source="${sub}" class="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">🔄 Récupérer</button><button onclick="batchGenerate('${sub}')" class="px-4 py-1 bg-purple-600 hover:bg-purple-500 rounded text-sm">🚀 Générer lot</button><button onclick="openCombineDialog('${sub}')" class="px-4 py-1 bg-green-600 hover:bg-green-500 rounded text-sm">🔗 Combiner</button></div>`;
+                        html += `<div class="mb-4 flex flex-wrap items-center gap-2"><button onclick="fetchSavedArticles('${sub}')" data-source="${sub}" class="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm">🔄 Récupérer</button><select id="audio-mode-${sub}" class="bg-gray-700 rounded px-2 py-1 text-sm"><option value="tts">🔊 TTS</option><option value="nlm">🎙️ NLM Podcast</option></select><button id="batch-btn-${sub}" onclick="batchGenerate('${sub}')" title="Minimum 5 articles cochés requis" class="px-4 py-1 bg-purple-600 hover:bg-purple-500 rounded text-sm opacity-50 cursor-not-allowed" disabled>🚀 Générer lot</button></div>`;
                         html += `<div id="articles-${sub}" class="text-sm text-gray-400">Chargement...</div>`;
                         subPanel.innerHTML = html;
                         loadSavedArticles(sub);
