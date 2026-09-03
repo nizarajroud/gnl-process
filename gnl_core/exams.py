@@ -765,9 +765,10 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
             order_html = "".join(f"<li><span class='correct'>{o}</span></li>" for o in correct)
             back = f"<b>Question {num}:</b><br><br>{q_text}<br><br><b>Correct order:</b><ol>{order_html}</ol>"
         else:
-            # Front: interactive checkboxes that save state to sessionStorage
+            # Front: interactive checkboxes that save state to localStorage (persists on device)
+            # Key prefixed with deck name to avoid collisions across exams
             front_items = "".join(
-                f"<div class='option'><input type='checkbox' id='q{num}o{i}' onchange=\"sessionStorage.setItem('q{num}o{i}', this.checked?'1':'0')\"> <label for='q{num}o{i}'>{o}</label></div>"
+                f"<div class='option'><input type='checkbox' id='{name}-q{num}o{i}' onchange=\"localStorage.setItem('{name}-q{num}o{i}', this.checked?'1':'0')\"> <label for='{name}-q{num}o{i}'>{o}</label></div>"
                 for i, o in enumerate(options)
             )
             front = f"<b>Question {num}:</b><br><br>{q_text}<br><br>{front_items}"
@@ -780,22 +781,22 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 if is_correct:
                     # Correct answer — always green, checked
                     back_items.append(
-                        f"<div class='option' data-qkey='q{num}o{i}' data-correct='1'>"
+                        f"<div class='option' data-qkey='{name}-q{num}o{i}' data-correct='1'>"
                         f"<input type='checkbox' checked disabled> "
                         f"<span class='correct'>{opt}</span></div>"
                     )
                 else:
                     # Incorrect option — will turn red if user had checked it
                     back_items.append(
-                        f"<div class='option' data-qkey='q{num}o{i}' data-correct='0'>"
+                        f"<div class='option' data-qkey='{name}-q{num}o{i}' data-correct='0'>"
                         f"<input type='checkbox' disabled> "
                         f"<span class='opt-text'>{opt}</span></div>"
                     )
-            # Script: read sessionStorage, color user's wrong choices in red
+            # Script: read localStorage, color user's wrong choices in red
             feedback_script = (
                 "<script>(function(){"
                 "document.querySelectorAll('.option[data-qkey]').forEach(function(el){"
-                "var picked=sessionStorage.getItem(el.getAttribute('data-qkey'))==='1';"
+                "var picked=localStorage.getItem(el.getAttribute('data-qkey'))==='1';"
                 "var correct=el.getAttribute('data-correct')==='1';"
                 "if(picked){el.querySelector('input').checked=true;"
                 "if(!correct){var s=el.querySelector('.opt-text');if(s){s.classList.add('wrong');}}}"
