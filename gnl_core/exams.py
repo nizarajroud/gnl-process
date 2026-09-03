@@ -738,7 +738,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
             .option {{ margin-bottom: 8px; line-height: 1.4; }}
             .option input[type='checkbox'] {{ margin-right: 8px; transform: scale(1.2); vertical-align: middle; }}
             .correct {{ color: #28a745; font-weight: bold; }}
-            .wrong {{ color: #dc3545; font-weight: bold; text-decoration: line-through; }}
+            .wrong {{ color: #dc3545; font-weight: bold; }}
             b {{ color: #0073bb; }}
         """
     )
