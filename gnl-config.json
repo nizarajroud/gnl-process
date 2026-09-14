@@ -84,49 +84,70 @@
       "priority": 1,
       "mode": "-",
       "per_episode": 5,
-      "pipeline": "both"
+      "pipeline": "both",
+      "speed": 1.37,
+      "language": "ar-EG",
+      "prompt": "exams-default.txt"
     },
     "saved-articles/linkedin": {
       "enabled": true,
       "priority": 2,
       "mode": "nlm",
       "per_episode": 5,
-      "pipeline": "generate"
+      "pipeline": "generate",
+      "speed": 1.37,
+      "language": "ar-EG",
+      "prompt": "articles-nlm-customize.txt"
     },
     "aws/aws-papers": {
       "enabled": true,
       "priority": 3,
       "mode": "pages",
       "per_episode": 20,
-      "pipeline": "generate"
+      "pipeline": "generate",
+      "speed": 1.37,
+      "language": "ar-EG",
+      "prompt": "aws-papers.txt"
     },
     "aws/aws-whats-new": {
       "enabled": true,
       "priority": 4,
       "mode": "pages",
       "per_episode": 5,
-      "pipeline": "generate"
+      "pipeline": "generate",
+      "speed": 1.37,
+      "language": "ar-EG",
+      "prompt": "aws-whats-new.txt"
     },
     "aws/aws-whitepapers": {
       "enabled": true,
       "priority": 5,
       "mode": "pages",
       "per_episode": 20,
-      "pipeline": "generate"
+      "pipeline": "generate",
+      "speed": 1.37,
+      "language": "ar-EG",
+      "prompt": "default.txt"
     },
     "aws/aws-solutions-lib": {
       "enabled": true,
       "priority": 6,
       "mode": "pages",
       "per_episode": 15,
-      "pipeline": "generate"
+      "pipeline": "generate",
+      "speed": 1.37,
+      "language": "ar-EG",
+      "prompt": "default.txt"
     },
     "misc/projects": {
       "enabled": false,
       "priority": 7,
       "mode": "semantic",
       "per_episode": 10,
-      "pipeline": "generate"
+      "pipeline": "generate",
+      "speed": 1.37,
+      "language": "ar-EG",
+      "prompt": "default.txt"
     }
   }
 }

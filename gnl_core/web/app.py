@@ -1654,10 +1654,13 @@ async def refresh():
 
 @app.get("/admin/category-defaults")
 async def get_category_defaults():
-    """Return per-category default settings for auto-generation."""
+    """Return per-category default settings + available prompts for auto-generation."""
     from gnl_core.config import get_config
+    from pathlib import Path
     config = get_config()
-    return config.get('CATEGORY_DEFAULTS', {})
+    prompts_dir = Path(__file__).parent.parent.parent / 'prompts'
+    prompts = sorted([f.name for f in prompts_dir.glob('*.txt')]) if prompts_dir.exists() else []
+    return {"defaults": config.get('CATEGORY_DEFAULTS', {}), "prompts": prompts}
 
 
 @app.post("/admin/category-defaults")
