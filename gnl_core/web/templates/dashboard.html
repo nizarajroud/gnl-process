@@ -931,10 +931,19 @@
                 } else {
                     document.getElementById('prep-dialog-mode-row').classList.remove('hidden');
                     document.getElementById('prep-dialog-pipeline-row').classList.add('hidden');
-                    document.getElementById('prep-dialog-pages').parentElement.style.display = '';
+                    const pagesInput = document.getElementById('prep-dialog-pages');
+                    pagesInput.parentElement.style.display = '';
                     document.getElementById('prep-dialog-pages-label').textContent = 'Pages par épisode';
-                    document.getElementById('prep-dialog-pages').value = info.suggested_pages;
-                    document.getElementById('prep-dialog-info').textContent = `${info.total_pages} pages — suggestion: ${info.suggested_pages} pages/épisode (${Math.ceil(info.total_pages/info.suggested_pages)} épisodes)`;
+                    pagesInput.value = info.suggested_pages;
+                    const infoEl = document.getElementById('prep-dialog-info');
+                    const totalPages = info.total_pages;
+                    const updateEpisodeInfo = () => {
+                        const pp = parseInt(pagesInput.value) || 1;
+                        const episodes = Math.ceil(totalPages / pp);
+                        infoEl.textContent = `${totalPages} pages → ${pp} pages/épisode (${episodes} épisode${episodes > 1 ? 's' : ''})`;
+                    };
+                    updateEpisodeInfo();
+                    pagesInput.oninput = updateEpisodeInfo;
                 }
 
                 document.getElementById('prep-dialog').classList.remove('hidden');
