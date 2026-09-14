@@ -1652,6 +1652,31 @@ async def refresh():
     return {"status": "ok"}
 
 
+@app.get("/admin/category-defaults")
+async def get_category_defaults():
+    """Return per-category default settings + available prompts for auto-generation."""
+    from gnl_core.config import get_config
+    from pathlib import Path
+    config = get_config()
+    prompts_dir = Path(__file__).parent.parent.parent / 'prompts'
+    prompts = sorted([f.name for f in prompts_dir.glob('*.txt')]) if prompts_dir.exists() else []
+    return {"defaults": config.get('CATEGORY_DEFAULTS', {}), "prompts": prompts}
+
+
+@app.post("/admin/category-defaults")
+async def save_category_defaults(request: Request):
+    """Save per-category default settings."""
+    from gnl_core.config import get_config, save_config
+    try:
+        defaults = await request.json()
+        config = get_config()
+        config['CATEGORY_DEFAULTS'] = defaults
+        save_config(config)
+        return {"status": "ok"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)[:100]}
+
+
 @app.post("/admin/save")
 async def admin_save(request: Request):
     """Save configuration to gnl-config.json with validation."""
