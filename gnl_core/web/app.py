@@ -1759,6 +1759,21 @@ async def admin_import(request: Request):
     return {"status": "ok"}
 
 
+@app.get("/api/nlm-usage")
+async def nlm_usage():
+    """Return current NLM compute usage (5h + weekly windows)."""
+    from gnl_core.quota import get_quota_status, SessionExpiredError, next_recharge_local
+    loop = asyncio.get_event_loop()
+    try:
+        status = await loop.run_in_executor(None, get_quota_status)
+        status['next_recharge'] = next_recharge_local(status)
+        return status
+    except SessionExpiredError as e:
+        return {"ok": False, "error": "session_expired", "message": str(e)}
+    except Exception as e:
+        return {"ok": False, "error": "unknown", "message": str(e)[:120]}
+
+
 @app.get("/api/quota-check/{parent_id}")
 async def quota_check(parent_id: int):
     """Check if quota is sufficient for this edition."""
