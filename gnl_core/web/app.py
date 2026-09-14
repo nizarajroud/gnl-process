@@ -1652,6 +1652,28 @@ async def refresh():
     return {"status": "ok"}
 
 
+@app.get("/admin/category-defaults")
+async def get_category_defaults():
+    """Return per-category default settings for auto-generation."""
+    from gnl_core.config import get_config
+    config = get_config()
+    return config.get('CATEGORY_DEFAULTS', {})
+
+
+@app.post("/admin/category-defaults")
+async def save_category_defaults(request: Request):
+    """Save per-category default settings."""
+    from gnl_core.config import get_config, save_config
+    try:
+        defaults = await request.json()
+        config = get_config()
+        config['CATEGORY_DEFAULTS'] = defaults
+        save_config(config)
+        return {"status": "ok"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)[:100]}
+
+
 @app.post("/admin/save")
 async def admin_save(request: Request):
     """Save configuration to gnl-config.json with validation."""

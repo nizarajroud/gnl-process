@@ -20,6 +20,7 @@
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('production')">📻 Production</button>
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('history')">📜 Historique</button>
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('config')">⚙️ Configuration</button>
+            <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('defaults')">🎛️ Config par défaut</button>
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('changelog')">📋 Changelog</button>
         </div>
 
@@ -416,6 +417,33 @@
                     <input type="file" name="config_file" accept=".json" class="bg-gray-700 rounded px-2 py-1 text-sm">
                     <button type="submit" class="px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-sm font-medium">Importer</button>
                 </form>
+            </div>
+        </div>
+
+        <!-- Tab: Config par défaut (auto-generation) -->
+        <div id="tab-defaults" class="tab-content hidden">
+            <div class="bg-gray-800 rounded-lg p-5">
+                <h3 class="font-semibold mb-1">🎛️ Configuration par défaut — Auto-génération</h3>
+                <p class="text-xs text-gray-400 mb-4">Ces paramètres sont utilisés par la génération automatique de podcasts.</p>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-gray-400 border-b border-gray-700 text-left">
+                                <th class="py-2 pr-3">Catégorie</th>
+                                <th class="py-2 px-2 text-center">Activé</th>
+                                <th class="py-2 px-2 text-center">Priorité</th>
+                                <th class="py-2 px-2">Mode</th>
+                                <th class="py-2 px-2 text-center">Pages/Quest.</th>
+                                <th class="py-2 px-2">Pipeline</th>
+                            </tr>
+                        </thead>
+                        <tbody id="defaults-tbody"></tbody>
+                    </table>
+                </div>
+                <div class="mt-4 flex justify-end">
+                    <button onclick="saveCategoryDefaults()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-semibold">💾 Enregistrer</button>
+                </div>
+                <div id="defaults-status" class="mt-2 text-xs"></div>
             </div>
         </div>
 
@@ -1238,6 +1266,50 @@
             });
             event.target.classList.remove('border-transparent', 'text-gray-400');
             event.target.classList.add('border-blue-500', 'text-blue-400');
+            if (name === 'defaults') loadCategoryDefaults();
+        }
+
+        async function loadCategoryDefaults() {
+            const res = await fetch('/admin/category-defaults');
+            const defaults = await res.json();
+            const tbody = document.getElementById('defaults-tbody');
+            const modes = ['-', 'pages', 'semantic', 'nlm', 'tts'];
+            const pipelines = [['generate','Podcast'],['anki','Anki'],['both','Anki+Podcast']];
+            // Sort by priority
+            const entries = Object.entries(defaults).sort((a,b) => (a[1].priority||99) - (b[1].priority||99));
+            tbody.innerHTML = entries.map(([cat, cfg]) => `
+                <tr class="border-b border-gray-800" data-cat="${cat}">
+                    <td class="py-2 pr-3 font-mono text-xs">${cat}</td>
+                    <td class="py-2 px-2 text-center"><input type="checkbox" class="def-enabled" ${cfg.enabled?'checked':''}></td>
+                    <td class="py-2 px-2 text-center"><input type="number" class="def-priority w-14 bg-gray-700 rounded px-2 py-1 text-center" value="${cfg.priority||1}" min="1"></td>
+                    <td class="py-2 px-2"><select class="def-mode bg-gray-700 rounded px-2 py-1">${modes.map(m=>`<option value="${m}" ${cfg.mode===m?'selected':''}>${m}</option>`).join('')}</select></td>
+                    <td class="py-2 px-2 text-center"><input type="number" class="def-per w-16 bg-gray-700 rounded px-2 py-1 text-center" value="${cfg.per_episode||5}" min="1"></td>
+                    <td class="py-2 px-2"><select class="def-pipeline bg-gray-700 rounded px-2 py-1">${pipelines.map(([v,l])=>`<option value="${v}" ${cfg.pipeline===v?'selected':''}>${l}</option>`).join('')}</select></td>
+                </tr>
+            `).join('');
+        }
+
+        function saveCategoryDefaults() {
+            const defaults = {};
+            document.querySelectorAll('#defaults-tbody tr').forEach(tr => {
+                defaults[tr.dataset.cat] = {
+                    enabled: tr.querySelector('.def-enabled').checked,
+                    priority: parseInt(tr.querySelector('.def-priority').value) || 1,
+                    mode: tr.querySelector('.def-mode').value,
+                    per_episode: parseInt(tr.querySelector('.def-per').value) || 5,
+                    pipeline: tr.querySelector('.def-pipeline').value
+                };
+            });
+            fetch('/admin/category-defaults', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(defaults)
+            }).then(r=>r.json()).then(d => {
+                const el = document.getElementById('defaults-status');
+                el.textContent = d.status === 'ok' ? '✓ Enregistré' : '⚠ Erreur';
+                el.className = 'mt-2 text-xs ' + (d.status === 'ok' ? 'text-green-400' : 'text-red-400');
+                setTimeout(() => { el.textContent = ''; }, 3000);
+            });
         }
 
         // Handle reset side effects after successful request

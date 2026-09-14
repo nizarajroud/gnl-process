@@ -77,5 +77,56 @@
     "DevOps & Infrastructure",
     "Career & Leadership",
     "Other"
-  ]
+  ],
+  "CATEGORY_DEFAULTS": {
+    "exams/sap-c02": {
+      "enabled": true,
+      "priority": 1,
+      "mode": "-",
+      "per_episode": 5,
+      "pipeline": "both"
+    },
+    "saved-articles/linkedin": {
+      "enabled": true,
+      "priority": 2,
+      "mode": "nlm",
+      "per_episode": 5,
+      "pipeline": "generate"
+    },
+    "aws/aws-papers": {
+      "enabled": true,
+      "priority": 3,
+      "mode": "pages",
+      "per_episode": 20,
+      "pipeline": "generate"
+    },
+    "aws/aws-whats-new": {
+      "enabled": true,
+      "priority": 4,
+      "mode": "pages",
+      "per_episode": 5,
+      "pipeline": "generate"
+    },
+    "aws/aws-whitepapers": {
+      "enabled": true,
+      "priority": 5,
+      "mode": "pages",
+      "per_episode": 20,
+      "pipeline": "generate"
+    },
+    "aws/aws-solutions-lib": {
+      "enabled": true,
+      "priority": 6,
+      "mode": "pages",
+      "per_episode": 15,
+      "pipeline": "generate"
+    },
+    "misc/projects": {
+      "enabled": false,
+      "priority": 7,
+      "mode": "semantic",
+      "per_episode": 10,
+      "pipeline": "generate"
+    }
+  }
 }
