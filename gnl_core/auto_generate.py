@@ -41,6 +41,16 @@ class GenerationReport:
 MAX_CONSECUTIVE_FAILURES = 3
 
 
+class _Skip:
+    """Sentinel returned by generate_fn when an item is not applicable
+    (e.g. category not wired yet). Does NOT count toward the circuit breaker."""
+    def __repr__(self):
+        return "SKIP"
+
+
+SKIP = _Skip()
+
+
 def build_work_queue(category_defaults, list_pending_fn):
     """Build an ordered list of WorkItem from enabled categories.
 
@@ -149,8 +159,11 @@ def run_auto_generation(
             continue
 
         try:
-            ok = generate_fn(item)
-            if ok:
+            result = generate_fn(item)
+            if result is SKIP:
+                report.skipped.append(item)
+                log(f"  ⊘ {item.category} / {item.identifier} (skipped)")
+            elif result:
                 report.generated.append(item)
                 consecutive_failures = 0
                 log(f"  ✓ {item.category} / {item.identifier}")

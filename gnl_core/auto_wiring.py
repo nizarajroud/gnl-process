@@ -59,26 +59,92 @@ def list_pending(category, cfg):
     return pending
 
 
-def make_generate_fn(on_progress=None):
-    """Return a generate_fn(WorkItem) -> bool that runs the real pipeline
-    for the item's category, respecting its per-category config.
+def _is_test_mode():
+    return os.getenv('TEST_MODE', '0') == '1'
 
-    NOTE: This is a synchronous wrapper. Heavy work (NLM generation) is
-    delegated to existing pipeline functions.
+
+def prepare_file_item(item, on_progress=None):
+    """Prepare one file-based work item into the production DB.
+
+    This is the QUOTA-FREE phase: split the PDF/DOCX into episodes, insert
+    into parent_configuration, and generate titles. It makes the material
+    ready for the (separate) NLM audio generation step.
+
+    Returns parent_id on success, None on failure.
+    """
+    from gnl_core.config import get_config
+
+    if _is_test_mode():
+        # Simulate a successful prepare without touching disk/DB
+        if on_progress:
+            on_progress(f"  [TEST] prepare {item.category}/{item.identifier}")
+        return -1  # sentinel parent_id for tests
+
+    config = get_config()
+
+    theme, _, subtheme = item.category.partition('/')
+    inbox = config.get('INBOX_FOLDER', '')
+    folder = os.path.join(inbox, theme, subtheme)
+    pdf_path = os.path.join(folder, item.identifier)
+    if not os.path.isfile(pdf_path):
+        if on_progress:
+            on_progress(f"  ✗ Introuvable: {pdf_path}")
+        return None
+
+    name = os.path.splitext(item.identifier)[0]
+    cfg = item.config or {}
+    pages_per_episode = int(cfg.get('pages_per_episode', 0) or 0)
+
+    if pages_per_episode <= 0:
+        import math
+        if item.identifier.lower().endswith('.docx'):
+            from docx import Document
+            doc = Document(pdf_path)
+            total = max(1, len(doc.paragraphs) // 30)
+        else:
+            from PyPDF2 import PdfReader
+            total = len(PdfReader(pdf_path).pages)
+        pages_per_episode = math.ceil(total / 20)
+
+    from gnl_core.split import split
+    from gnl_core.collect import collect
+    from gnl_core.titles import generate_titles
+
+    result = split(pdf_path, pages_per_episode, name,
+                    podcast_theme=theme, podcast_subtheme=subtheme, mode='pages')
+    parent_id = collect(result)
+    generate_titles(parent_id)
+    if on_progress:
+        on_progress(f"  ✓ {item.category}/{item.identifier} → parent_id={parent_id}")
+    return parent_id
+
+
+def make_generate_fn(on_progress=None):
+    """Return a generate_fn(WorkItem) -> bool for the orchestrator.
+
+    Current scope: the QUOTA-FREE prepare phase for file-based categories
+    (aws/*, misc/*). Exams and saved-articles have distinct pipelines and are
+    skipped here (returned False) until wired explicitly.
+
+    Respects TEST_MODE via prepare_file_item.
     """
     def generate(item):
+        from gnl_core.auto_generate import SKIP
         category = item.category
-        cfg = item.config or {}
         try:
             if category == 'saved-articles/linkedin':
-                # Handled in batch elsewhere; single-article generation not wired here
                 if on_progress:
-                    on_progress(f"  (linkedin batch handled separately)")
-                return False
-            # File-based: reuse prepare-from-inbox pipeline logic
-            # This would call the same code path as the UI 'Traiter' button.
-            # Left as an integration point — see _run_auto_pass in app.py.
-            return False
-        except Exception:
+                    on_progress("  (linkedin: batch NLM pipeline, not wired here)")
+                return SKIP
+            theme = category.partition('/')[0]
+            if theme == 'exams':
+                if on_progress:
+                    on_progress("  (exams: dedicated pipeline, not wired here)")
+                return SKIP
+            parent_id = prepare_file_item(item, on_progress=on_progress)
+            return parent_id is not None
+        except Exception as e:
+            if on_progress:
+                on_progress(f"  ✗ {item.category}/{item.identifier}: {str(e)[:60]}")
             return False
     return generate

@@ -1795,6 +1795,55 @@ async def auto_generate_plan():
         return {"error": str(e)[:120]}
 
 
+@app.post("/api/auto-generate/run")
+async def auto_generate_run():
+    """Execute one auto-generation pass (prepare phase — quota-free).
+
+    Prepares unprocessed file-based material into the production DB, respecting
+    per-category config and budget. Set TEST_MODE=1 to simulate without side effects.
+    """
+    from gnl_core.config import get_config
+    from gnl_core.auto_generate import run_auto_generation
+    from gnl_core.auto_wiring import list_pending, make_generate_fn
+    from gnl_core.quota import get_quota_status, has_budget, next_recharge_local
+    loop = asyncio.get_event_loop()
+
+    logs = []
+    def on_p(msg):
+        logs.append(msg)
+        asyncio.run_coroutine_threadsafe(broadcast_log(msg), loop)
+
+    def _run():
+        config = get_config()
+        defaults = config.get('CATEGORY_DEFAULTS', {})
+        return run_auto_generation(
+            category_defaults=defaults,
+            list_pending_fn=list_pending,
+            quota_status_fn=get_quota_status,
+            has_budget_fn=has_budget,
+            generate_fn=make_generate_fn(on_progress=on_p),
+            next_recharge_fn=next_recharge_local,
+            dry_run=False,
+            on_progress=on_p,
+        )
+
+    try:
+        await broadcast_log("▶ Auto-génération (phase prepare)")
+        report = await loop.run_in_executor(None, _run)
+        await broadcast_status()
+        return {
+            "generated": [{"category": w.category, "identifier": str(w.identifier)} for w in report.generated],
+            "failed": [{"category": w.category, "identifier": str(w.identifier)} for w in report.failed],
+            "generated_count": len(report.generated),
+            "failed_count": len(report.failed),
+            "stopped_reason": report.stopped_reason,
+            "next_recharge": report.next_recharge,
+        }
+    except Exception as e:
+        await broadcast_log(f"⚠ Auto-génération échouée: {str(e)[:100]}")
+        return {"error": str(e)[:120]}
+
+
 @app.get("/api/nlm-usage")
 async def nlm_usage():
     """Return current NLM compute usage (5h + weekly windows)."""

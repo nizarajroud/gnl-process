@@ -6,7 +6,7 @@ import pytest
 
 from gnl_core.auto_generate import (
     run_auto_generation, build_work_queue, WorkItem,
-    MAX_CONSECUTIVE_FAILURES,
+    MAX_CONSECUTIVE_FAILURES, SKIP,
 )
 from gnl_core.quota import SessionExpiredError
 
@@ -202,3 +202,41 @@ def test_dry_run_does_not_call_generate():
     assert report.dry_run is True
     assert gen_called == []            # generate never called
     assert len(report.generated) == 2  # but planned items reported
+
+
+# --- SKIP sentinel ---
+
+def test_skip_does_not_trip_circuit_breaker():
+    """Many consecutive SKIPs must NOT stop the pass; a later success proceeds."""
+    pending = make_pending({"exams/sap-c02": [f"e{i}" for i in range(6)]})
+    def gen(item):
+        # First 5 skipped, last one succeeds
+        return SKIP if item.identifier != "e5" else True
+    report = run_auto_generation(
+        category_defaults=DEFAULTS,
+        list_pending_fn=pending,
+        quota_status_fn=ok_status,
+        has_budget_fn=always_budget,
+        generate_fn=gen,
+    )
+    assert report.stopped_reason == "completed"
+    assert len(report.skipped) == 5
+    assert len(report.generated) == 1
+
+
+def test_skip_then_real_failures_still_trip_breaker():
+    """SKIPs are neutral, but real failures still trip the breaker."""
+    pending = make_pending({"exams/sap-c02": [f"e{i}" for i in range(10)]})
+    def gen(item):
+        idx = int(item.identifier[1:])
+        return SKIP if idx < 2 else False  # 2 skips, then all fail
+    report = run_auto_generation(
+        category_defaults=DEFAULTS,
+        list_pending_fn=pending,
+        quota_status_fn=ok_status,
+        has_budget_fn=always_budget,
+        generate_fn=gen,
+    )
+    assert report.stopped_reason == "circuit_breaker"
+    assert len(report.skipped) == 2
+    assert len(report.failed) == MAX_CONSECUTIVE_FAILURES
