@@ -31,7 +31,7 @@
                 <div></div>
                 <div class="flex items-center gap-4">
                     <button onclick="openCombineEpisodes()" class="px-3 py-1 bg-green-700 hover:bg-green-600 rounded text-xs">🔗 Combiner épisodes</button>
-                    <span id="quota" class="text-sm {% if quota_remaining > 5 %}text-green-400{% elif quota_remaining > 0 %}text-yellow-400{% else %}text-red-400{% endif %}">🎯 {{ quota_remaining }}/20</span>
+                    <span id="quota" class="text-sm text-gray-400" title="Budget compute NotebookLM (5h / hebdo)">🎯 …</span>
                     <button hx-post="/stop" hx-swap="none" data-reset class="px-3 py-1 bg-yellow-800 hover:bg-yellow-700 rounded text-xs" id="stopBtn">⏹ Stop</button>
                     <button hx-post="/action/reset/0" hx-swap="none" data-reset hx-confirm="Tout réinitialiser ?"
                         class="px-3 py-1 bg-red-800 hover:bg-red-700 rounded text-xs">🔄 Reset</button>
@@ -499,7 +499,7 @@
             });
         }
 
-        function batchGenerate(source) {
+        async function batchGenerate(source) {
             const mode = document.getElementById(`audio-mode-${source}`)?.value || 'tts';
             // Get checked article IDs in DOM order (respects drag-drop)
             const container = document.getElementById(`articles-list-${source}`);
@@ -512,13 +512,23 @@
             document.getElementById('nlm-confirm-dialog')?.remove();
 
             if (mode === 'nlm') {
-                // Show confirmation with batch count + quota
                 const batchSize = 5;
                 const nbBatches = Math.ceil(selectedIds.length / batchSize);
-                const quotaText = document.getElementById('quota')?.textContent || '';
-                const quotaMatch = quotaText.match(/(\d+)\/20/);
-                const quotaRemaining = quotaMatch ? parseInt(quotaMatch[1]) : null;
-                const insufficient = quotaRemaining !== null && nbBatches > quotaRemaining;
+                // Fetch live NLM usage
+                let usageLine = '';
+                try {
+                    const res = await fetch('/api/nlm-usage');
+                    const d = await res.json();
+                    if (!d.ok && d.error === 'session_expired') {
+                        alert('⚠ Session NLM expirée. Lancez: nlm auth refresh');
+                        return;
+                    }
+                    if (d.ok) {
+                        const w5 = d.window_5h?.percent_remaining ?? '?';
+                        const ww = d.window_weekly?.percent_remaining ?? '?';
+                        usageLine = `<p class="text-gray-300">Budget restant — 5h: <b>${w5}%</b> · Semaine: <b>${ww}%</b></p><p class="text-xs text-gray-500">Prochaine recharge 5h: ${d.next_recharge || '?'}</p>`;
+                    }
+                } catch(e) {}
 
                 const html = `<div class="fixed inset-0 bg-black/60 flex items-center justify-center z-[70]" id="nlm-confirm-dialog">
                     <div class="bg-gray-800 rounded-lg p-6 w-96">
@@ -526,8 +536,8 @@
                         <div class="text-sm text-gray-300 space-y-2 mb-4">
                             <p><b>${selectedIds.length}</b> articles sélectionnés</p>
                             <p>→ <b>${nbBatches}</b> batch(es) (${batchSize} articles/batch)</p>
-                            <p class="text-yellow-400">⚠️ Consommera <b>${nbBatches}</b> crédit(s) du quota NLM</p>
-                            ${quotaRemaining !== null ? `<p class="${insufficient ? 'text-red-400' : 'text-green-400'}">Quota restant : ${quotaRemaining}/20 ${insufficient ? '(insuffisant !)' : ''}</p>` : ''}
+                            <p class="text-yellow-400">⚠️ Consomme du budget compute (audio)</p>
+                            ${usageLine}
                         </div>
                         <div class="flex gap-2 justify-end">
                             <button onclick="document.getElementById('nlm-confirm-dialog').remove()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded">Annuler</button>
@@ -1260,6 +1270,38 @@
             (catalog[theme]||[]).forEach(s=>{sel.add(new Option(s.subtheme,s.subtheme))});
         }
 
+        async function refreshNlmUsage() {
+            const q = document.getElementById('quota');
+            if (!q) return;
+            try {
+                const res = await fetch('/api/nlm-usage');
+                const d = await res.json();
+                if (!d.ok) {
+                    if (d.error === 'session_expired') {
+                        q.textContent = '⚠ Session NLM expirée';
+                        q.className = 'text-sm text-red-400';
+                        q.title = d.message || 'nlm auth refresh';
+                    } else {
+                        q.textContent = '🎯 quota ?';
+                        q.className = 'text-sm text-gray-400';
+                        q.title = d.message || '';
+                    }
+                    return;
+                }
+                const w5 = d.window_5h?.percent_remaining ?? '?';
+                const ww = d.window_weekly?.percent_remaining ?? '?';
+                q.textContent = `🎯 5h: ${w5}% · Sem: ${ww}%`;
+                const low = Math.min(w5 === '?' ? 100 : w5, ww === '?' ? 100 : ww);
+                q.className = 'text-sm ' + (low > 25 ? 'text-green-400' : (low > 0 ? 'text-yellow-400' : 'text-red-400'));
+                q.title = `Recharge 5h: ${d.next_recharge || '?'} · Tier: ${d.tier || '?'}`;
+            } catch (e) {
+                q.textContent = '🎯 quota ?';
+            }
+        }
+        // Refresh on load + every 2 minutes
+        refreshNlmUsage();
+        setInterval(refreshNlmUsage, 120000);
+
         function switchTab(name) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.getElementById('tab-' + name).classList.remove('hidden');
@@ -1408,9 +1450,7 @@
                     document.getElementById('history-content').innerHTML = data.history_html;
                 }
                 if (data.quota !== undefined) {
-                    const q = document.getElementById('quota');
-                    q.textContent = `🎯 ${data.quota}/20`;
-                    q.className = data.quota > 5 ? 'text-sm text-green-400' : (data.quota > 0 ? 'text-sm text-yellow-400' : 'text-sm text-red-400');
+                    // Legacy field ignored — real usage comes from /api/nlm-usage
                 }
                 if (running) {
                     document.querySelectorAll('#editions button[hx-post*="/action/"]').forEach(b => {

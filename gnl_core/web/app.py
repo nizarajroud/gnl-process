@@ -1759,6 +1759,57 @@ async def admin_import(request: Request):
     return {"status": "ok"}
 
 
+@app.get("/api/auto-generate/plan")
+async def auto_generate_plan():
+    """Dry-run: show what auto-generation WOULD do (no quota consumed)."""
+    from gnl_core.config import get_config
+    from gnl_core.auto_generate import run_auto_generation
+    from gnl_core.auto_wiring import list_pending
+    from gnl_core.quota import get_quota_status, has_budget, next_recharge_local, SessionExpiredError
+    loop = asyncio.get_event_loop()
+
+    def _plan():
+        config = get_config()
+        defaults = config.get('CATEGORY_DEFAULTS', {})
+        report = run_auto_generation(
+            category_defaults=defaults,
+            list_pending_fn=list_pending,
+            quota_status_fn=get_quota_status,
+            has_budget_fn=has_budget,
+            generate_fn=lambda i: True,  # never called in dry-run
+            next_recharge_fn=next_recharge_local,
+            dry_run=True,
+        )
+        return report
+
+    try:
+        report = await loop.run_in_executor(None, _plan)
+        return {
+            "dry_run": True,
+            "planned": [{"category": w.category, "identifier": str(w.identifier), "priority": w.priority} for w in report.generated],
+            "count": len(report.generated),
+            "stopped_reason": report.stopped_reason,
+            "next_recharge": report.next_recharge,
+        }
+    except Exception as e:
+        return {"error": str(e)[:120]}
+
+
+@app.get("/api/nlm-usage")
+async def nlm_usage():
+    """Return current NLM compute usage (5h + weekly windows)."""
+    from gnl_core.quota import get_quota_status, SessionExpiredError, next_recharge_local
+    loop = asyncio.get_event_loop()
+    try:
+        status = await loop.run_in_executor(None, get_quota_status)
+        status['next_recharge'] = next_recharge_local(status)
+        return status
+    except SessionExpiredError as e:
+        return {"ok": False, "error": "session_expired", "message": str(e)}
+    except Exception as e:
+        return {"ok": False, "error": "unknown", "message": str(e)[:120]}
+
+
 @app.get("/api/quota-check/{parent_id}")
 async def quota_check(parent_id: int):
     """Check if quota is sufficient for this edition."""
