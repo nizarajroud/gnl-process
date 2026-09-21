@@ -97,6 +97,62 @@ def _scheduled_linkedin_generate():
         pass
 
 
+def _scheduled_auto_generate():
+    """Scheduled: run one auto-generation pass (drains queue while budget lasts).
+
+    Fires several times per day (see SCHEDULER.auto_generate.every_hours) to
+    exploit the rolling 5h compute-budget recharges. Each pass:
+      - reads live quota, stops cleanly when budget is exhausted
+      - generates the highest-priority pending material (linkedin + aws/*)
+      - skips not-yet-wired categories (exams) without failing
+    Runs the pass in a worker thread so it never blocks the event loop.
+    """
+    import asyncio
+    from gnl_core.config import get_config
+    from gnl_core.auto_generate import run_auto_generation
+    from gnl_core.auto_wiring import list_pending, make_generate_fn
+    from gnl_core.quota import get_quota_status, has_budget, next_recharge_local
+
+    loop = asyncio.get_event_loop()
+
+    def on_p(msg):
+        try:
+            asyncio.run_coroutine_threadsafe(broadcast_log(msg), loop)
+        except Exception:
+            pass
+
+    def _run():
+        defaults = get_config().get('CATEGORY_DEFAULTS', {})
+        return run_auto_generation(
+            category_defaults=defaults,
+            list_pending_fn=list_pending,
+            quota_status_fn=get_quota_status,
+            has_budget_fn=has_budget,
+            generate_fn=make_generate_fn(on_progress=on_p),
+            next_recharge_fn=next_recharge_local,
+            dry_run=False,
+            on_progress=on_p,
+        )
+
+    async def _driver():
+        await broadcast_log("⏰ Passe auto-génération (scheduler)")
+        try:
+            report = await loop.run_in_executor(None, _run)
+            await broadcast_log(
+                f"⏰ Passe terminée: {len(report.generated)} générés, "
+                f"{len(report.failed)} échecs, {len(report.skipped)} skippés "
+                f"({report.stopped_reason})"
+            )
+            await broadcast_status()
+        except Exception as e:
+            await broadcast_log(f"⚠ Passe auto échouée: {str(e)[:100]}")
+
+    try:
+        asyncio.run_coroutine_threadsafe(_driver(), loop)
+    except Exception:
+        pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Mount Google Drive if not available
@@ -129,6 +185,25 @@ async def lifespan(app: FastAPI):
     if gen_job.get('enabled'):
         h, m = gen_job.get('time', '03:00').split(':')
         scheduler.add_job(_scheduled_linkedin_generate, CronTrigger(hour=int(h), minute=int(m), timezone='America/Toronto'), id='saved_articles_generate', replace_existing=True, misfire_grace_time=3600)
+
+    # Auto-generation — multiple passes/day (exploits rolling 5h budget recharges)
+    auto_job = sched_config.get('auto_generate', {})
+    if auto_job.get('enabled'):
+        from apscheduler.triggers.interval import IntervalTrigger
+        every_hours = int(auto_job.get('every_hours', 5))  # align with 5h recharge window
+        start_h, start_m = auto_job.get('start_time', '06:00').split(':')
+        from datetime import datetime, timedelta
+        import pytz
+        tzinfo = pytz.timezone('America/Toronto')
+        now = datetime.now(tzinfo)
+        first = now.replace(hour=int(start_h), minute=int(start_m), second=0, microsecond=0)
+        if first < now:
+            first += timedelta(days=1)
+        scheduler.add_job(
+            _scheduled_auto_generate,
+            IntervalTrigger(hours=every_hours, start_date=first, timezone='America/Toronto'),
+            id='auto_generate', replace_existing=True, misfire_grace_time=3600,
+        )
 
     scheduler.start()
 
@@ -1842,6 +1917,82 @@ async def auto_generate_run():
     except Exception as e:
         await broadcast_log(f"⚠ Auto-génération échouée: {str(e)[:100]}")
         return {"error": str(e)[:120]}
+
+
+@app.get("/api/auto-generate/schedule")
+async def auto_generate_schedule_status():
+    """Return current multi-pass auto-generation schedule state + next run."""
+    job = scheduler.get_job('auto_generate')
+    from gnl_core.config import get_config
+    sched_config = get_config().get('SCHEDULER', {})
+    if isinstance(sched_config, str):
+        import json as _json
+        sched_config = _json.loads(sched_config) if sched_config else {}
+    cfg = sched_config.get('auto_generate', {})
+    return {
+        "enabled": bool(job) and cfg.get('enabled', False),
+        "every_hours": cfg.get('every_hours', 5),
+        "start_time": cfg.get('start_time', '06:00'),
+        "next_run": job.next_run_time.isoformat() if job and job.next_run_time else None,
+    }
+
+
+@app.post("/api/auto-generate/schedule")
+async def auto_generate_schedule_set(request: Request):
+    """Enable/disable/reconfigure the multi-pass auto-generation job (live)."""
+    from gnl_core.config import get_config, save_config
+    form = await request.form()
+    enabled = form.get('enabled', 'true') == 'true'
+    every_hours = int(form.get('every_hours', '5'))
+    start_time = form.get('start_time', '06:00')
+
+    # Persist config
+    config = dict(get_config())
+    sched_config = config.get('SCHEDULER', {})
+    if isinstance(sched_config, str):
+        import json as _json
+        sched_config = _json.loads(sched_config) if sched_config else {}
+    sched_config['auto_generate'] = {
+        'enabled': enabled, 'every_hours': every_hours, 'start_time': start_time,
+    }
+    config['SCHEDULER'] = sched_config
+    save_config(config)
+
+    # Apply live
+    if enabled:
+        from apscheduler.triggers.interval import IntervalTrigger
+        from datetime import datetime, timedelta
+        import pytz
+        tzinfo = pytz.timezone('America/Toronto')
+        now = datetime.now(tzinfo)
+        sh, sm = start_time.split(':')
+        first = now.replace(hour=int(sh), minute=int(sm), second=0, microsecond=0)
+        if first < now:
+            first += timedelta(days=1)
+        scheduler.add_job(
+            _scheduled_auto_generate,
+            IntervalTrigger(hours=every_hours, start_date=first, timezone='America/Toronto'),
+            id='auto_generate', replace_existing=True, misfire_grace_time=3600,
+        )
+        msg = f"⏰ Auto-génération activée: toutes les {every_hours}h dès {start_time}"
+    else:
+        if scheduler.get_job('auto_generate'):
+            scheduler.remove_job('auto_generate')
+        msg = "⏸ Auto-génération désactivée"
+    await broadcast_log(msg)
+    job = scheduler.get_job('auto_generate')
+    return {
+        "status": "ok", "enabled": enabled, "every_hours": every_hours,
+        "start_time": start_time,
+        "next_run": job.next_run_time.isoformat() if job and job.next_run_time else None,
+    }
+
+
+@app.post("/api/auto-generate/trigger")
+async def auto_generate_trigger():
+    """Fire one auto-generation pass immediately (does not change the schedule)."""
+    _scheduled_auto_generate()
+    return {"status": "triggered"}
 
 
 @app.get("/api/nlm-usage")
