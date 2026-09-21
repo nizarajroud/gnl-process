@@ -22,12 +22,17 @@ def list_pending(category, cfg):
     config = get_config()
 
     if category == 'saved-articles/linkedin':
+        # Option A: batch articles so 1 WorkItem = 1 notebook = 1 audio = 1 quota unit.
+        # The identifier is a tuple of article ids; generate_linkedin_batch consumes it.
         from gnl_core.db import get_db
+        batch_size = int(config.get('ARTICLES_NLM_BATCH_SIZE', '5'))
         with get_db() as conn:
             rows = conn.execute(
-                "SELECT id FROM saved_articles WHERE source='linkedin' AND processed=0"
+                "SELECT id FROM saved_articles WHERE source='linkedin' AND processed=0 ORDER BY id"
             ).fetchall()
-        return [r[0] for r in rows]
+        ids = [r[0] for r in rows]
+        batches = [tuple(ids[i:i + batch_size]) for i in range(0, len(ids), batch_size)]
+        return batches
 
     # File-based categories (aws/*, misc/*, exams/*)
     theme, _, subtheme = category.partition('/')
@@ -119,6 +124,139 @@ def prepare_file_item(item, on_progress=None):
     return parent_id
 
 
+def generate_linkedin_batch(item, on_progress=None):
+    """Generate one NLM audio for a batch of LinkedIn articles.
+
+    item.identifier is a tuple of saved_articles ids. Produces one notebook,
+    adds each article as a text source, generates + polls + downloads the audio,
+    converts to mp3, marks articles processed, and deletes the notebook.
+
+    THIS CONSUMES NLM COMPUTE QUOTA. Respects TEST_MODE (simulates, no calls).
+
+    Returns the mp3 path on success, None on failure.
+    """
+    import subprocess
+    from datetime import datetime
+    from gnl_core.config import get_config
+    from gnl_core.db import get_db
+
+    article_ids = list(item.identifier) if isinstance(item.identifier, (tuple, list)) else [item.identifier]
+
+    if _is_test_mode():
+        if on_progress:
+            on_progress(f"  [TEST] NLM batch of {len(article_ids)} articles (no quota consumed)")
+        return "/tmp/test-batch.mp3"  # sentinel path, not created
+
+    config = get_config()
+    customize_path = Path(__file__).parent.parent / 'prompts' / 'articles-nlm-customize.txt'
+    customize_prompt = customize_path.read_text(encoding='utf-8').strip() if customize_path.exists() else ''
+    audio_dir = os.path.join(config.get('AUDIO_PARTS_FOLDER', ''), 'saved-articles', 'linkedin')
+    os.makedirs(audio_dir, exist_ok=True)
+    language = config.get('NOTEBOOKLM_LANGUAGE', 'en')
+    download_timeout = int(config.get('MCP_DOWNLOAD_TIMEOUT', '10800'))
+
+    from notebooklm_tools.mcp.tools._utils import get_client
+    client = get_client()
+
+    # Load article rows
+    with get_db() as conn:
+        placeholders = ','.join('?' * len(article_ids))
+        rows = conn.execute(
+            f"SELECT id, title, content FROM saved_articles WHERE id IN ({placeholders})",
+            article_ids
+        ).fetchall()
+    if not rows:
+        if on_progress:
+            on_progress("  ✗ Aucun article trouvé pour ce batch")
+        return None
+
+    date_str = datetime.now().strftime('%Y%m%d-%H%M%S')
+    nb_name = f"articles-batch-{date_str}"
+
+    # Delete a stale notebook with the same name (defensive)
+    try:
+        for nb in client.list_notebooks():
+            if nb.title == nb_name:
+                client.delete_notebook(nb.id)
+                break
+    except Exception:
+        pass
+
+    nb = client.create_notebook(title=nb_name)
+    nb_id = nb.notebook_id if hasattr(nb, 'notebook_id') else nb.id
+
+    source_ids = []
+    for i, row in enumerate(rows):
+        src = client.add_text_source(
+            notebook_id=nb_id,
+            text=f"{row['content'] or ''}",
+            title=f"Article {i+1}: {row['title'] or ''}"[:100],
+            wait=True,
+        )
+        if src and src.get('source_id'):
+            source_ids.append(src['source_id'])
+
+    if on_progress:
+        on_progress(f"  🎙️ Génération audio ({len(rows)} articles)…")
+
+    audio_result = client.create_audio_overview(
+        notebook_id=nb_id,
+        source_ids=source_ids or None,
+        language=language,
+        focus_prompt=customize_prompt,
+    )
+
+    audio_path = None
+    if audio_result:
+        m4a_path = os.path.join(audio_dir, f"batch-{date_str}.m4a")
+        import time as _t
+        from notebooklm_tools.services.studio import get_studio_status
+        poll_start = _t.time()
+        ready = False
+        while _t.time() - poll_start < download_timeout:
+            try:
+                status = get_studio_status(client, nb_id)
+                arts = status.get('artifacts', []) if isinstance(status, dict) else []
+                if next((a for a in arts if a.get('type') == 'audio' and a.get('status') == 'completed'), None):
+                    ready = True
+                    break
+                if next((a for a in arts if a.get('type') == 'audio' and a.get('status') == 'failed'), None):
+                    break
+            except Exception:
+                pass
+            _t.sleep(15)
+
+        if ready:
+            client.download_audio(notebook_id=nb_id, output_path=m4a_path)
+            if os.path.exists(m4a_path):
+                audio_path = os.path.join(audio_dir, f"batch-{date_str}.mp3")
+                subprocess.run(['ffmpeg', '-y', '-i', m4a_path, audio_path], capture_output=True)
+                if os.path.exists(m4a_path):
+                    os.unlink(m4a_path)
+
+    # Clean up notebook regardless
+    try:
+        client.delete_notebook(nb_id)
+    except Exception:
+        pass
+
+    if audio_path and os.path.exists(audio_path):
+        with get_db() as conn:
+            for row in rows:
+                conn.execute(
+                    "UPDATE saved_articles SET processed=1, audio_path=? WHERE id=?",
+                    (audio_path, row['id']),
+                )
+            conn.commit()
+        if on_progress:
+            on_progress(f"  ✓ Batch OK → {audio_path}")
+        return audio_path
+
+    if on_progress:
+        on_progress("  ✗ Génération/download échoué")
+    return None
+
+
 def make_generate_fn(on_progress=None):
     """Return a generate_fn(WorkItem) -> bool for the orchestrator.
 
@@ -133,9 +271,8 @@ def make_generate_fn(on_progress=None):
         category = item.category
         try:
             if category == 'saved-articles/linkedin':
-                if on_progress:
-                    on_progress("  (linkedin: batch NLM pipeline, not wired here)")
-                return SKIP
+                audio_path = generate_linkedin_batch(item, on_progress=on_progress)
+                return audio_path is not None
             theme = category.partition('/')[0]
             if theme == 'exams':
                 if on_progress:
