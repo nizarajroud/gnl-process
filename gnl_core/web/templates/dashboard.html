@@ -355,6 +355,71 @@
                             </div>
                         </div>
                         <!-- Exams removed — uses GNL Deliver scheduler -->
+
+                        <!-- Auto-génération (multi-passes/jour) -->
+                        <div class="border border-indigo-700 rounded p-3 bg-indigo-950/30">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium">🤖 Auto-génération (multi-passes)</span>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="autogen-enabled" class="sr-only peer" onchange="saveAutogenSchedule()">
+                                    <div class="w-9 h-5 bg-gray-600 peer-checked:bg-green-600 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                                </label>
+                            </div>
+                            <div class="mt-2 space-y-2 ml-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-gray-400">🕐 Démarre à</span>
+                                    <input type="time" id="autogen-start" value="06:00" onchange="saveAutogenSchedule()" class="bg-gray-700 rounded px-2 py-1 text-xs">
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-gray-400">🔁 Toutes les</span>
+                                    <select id="autogen-every" onchange="saveAutogenSchedule()" class="bg-gray-700 rounded px-2 py-1 text-xs">
+                                        <option value="3">3 h (8 passes/j)</option>
+                                        <option value="5" selected>5 h (recharge 5h)</option>
+                                        <option value="6">6 h (4 passes/j)</option>
+                                        <option value="12">12 h (2 passes/j)</option>
+                                        <option value="24">24 h (1 passe/j)</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-gray-500" id="autogen-nextrun">—</span>
+                                    <button type="button" onclick="triggerAutogenNow(this)" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-xs">▶ Lancer maintenant</button>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">Vide la file tant qu'il y a du budget, s'arrête quand épuisé.</p>
+                        </div>
+                        <script>
+                            async function loadAutogenSchedule() {
+                                try {
+                                    const d = await (await fetch('/api/auto-generate/schedule')).json();
+                                    document.getElementById('autogen-enabled').checked = !!d.enabled;
+                                    if (d.start_time) document.getElementById('autogen-start').value = d.start_time;
+                                    if (d.every_hours) document.getElementById('autogen-every').value = String(d.every_hours);
+                                    updateAutogenNextRun(d.next_run);
+                                } catch (e) {}
+                            }
+                            function updateAutogenNextRun(iso) {
+                                const el = document.getElementById('autogen-nextrun');
+                                if (!iso) { el.textContent = '—'; return; }
+                                const dt = new Date(iso);
+                                el.textContent = 'Prochaine: ' + dt.toLocaleString('fr-CA', {weekday:'short', hour:'2-digit', minute:'2-digit'});
+                            }
+                            async function saveAutogenSchedule() {
+                                const enabled = document.getElementById('autogen-enabled').checked;
+                                const every = document.getElementById('autogen-every').value;
+                                const start = document.getElementById('autogen-start').value;
+                                const body = new URLSearchParams({enabled, every_hours: every, start_time: start});
+                                try {
+                                    const d = await (await fetch('/api/auto-generate/schedule', {method:'POST', body})).json();
+                                    updateAutogenNextRun(d.next_run);
+                                } catch (e) {}
+                            }
+                            async function triggerAutogenNow(btn) {
+                                btn.disabled = true; const t = btn.textContent; btn.textContent = '⏳ En cours…';
+                                try { await fetch('/api/auto-generate/trigger', {method:'POST'}); }
+                                finally { setTimeout(() => { btn.disabled = false; btn.textContent = t; }, 2000); }
+                            }
+                            loadAutogenSchedule();
+                        </script>
                     </div>
                 </div>
 
