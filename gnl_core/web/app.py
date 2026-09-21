@@ -137,16 +137,51 @@ def _scheduled_auto_generate():
 
     async def _driver():
         await broadcast_log("⏰ Passe auto-génération (scheduler)")
+        report = None
         try:
             report = await loop.run_in_executor(None, _run)
             await broadcast_log(
                 f"⏰ Passe terminée: {len(report.generated)} générés, "
-                f"{len(report.failed)} échecs, {len(report.skipped)} skippés "
-                f"({report.stopped_reason})"
+                f"{len(report.failed)} échecs, {len(report.skipped)} skippés, "
+                f"{len(report.finalized)} finalisés ({report.stopped_reason})"
             )
             await broadcast_status()
         except Exception as e:
             await broadcast_log(f"⚠ Passe auto échouée: {str(e)[:100]}")
+
+        # Adaptive rescheduling: plan the next pass based on live quota.
+        try:
+            from gnl_core.config import get_config
+            sched_config = get_config().get('SCHEDULER', {})
+            if isinstance(sched_config, str):
+                import json as _json
+                sched_config = _json.loads(sched_config) if sched_config else {}
+            cfg = sched_config.get('auto_generate', {})
+            if not cfg.get('enabled') or not cfg.get('adaptive', True):
+                return  # fixed-interval mode or disabled -> APScheduler handles next run
+
+            from gnl_core.auto_generate import compute_next_delay_seconds
+            from gnl_core.quota import get_quota_status
+            try:
+                status = await loop.run_in_executor(None, get_quota_status)
+            except Exception:
+                status = {}
+            stopped = report.stopped_reason if report else "quota_error"
+            delay = compute_next_delay_seconds(status, stopped)
+
+            from datetime import datetime, timedelta
+            import pytz
+            tzinfo = pytz.timezone('America/Toronto')
+            next_run = datetime.now(tzinfo) + timedelta(seconds=delay)
+            scheduler.add_job(
+                _scheduled_auto_generate,
+                'date', run_date=next_run, id='auto_generate',
+                replace_existing=True, misfire_grace_time=3600,
+            )
+            mins = round(delay / 60)
+            await broadcast_log(f"⏰ Prochaine passe planifiée dans ~{mins} min ({next_run.strftime('%H:%M')})")
+        except Exception as e:
+            await broadcast_log(f"⚠ Reprogrammation échouée: {str(e)[:80]}")
 
     try:
         asyncio.run_coroutine_threadsafe(_driver(), loop)
@@ -190,21 +225,28 @@ async def lifespan(app: FastAPI):
     # Auto-generation — multiple passes/day (exploits rolling 5h budget recharges)
     auto_job = sched_config.get('auto_generate', {})
     if auto_job.get('enabled'):
-        from apscheduler.triggers.interval import IntervalTrigger
-        every_hours = int(auto_job.get('every_hours', 5))  # align with 5h recharge window
-        start_h, start_m = auto_job.get('start_time', '06:00').split(':')
         from datetime import datetime, timedelta
         import pytz
         tzinfo = pytz.timezone('America/Toronto')
         now = datetime.now(tzinfo)
+        start_h, start_m = auto_job.get('start_time', '06:00').split(':')
         first = now.replace(hour=int(start_h), minute=int(start_m), second=0, microsecond=0)
         if first < now:
             first += timedelta(days=1)
-        scheduler.add_job(
-            _scheduled_auto_generate,
-            IntervalTrigger(hours=every_hours, start_date=first, timezone='America/Toronto'),
-            id='auto_generate', replace_existing=True, misfire_grace_time=3600,
-        )
+        if auto_job.get('adaptive', True):
+            # Adaptive: one-shot first run; the driver self-reschedules based on quota.
+            scheduler.add_job(
+                _scheduled_auto_generate, 'date', run_date=first,
+                id='auto_generate', replace_existing=True, misfire_grace_time=3600,
+            )
+        else:
+            from apscheduler.triggers.interval import IntervalTrigger
+            every_hours = int(auto_job.get('every_hours', 5))
+            scheduler.add_job(
+                _scheduled_auto_generate,
+                IntervalTrigger(hours=every_hours, start_date=first, timezone='America/Toronto'),
+                id='auto_generate', replace_existing=True, misfire_grace_time=3600,
+            )
 
     scheduler.start()
 
@@ -1935,6 +1977,7 @@ async def auto_generate_schedule_status():
         "enabled": bool(job) and cfg.get('enabled', False),
         "every_hours": cfg.get('every_hours', 5),
         "start_time": cfg.get('start_time', '06:00'),
+        "adaptive": cfg.get('adaptive', True),
         "next_run": job.next_run_time.isoformat() if job and job.next_run_time else None,
     }
 
@@ -1947,6 +1990,7 @@ async def auto_generate_schedule_set(request: Request):
     enabled = form.get('enabled', 'true') == 'true'
     every_hours = int(form.get('every_hours', '5'))
     start_time = form.get('start_time', '06:00')
+    adaptive = form.get('adaptive', 'true') == 'true'
 
     # Persist config
     config = dict(get_config())
@@ -1955,14 +1999,14 @@ async def auto_generate_schedule_set(request: Request):
         import json as _json
         sched_config = _json.loads(sched_config) if sched_config else {}
     sched_config['auto_generate'] = {
-        'enabled': enabled, 'every_hours': every_hours, 'start_time': start_time,
+        'enabled': enabled, 'every_hours': every_hours,
+        'start_time': start_time, 'adaptive': adaptive,
     }
     config['SCHEDULER'] = sched_config
     save_config(config)
 
     # Apply live
     if enabled:
-        from apscheduler.triggers.interval import IntervalTrigger
         from datetime import datetime, timedelta
         import pytz
         tzinfo = pytz.timezone('America/Toronto')
@@ -1971,12 +2015,20 @@ async def auto_generate_schedule_set(request: Request):
         first = now.replace(hour=int(sh), minute=int(sm), second=0, microsecond=0)
         if first < now:
             first += timedelta(days=1)
-        scheduler.add_job(
-            _scheduled_auto_generate,
-            IntervalTrigger(hours=every_hours, start_date=first, timezone='America/Toronto'),
-            id='auto_generate', replace_existing=True, misfire_grace_time=3600,
-        )
-        msg = f"⏰ Auto-génération activée: toutes les {every_hours}h dès {start_time}"
+        if adaptive:
+            scheduler.add_job(
+                _scheduled_auto_generate, 'date', run_date=first,
+                id='auto_generate', replace_existing=True, misfire_grace_time=3600,
+            )
+            msg = f"⏰ Auto-génération activée (adaptatif): 1ère passe {start_time}, puis alignée sur les recharges 5h"
+        else:
+            from apscheduler.triggers.interval import IntervalTrigger
+            scheduler.add_job(
+                _scheduled_auto_generate,
+                IntervalTrigger(hours=every_hours, start_date=first, timezone='America/Toronto'),
+                id='auto_generate', replace_existing=True, misfire_grace_time=3600,
+            )
+            msg = f"⏰ Auto-génération activée: toutes les {every_hours}h dès {start_time}"
     else:
         if scheduler.get_job('auto_generate'):
             scheduler.remove_job('auto_generate')
@@ -1985,7 +2037,7 @@ async def auto_generate_schedule_set(request: Request):
     job = scheduler.get_job('auto_generate')
     return {
         "status": "ok", "enabled": enabled, "every_hours": every_hours,
-        "start_time": start_time,
+        "start_time": start_time, "adaptive": adaptive,
         "next_run": job.next_run_time.isoformat() if job and job.next_run_time else None,
     }
 

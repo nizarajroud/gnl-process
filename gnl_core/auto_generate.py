@@ -203,3 +203,62 @@ def run_auto_generation(
                 log(f"  ⚠ Finalize {category} échoué: {str(e)[:60]}")
 
     return report
+
+
+# Adaptive scheduling
+# ---------------------
+# On a 24/7 host we want to fire a pass right after each 5h-window recharge,
+# not on a fixed clock. compute_next_delay_seconds inspects the quota status
+# and returns how long to wait before the next pass.
+
+# Small buffer after a reset so the recharge is definitely applied server-side.
+RECHARGE_BUFFER_SECONDS = 120
+# When budget is still available after a pass, wait a bit and go again
+# (queue not empty, more can be produced within the current window).
+CONTINUE_DELAY_SECONDS = 60
+# Safety floor / ceiling.
+MIN_DELAY_SECONDS = 30
+MAX_DELAY_SECONDS = 6 * 3600
+
+
+def compute_next_delay_seconds(status, stopped_reason, min_percent=1):
+    """Return seconds to wait before the next adaptive pass.
+
+    Logic:
+      - session_expired / quota_error -> back off MAX (nothing productive to do)
+      - budget still available (stopped 'completed' with material left, or
+        'no_material') -> short CONTINUE delay to drain remaining queue soon
+      - budget exhausted ('no_budget') -> wait until the 5h window resets
+        (resets_in_h) + buffer
+      - fallback -> CONTINUE delay
+    """
+    if stopped_reason in ("session_expired",) or (stopped_reason or "").startswith("quota_error"):
+        return MAX_DELAY_SECONDS
+
+    if stopped_reason == "no_budget":
+        # Wait for the sooner of the two windows to recharge.
+        candidates = []
+        for key in ("window_5h", "window_weekly"):
+            w = (status or {}).get(key) or {}
+            rin = w.get("resets_in_h")
+            rem = w.get("percent_remaining")
+            # Only windows that are actually exhausted gate us; pick their reset.
+            if rem is not None and rem <= min_percent and rin is not None:
+                candidates.append(rin * 3600)
+        if candidates:
+            wait = min(candidates) + RECHARGE_BUFFER_SECONDS
+            return int(max(MIN_DELAY_SECONDS, min(MAX_DELAY_SECONDS, wait)))
+        # Exhausted but no reset info -> back off moderately
+        return MAX_DELAY_SECONDS
+
+    if stopped_reason == "no_material":
+        # Nothing to do now; re-check after the next recharge window (5h) so we
+        # pick up freshly fetched material without hammering.
+        w = (status or {}).get("window_5h") or {}
+        rin = w.get("resets_in_h")
+        if rin is not None:
+            return int(max(MIN_DELAY_SECONDS, min(MAX_DELAY_SECONDS, rin * 3600 + RECHARGE_BUFFER_SECONDS)))
+        return MAX_DELAY_SECONDS
+
+    # completed / circuit_breaker with budget likely remaining -> go again soon
+    return CONTINUE_DELAY_SECONDS

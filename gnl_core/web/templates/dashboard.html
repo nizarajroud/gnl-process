@@ -381,6 +381,13 @@
                                     </select>
                                 </div>
                                 <div class="flex items-center justify-between">
+                                    <span class="text-xs text-gray-400">🧠 Adaptatif (aligné sur recharge 5h)</span>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="autogen-adaptive" checked onchange="saveAutogenSchedule()" class="sr-only peer">
+                                        <div class="w-9 h-5 bg-gray-600 peer-checked:bg-indigo-600 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                                    </label>
+                                </div>
+                                <div class="flex items-center justify-between">
                                     <span class="text-xs text-gray-500" id="autogen-nextrun">—</span>
                                     <button type="button" onclick="triggerAutogenNow(this)" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-xs">▶ Lancer maintenant</button>
                                 </div>
@@ -394,6 +401,7 @@
                                     document.getElementById('autogen-enabled').checked = !!d.enabled;
                                     if (d.start_time) document.getElementById('autogen-start').value = d.start_time;
                                     if (d.every_hours) document.getElementById('autogen-every').value = String(d.every_hours);
+                                    if (typeof d.adaptive !== 'undefined') document.getElementById('autogen-adaptive').checked = !!d.adaptive;
                                     updateAutogenNextRun(d.next_run);
                                 } catch (e) {}
                             }
@@ -407,7 +415,8 @@
                                 const enabled = document.getElementById('autogen-enabled').checked;
                                 const every = document.getElementById('autogen-every').value;
                                 const start = document.getElementById('autogen-start').value;
-                                const body = new URLSearchParams({enabled, every_hours: every, start_time: start});
+                                const adaptive = document.getElementById('autogen-adaptive').checked;
+                                const body = new URLSearchParams({enabled, every_hours: every, start_time: start, adaptive});
                                 try {
                                     const d = await (await fetch('/api/auto-generate/schedule', {method:'POST', body})).json();
                                     updateAutogenNextRun(d.next_run);
