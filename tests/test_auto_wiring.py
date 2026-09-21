@@ -8,7 +8,10 @@ import pytest
 
 from gnl_core.auto_generate import WorkItem, SKIP
 from gnl_core import auto_wiring
-from gnl_core.auto_wiring import make_generate_fn, prepare_file_item, generate_linkedin_batch
+from gnl_core.auto_wiring import (
+    make_generate_fn, prepare_file_item, generate_linkedin_batch,
+    finalize_category,
+)
 
 
 @pytest.fixture
@@ -118,3 +121,21 @@ def test_linkedin_list_pending_returns_batches(monkeypatch):
     assert [len(b) for b in batches] == [5, 5, 3]
     assert batches[0] == (1, 2, 3, 4, 5)
     assert batches[2] == (11, 12, 13)
+
+
+# --- finalize_category ---
+
+def test_finalize_linkedin_test_mode(test_mode):
+    items = [WorkItem('saved-articles/linkedin', (1, 2, 3), 2, {})]
+    out = finalize_category('saved-articles/linkedin', items)
+    assert out == "/tmp/test-final.mp3"
+
+
+def test_finalize_non_linkedin_returns_none():
+    items = [WorkItem('aws/aws-papers', 'doc.pdf', 3, {})]
+    assert finalize_category('aws/aws-papers', items) is None
+
+
+def test_finalize_non_linkedin_returns_none_even_in_test_mode(test_mode):
+    items = [WorkItem('aws/aws-papers', 'doc.pdf', 3, {})]
+    assert finalize_category('aws/aws-papers', items) is None

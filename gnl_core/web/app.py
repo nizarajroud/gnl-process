@@ -110,7 +110,7 @@ def _scheduled_auto_generate():
     import asyncio
     from gnl_core.config import get_config
     from gnl_core.auto_generate import run_auto_generation
-    from gnl_core.auto_wiring import list_pending, make_generate_fn
+    from gnl_core.auto_wiring import list_pending, make_generate_fn, make_finalize_fn
     from gnl_core.quota import get_quota_status, has_budget, next_recharge_local
 
     loop = asyncio.get_event_loop()
@@ -129,6 +129,7 @@ def _scheduled_auto_generate():
             quota_status_fn=get_quota_status,
             has_budget_fn=has_budget,
             generate_fn=make_generate_fn(on_progress=on_p),
+            finalize_fn=make_finalize_fn(on_progress=on_p),
             next_recharge_fn=next_recharge_local,
             dry_run=False,
             on_progress=on_p,
@@ -1879,7 +1880,7 @@ async def auto_generate_run():
     """
     from gnl_core.config import get_config
     from gnl_core.auto_generate import run_auto_generation
-    from gnl_core.auto_wiring import list_pending, make_generate_fn
+    from gnl_core.auto_wiring import list_pending, make_generate_fn, make_finalize_fn
     from gnl_core.quota import get_quota_status, has_budget, next_recharge_local
     loop = asyncio.get_event_loop()
 
@@ -1897,6 +1898,7 @@ async def auto_generate_run():
             quota_status_fn=get_quota_status,
             has_budget_fn=has_budget,
             generate_fn=make_generate_fn(on_progress=on_p),
+            finalize_fn=make_finalize_fn(on_progress=on_p),
             next_recharge_fn=next_recharge_local,
             dry_run=False,
             on_progress=on_p,

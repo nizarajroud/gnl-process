@@ -240,3 +240,78 @@ def test_skip_then_real_failures_still_trip_breaker():
     assert report.stopped_reason == "circuit_breaker"
     assert len(report.skipped) == 2
     assert len(report.failed) == MAX_CONSECUTIVE_FAILURES
+
+
+# --- finalize_fn ---
+
+def test_finalize_called_per_category_with_generated_items():
+    pending = make_pending({
+        "exams/sap-c02": ["e1"],
+        "aws/aws-papers": ["a1", "a2"],
+    })
+    calls = []
+    def finalize(category, items):
+        calls.append((category, len(items)))
+        return f"/out/{category}.mp3"
+    report = run_auto_generation(
+        category_defaults=DEFAULTS,
+        list_pending_fn=pending,
+        quota_status_fn=ok_status,
+        has_budget_fn=always_budget,
+        generate_fn=lambda i: True,
+        finalize_fn=finalize,
+    )
+    # both categories generated -> both finalized, grouped by category
+    assert ("exams/sap-c02", 1) in calls
+    assert ("aws/aws-papers", 2) in calls
+    assert len(report.finalized) == 2
+
+
+def test_finalize_not_called_for_skipped_only_category():
+    pending = make_pending({"exams/sap-c02": ["e1", "e2"]})
+    calls = []
+    def finalize(category, items):
+        calls.append(category)
+        return "/out.mp3"
+    report = run_auto_generation(
+        category_defaults=DEFAULTS,
+        list_pending_fn=pending,
+        quota_status_fn=ok_status,
+        has_budget_fn=always_budget,
+        generate_fn=lambda i: SKIP,  # everything skipped
+        finalize_fn=finalize,
+    )
+    assert calls == []            # nothing generated -> no finalize
+    assert report.finalized == []
+
+
+def test_finalize_skipped_in_dry_run():
+    pending = make_pending({"aws/aws-papers": ["a1"]})
+    calls = []
+    run_auto_generation(
+        category_defaults=DEFAULTS,
+        list_pending_fn=pending,
+        quota_status_fn=ok_status,
+        has_budget_fn=always_budget,
+        generate_fn=lambda i: True,
+        finalize_fn=lambda c, i: calls.append(c),
+        dry_run=True,
+    )
+    assert calls == []  # dry-run never finalizes
+
+
+def test_finalize_exception_does_not_crash_pass():
+    pending = make_pending({"aws/aws-papers": ["a1"]})
+    def finalize(category, items):
+        raise RuntimeError("ffmpeg missing")
+    report = run_auto_generation(
+        category_defaults=DEFAULTS,
+        list_pending_fn=pending,
+        quota_status_fn=ok_status,
+        has_budget_fn=always_budget,
+        generate_fn=lambda i: True,
+        finalize_fn=finalize,
+    )
+    assert report.stopped_reason == "completed"
+    assert report.finalized == []       # finalize failed but pass survived
+    assert len(report.generated) == 1

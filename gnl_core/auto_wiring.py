@@ -290,3 +290,96 @@ def make_generate_fn(on_progress=None):
                 on_progress(f"  ✗ {item.category}/{item.identifier}: {str(e)[:60]}")
             return False
     return generate
+
+
+def finalize_category(category, items, on_progress=None):
+    """Combine the audio produced THIS pass for a category into one final file
+    delivered to the Drive backlog. Returns the output path, or None.
+
+    Currently implemented for saved-articles/linkedin: concatenates the batch
+    MP3s (with 3s silence between) into GNL_BACKLOG/saved-articles/linkedin/.
+    File-based categories (aws/*) don't need combining here (each becomes its
+    own production edition), so they return None.
+
+    Respects TEST_MODE (returns a sentinel path without touching disk).
+    """
+    import subprocess
+    from datetime import datetime
+    from gnl_core.config import get_config
+
+    if category != 'saved-articles/linkedin':
+        return None  # aws/* handled by the production/deliver pipeline
+
+    if _is_test_mode():
+        if on_progress:
+            on_progress(f"  [TEST] finalize {category} ({len(items)} batches)")
+        return "/tmp/test-final.mp3"
+
+    config = get_config()
+
+    # Collect the audio paths generated this pass, in order, from the DB.
+    from gnl_core.db import get_db
+    article_ids = []
+    for it in items:
+        ids = it.identifier if isinstance(it.identifier, (tuple, list)) else [it.identifier]
+        article_ids.extend(ids)
+    if not article_ids:
+        return None
+
+    with get_db() as conn:
+        placeholders = ','.join('?' * len(article_ids))
+        rows = conn.execute(
+            f"SELECT DISTINCT audio_path FROM saved_articles "
+            f"WHERE id IN ({placeholders}) AND audio_path IS NOT NULL AND audio_path != ''",
+            article_ids,
+        ).fetchall()
+    audio_paths = [r['audio_path'] for r in rows if os.path.exists(r['audio_path'])]
+    # Preserve batch order (sorted by filename timestamp)
+    audio_paths = sorted(set(audio_paths))
+    if not audio_paths:
+        if on_progress:
+            on_progress("  ⚠ Finalize: aucun audio de batch trouvé")
+        return None
+
+    backlog_dir = os.path.join(config.get('GNL_BACKLOG', ''), 'saved-articles', 'linkedin')
+    os.makedirs(backlog_dir, exist_ok=True)
+    final_date = datetime.now().strftime('%Y-%m-%d')
+    output_file = os.path.join(backlog_dir, f"batch-{final_date}.mp3")
+    counter = 1
+    while os.path.exists(output_file):
+        counter += 1
+        output_file = os.path.join(backlog_dir, f"batch-{final_date}-{counter}.mp3")
+
+    import tempfile
+    silence_file = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'assets', 'silence-3s.mp3'
+    )
+    concat_path = os.path.join(tempfile.gettempdir(), f'nlm_finalize_{final_date}.txt')
+    with open(concat_path, 'w') as f:
+        for idx, p in enumerate(audio_paths):
+            f.write(f"file '{p}'\n")
+            if idx < len(audio_paths) - 1 and os.path.exists(silence_file):
+                f.write(f"file '{silence_file}'\n")
+    subprocess.run(
+        ['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', concat_path, '-c', 'copy', output_file],
+        capture_output=True,
+    )
+    try:
+        os.unlink(concat_path)
+    except Exception:
+        pass
+
+    if os.path.exists(output_file):
+        if on_progress:
+            on_progress(f"  ✓ Combiné sur Drive: {output_file}")
+        return output_file
+    if on_progress:
+        on_progress("  ⚠ Combine échoué")
+    return None
+
+
+def make_finalize_fn(on_progress=None):
+    """Return finalize_fn(category, items) -> output_path | None for the orchestrator."""
+    def finalize(category, items):
+        return finalize_category(category, items, on_progress=on_progress)
+    return finalize

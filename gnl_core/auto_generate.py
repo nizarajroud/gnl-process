@@ -32,6 +32,7 @@ class GenerationReport:
     generated: list = field(default_factory=list)
     skipped: list = field(default_factory=list)
     failed: list = field(default_factory=list)
+    finalized: list = field(default_factory=list)  # [(category, output_path), ...]
     stopped_reason: Optional[str] = None
     next_recharge: Optional[str] = None
     dry_run: bool = False
@@ -84,6 +85,7 @@ def run_auto_generation(
     quota_status_fn,
     has_budget_fn,
     generate_fn,
+    finalize_fn=None,
     next_recharge_fn=lambda s: None,
     dry_run=False,
     on_progress=None,
@@ -184,5 +186,20 @@ def run_auto_generation(
 
     if report.stopped_reason is None:
         report.stopped_reason = "completed"
+
+    # 5. Finalize per category: combine + deliver the items generated THIS pass.
+    # Only categories that produced at least one successful item are finalized.
+    if finalize_fn and not dry_run and report.generated:
+        by_category = {}
+        for item in report.generated:
+            by_category.setdefault(item.category, []).append(item)
+        for category, items in by_category.items():
+            try:
+                output = finalize_fn(category, items)
+                if output:
+                    report.finalized.append((category, output))
+                    log(f"  📦 Finalisé {category} → {output}")
+            except Exception as e:
+                log(f"  ⚠ Finalize {category} échoué: {str(e)[:60]}")
 
     return report
