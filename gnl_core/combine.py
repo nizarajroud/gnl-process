@@ -86,4 +86,25 @@ def combine(parent_id, output_file, db_path=None, suffix=None):
             conn.execute("UPDATE parent_configuration SET combination_state = 1 WHERE id = ?", (parent_id,))
             conn.commit()
 
+    # Dynamic cover art (aws/aws-whats-new only) — best-effort, never blocks delivery.
+    category = f"{theme}/{subfolder}"
+    if not test_mode:
+        try:
+            from .coverart import add_cover_for_whatsnew, COVER_CATEGORY
+            if category == COVER_CATEGORY:
+                # Gather source text from the split .txt chunks for this parent.
+                pdf_parts_folder = os.getenv('PDF_PARTS_FOLDER', '')
+                parts_dir = Path(pdf_parts_folder) / theme / subfolder / parent_file
+                source_text = ""
+                if parts_dir.is_dir():
+                    for txt in sorted(parts_dir.glob("*.txt")):
+                        try:
+                            source_text += txt.read_text(encoding='utf-8', errors='ignore') + "\n"
+                        except Exception:
+                            pass
+                episode_title = os.path.splitext(os.path.basename(output_file))[0]
+                add_cover_for_whatsnew(category, str(output_path), source_text, episode_title)
+        except Exception:
+            pass  # cover art must never break the combine
+
     return str(output_path)

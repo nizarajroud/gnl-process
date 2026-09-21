@@ -16,3 +16,4 @@ weasyprint==68.1
 websockets==15.0.1
 pytest>=8.0
 pytz>=2024.1
+Pillow>=10.0

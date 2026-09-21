@@ -38,16 +38,9 @@
       "description": "R\u00e9cup\u00e9rer saved posts"
     },
     "saved_articles_generate": {
-      "enabled": false,
+      "enabled": true,
       "time": "03:00",
       "description": "Batch generate (texte + audio)"
-    },
-    "auto_generate": {
-      "enabled": true,
-      "adaptive": true,
-      "start_time": "06:00",
-      "every_hours": 5,
-      "description": "Passes adaptatives alignees sur recharge 5h"
     }
   },
   "DEBUG_NLM": "0",
