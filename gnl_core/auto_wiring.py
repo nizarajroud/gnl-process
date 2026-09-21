@@ -234,13 +234,8 @@ def generate_linkedin_batch(item, on_progress=None):
                 if os.path.exists(m4a_path):
                     os.unlink(m4a_path)
 
-    # Clean up notebook regardless
-    try:
-        client.delete_notebook(nb_id)
-    except Exception:
-        pass
-
     if audio_path and os.path.exists(audio_path):
+        # Success: mark processed, THEN delete the notebook (audio is safely saved locally)
         with get_db() as conn:
             for row in rows:
                 conn.execute(
@@ -248,12 +243,22 @@ def generate_linkedin_batch(item, on_progress=None):
                     (audio_path, row['id']),
                 )
             conn.commit()
+        try:
+            client.delete_notebook(nb_id)
+        except Exception:
+            pass
         if on_progress:
             on_progress(f"  ✓ Batch OK → {audio_path}")
         return audio_path
 
+    # FAILURE / TIMEOUT / INTERRUPTION:
+    # Do NOT delete the notebook — the audio may still be generating in NotebookLM.
+    # Leaving it intact lets a later pass recover the audio instead of losing it.
     if on_progress:
-        on_progress("  ✗ Génération/download échoué")
+        on_progress(
+            f"  ⚠ Audio non récupéré — notebook '{nb_name}' CONSERVÉ pour récupération "
+            f"(nb_id={nb_id})"
+        )
     return None
 
 
