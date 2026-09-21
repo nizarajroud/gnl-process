@@ -2203,13 +2203,21 @@ async def _run_action(action: str, parent_id: int):
                     await asyncio.sleep(retry_delay)
                     continue
 
-                # All generated and downloaded — combine
+                # All generated and downloaded — combine or playlist
                 if s['converted'] == s['total'] and s['combined'] == 0:
                     with get_db() as conn:
                         pf = conn.execute("SELECT parent_file FROM parent_configuration WHERE id=?", (parent_id,)).fetchone()['parent_file']
-                    await broadcast_log("▶ COMBINE (complet)")
-                    await broadcast_log("⏳ Combinaison en cours...")
-                    await loop.run_in_executor(None, lambda: combine(parent_id, pf))
+                    from gnl_core.config import get_config as _gc
+                    output_mode = (_gc().get('OUTPUT_MODE', 'combine') or 'combine').lower()
+                    if output_mode == 'playlist':
+                        from gnl_core.playlist import make_playlist
+                        await broadcast_log("▶ PLAYLIST (fichiers séparés + covers + .m3u)")
+                        out = await loop.run_in_executor(None, lambda: make_playlist(parent_id, pf))
+                        await broadcast_log(f"  ✓ Playlist: {out}" if out else "  ⚠ Playlist échouée")
+                    else:
+                        await broadcast_log("▶ COMBINE (complet)")
+                        await broadcast_log("⏳ Combinaison en cours...")
+                        await loop.run_in_executor(None, lambda: combine(parent_id, pf))
                     await broadcast_status()
                 break
 
