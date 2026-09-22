@@ -172,8 +172,28 @@ def _scheduled_auto_generate():
                 f"{len(report.finalized)} finalisés ({report.stopped_reason})"
             )
             await broadcast_status()
+            # Telegram alerts on notable outcomes (best-effort, de-duplicated).
+            try:
+                from gnl_core.alerts import alert
+                if report.stopped_reason == 'session_expired':
+                    alert('nlm-session-expired',
+                          "⚠️ GNL: session NotebookLM expirée — l'auto-génération est bloquée. "
+                          "Relancer le login NLM.", once_per='day')
+                elif report.finalized:
+                    names = ', '.join(f"{c}" for c, _ in report.finalized)
+                    alert('gnl-generated',
+                          f"🎙️ GNL: {len(report.generated)} épisode(s) généré(s), "
+                          f"{len(report.finalized)} livré(s) sur le Drive ({names}).")
+            except Exception:
+                pass
         except Exception as e:
             await broadcast_log(f"⚠ Passe auto échouée: {str(e)[:100]}")
+            try:
+                from gnl_core.alerts import alert
+                alert('gnl-pass-error',
+                      f"🚨 GNL: passe auto-génération échouée — {str(e)[:120]}", once_per='day')
+            except Exception:
+                pass
 
         # Adaptive rescheduling: plan the next pass based on live quota.
         try:
@@ -2179,6 +2199,16 @@ async def auto_generate_trigger():
     """Fire one auto-generation pass immediately (does not change the schedule)."""
     _scheduled_auto_generate()
     return {"status": "triggered"}
+
+
+@app.post("/api/alert-test")
+async def alert_test():
+    """Send a test Telegram alert to verify the channel is wired correctly."""
+    from gnl_core.alerts import send_telegram
+    loop = asyncio.get_event_loop()
+    ok = await loop.run_in_executor(
+        None, lambda: send_telegram("✅ GNL: test d'alerte Telegram — le canal fonctionne."))
+    return {"sent": ok}
 
 
 @app.get("/api/nlm-usage")
