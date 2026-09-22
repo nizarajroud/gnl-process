@@ -794,6 +794,16 @@ async def _fetch_saved_articles(source):
             await broadcast_log("⚠ Aucun article récupéré (session expirée ou profil vide)")
             await broadcast_log("__done__")
             return
+        elif isinstance(refresh_ok, str) and refresh_ok.startswith('venv_missing:'):
+            path = refresh_ok.split(':', 1)[1]
+            await broadcast_log(f"⚠ Environnement MCP LinkedIn manquant: {path}/.venv")
+            await broadcast_log(f"  → Réparer: cd {path} && uv sync")
+            await broadcast_log("  (cache existant préservé)")
+            await broadcast_log("__done__")
+            return
+        elif isinstance(refresh_ok, str) and refresh_ok.startswith('error:'):
+            await broadcast_log(f"⚠ Scraping échoué — {refresh_ok[6:]}")
+            await broadcast_log("  (cache existant préservé)")
         elif refresh_ok is True:
             await broadcast_log("✓ Cache LinkedIn mis à jour")
         else:
@@ -811,46 +821,92 @@ async def _fetch_saved_articles(source):
 
 
 async def _call_linkedin_mcp():
-    """Call LinkedIn MCP server to refresh saved posts cache."""
+    """Call LinkedIn MCP server to refresh saved posts cache.
+
+    Returns True on success, or a string status/error:
+      'session_expired', 'no_data', 'venv_missing:<path>', or 'error:<msg>'.
+    Cache-safe: the existing cache is only removed once a fresh scrape succeeds.
+    """
+    from pathlib import Path
+    import sqlite3, shutil
+
+    cache_db = Path.home() / ".linkedin-mcp" / "saved_posts.db"
+    linkedin_mcp_path = os.environ.get('LINKEDIN_MCP_PATH', '/home/nizar/HomeWspce/linkedin-mcp-fork')
+    venv_python = os.path.join(linkedin_mcp_path, '.venv', 'bin', 'python')
+
+    # Fail fast with a clear, actionable signal if the MCP env is missing.
+    if not os.path.exists(venv_python):
+        return f'venv_missing:{linkedin_mcp_path}'
+
+    # Scrape into a temp DB path; only replace the real cache on success.
+    tmp_db = cache_db.with_suffix('.db.new')
+    backup_db = cache_db.with_suffix('.db.bak')
     try:
         from mcp import ClientSession, StdioServerParameters
         from mcp.client.stdio import stdio_client
-        from pathlib import Path
 
-        # Delete old cache to get a fresh ordered scrape
-        cache_db = Path.home() / ".linkedin-mcp" / "saved_posts.db"
+        # The MCP writes to cache_db; move any existing cache aside as backup so
+        # we can restore it if the scrape fails.
         if cache_db.exists():
+            shutil.copy2(cache_db, backup_db)
             cache_db.unlink()
 
-        linkedin_mcp_path = os.environ.get('LINKEDIN_MCP_PATH', '/home/nizar/HomeWspce/linkedin-mcp-fork')
         server_params = StdioServerParameters(
-            command=os.path.join(linkedin_mcp_path, '.venv', 'bin', 'python'),
+            command=venv_python,
             args=['-m', 'linkedin_mcp_server'],
             env={**os.environ, 'PYTHONPATH': linkedin_mcp_path}
         )
 
+        session_expired = False
         async with stdio_client(server_params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 result = await session.call_tool('get_saved_posts', {'num_posts': int(os.environ.get('LINKEDIN_SCRAPE_COUNT', '50')), 'full_content': True})
-                # Check if result indicates an error
                 if result and hasattr(result, 'content'):
                     for block in result.content:
                         if hasattr(block, 'text') and 'No valid LinkedIn session' in block.text:
-                            return 'session_expired'
+                            session_expired = True
 
-        # Verify that DB was actually created with data
+        # Evaluate outcome
+        if session_expired:
+            _restore_cache(cache_db, backup_db)
+            return 'session_expired'
         if not cache_db.exists():
+            _restore_cache(cache_db, backup_db)
             return 'no_data'
-        import sqlite3
         conn = sqlite3.connect(cache_db)
-        count = conn.execute("SELECT count(*) FROM saved_posts").fetchone()[0]
-        conn.close()
+        try:
+            count = conn.execute("SELECT count(*) FROM saved_posts").fetchone()[0]
+        finally:
+            conn.close()
         if count == 0:
+            _restore_cache(cache_db, backup_db)
             return 'no_data'
+        # Success: drop the backup
+        if backup_db.exists():
+            backup_db.unlink()
         return True
     except Exception as e:
-        return False
+        _restore_cache(cache_db, backup_db)
+        return f'error:{type(e).__name__}: {str(e)[:120]}'
+    finally:
+        if tmp_db.exists():
+            try:
+                tmp_db.unlink()
+            except Exception:
+                pass
+
+
+def _restore_cache(cache_db, backup_db):
+    """Restore the cache from backup if a scrape failed (keeps prior data)."""
+    try:
+        if backup_db.exists():
+            import shutil
+            if cache_db.exists():
+                cache_db.unlink()
+            shutil.move(str(backup_db), str(cache_db))
+    except Exception:
+        pass
 
 
 def _generate_title_bedrock(content: str) -> str:
