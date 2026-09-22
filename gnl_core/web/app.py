@@ -222,6 +222,14 @@ async def lifespan(app: FastAPI):
     if not os.path.ismount('/mnt/g'):
         subprocess.run(['sudo', 'mount', '-t', 'drvfs', 'G:', '/mnt/g'], capture_output=True)
 
+    # Self-heal: recreate the LinkedIn MCP venv if it vanished (WSL cleanup/reboot).
+    import asyncio as _aio_boot
+    try:
+        _loop_boot = _aio_boot.get_running_loop()
+        _loop_boot.run_in_executor(None, _ensure_linkedin_mcp_venv)
+    except Exception:
+        pass
+
     # Load scheduler config
     from gnl_core.config import get_config
     config = get_config()
@@ -820,6 +828,32 @@ async def _fetch_saved_articles(source):
     await broadcast_log("__done__")
 
 
+def _ensure_linkedin_mcp_venv():
+    """Ensure the LinkedIn MCP venv exists; recreate it via `uv sync` if missing.
+
+    The MCP venv can vanish after a WSL cleanup/reboot, which silently breaks
+    LinkedIn fetching. This self-heals it at startup. Returns True if the venv
+    is present (or was successfully recreated), False otherwise.
+    """
+    import shutil
+    import subprocess
+    linkedin_mcp_path = os.environ.get('LINKEDIN_MCP_PATH', '/home/nizar/HomeWspce/linkedin-mcp-fork')
+    venv_python = os.path.join(linkedin_mcp_path, '.venv', 'bin', 'python')
+    if os.path.exists(venv_python):
+        return True
+    if not os.path.isdir(linkedin_mcp_path):
+        return False  # repo itself missing — nothing we can do automatically
+    uv = shutil.which('uv') or os.path.expanduser('~/.local/bin/uv')
+    if not os.path.exists(uv):
+        return False
+    try:
+        subprocess.run([uv, 'sync', '--frozen'], cwd=linkedin_mcp_path,
+                       capture_output=True, timeout=300)
+    except Exception:
+        return False
+    return os.path.exists(venv_python)
+
+
 async def _call_linkedin_mcp():
     """Call LinkedIn MCP server to refresh saved posts cache.
 
@@ -835,6 +869,14 @@ async def _call_linkedin_mcp():
     venv_python = os.path.join(linkedin_mcp_path, '.venv', 'bin', 'python')
 
     # Fail fast with a clear, actionable signal if the MCP env is missing.
+    # Attempt a one-shot self-heal first (recreate the venv via uv sync).
+    if not os.path.exists(venv_python):
+        try:
+            import asyncio as _aio
+            loop = _aio.get_event_loop()
+            await loop.run_in_executor(None, _ensure_linkedin_mcp_venv)
+        except Exception:
+            pass
     if not os.path.exists(venv_python):
         return f'venv_missing:{linkedin_mcp_path}'
 

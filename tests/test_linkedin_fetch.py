@@ -38,3 +38,19 @@ def test_missing_venv_does_not_touch_cache(monkeypatch, tmp_path):
     # Cache must be intact (we bailed out before touching it)
     assert cache.exists()
     assert cache.read_bytes() == b"existing-cache-data"
+
+
+def test_ensure_venv_false_when_repo_missing(monkeypatch):
+    monkeypatch.setenv('LINKEDIN_MCP_PATH', '/no/such/repo')
+    from gnl_core.web.app import _ensure_linkedin_mcp_venv
+    assert _ensure_linkedin_mcp_venv() is False
+
+
+def test_ensure_venv_true_when_python_present(monkeypatch, tmp_path):
+    # Fabricate a fake venv python so the check passes without invoking uv
+    repo = tmp_path / "repo"
+    (repo / ".venv" / "bin").mkdir(parents=True)
+    (repo / ".venv" / "bin" / "python").write_text("#!/bin/sh\n")
+    monkeypatch.setenv('LINKEDIN_MCP_PATH', str(repo))
+    from gnl_core.web.app import _ensure_linkedin_mcp_venv
+    assert _ensure_linkedin_mcp_venv() is True
