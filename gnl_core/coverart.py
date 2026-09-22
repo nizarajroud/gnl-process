@@ -23,11 +23,11 @@ def _is_test_mode():
     return os.getenv('TEST_MODE', '0') == '1'
 
 
-def extract_news_titles(text, max_titles=12):
-    """Return a list of short (~2-word) titles, one per AWS news found in `text`.
+def extract_news_titles(text, max_titles=30):
+    """Return a list of short titles, one per AWS news found in `text`.
 
-    Uses a single grouped Bedrock call (efficient). In TEST_MODE returns a
-    deterministic stub without calling Bedrock.
+    Extracts EVERY distinct announcement (not just the top few). Uses a single
+    grouped Bedrock call. In TEST_MODE returns a deterministic stub.
     """
     if _is_test_mode():
         return ["Test News", "Sample Item"]
@@ -41,19 +41,20 @@ def extract_news_titles(text, max_titles=12):
     model_id = config.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-6')
     region = config.get('BEDROCK_REGION', 'us-east-1')
 
-    snippet = text[:6000]
+    snippet = text[:8000]
     prompt = (
-        "This text contains several AWS 'What's New' announcements. "
-        "For EACH distinct announcement, produce a punchy title of AT MOST 2 words "
-        "(service or feature name). Return ONLY a JSON array of strings, most "
-        f"important first, max {max_titles} items. No prose.\n\nTEXT:\n{snippet}"
+        "This text contains AWS 'What's New' announcements. List EVERY SINGLE "
+        "distinct announcement/feature — do NOT skip any, do NOT summarize. "
+        "For each, produce a concise title of 2 to 4 words (service + feature). "
+        "Return ONLY a JSON array of strings, in the order they appear. No prose, "
+        f"no limit below the actual count (up to {max_titles}).\n\nTEXT:\n{snippet}"
     )
     client = boto3.client('bedrock-runtime', region_name=region)
     resp = client.invoke_model(
         modelId=model_id,
         body=json.dumps({
             "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 300,
+            "max_tokens": 800,
             "messages": [{"role": "user", "content": prompt}],
         }),
     )
@@ -75,7 +76,10 @@ def extract_news_titles(text, max_titles=12):
 
 
 def render_cover(episode_title, titles, out_png, size=(1400, 1400)):
-    """Render a simple cover PNG: solid background, episode title, bulleted titles.
+    """Render a cover PNG as a 2-column grid of news cards, no header/title.
+
+    The whole image is filled with cards (one per news). Card size and font
+    scale adaptively so ALL news fit and occupy the space well.
 
     Returns out_png on success. In TEST_MODE, writes a tiny placeholder file.
     """
@@ -87,39 +91,93 @@ def render_cover(episode_title, titles, out_png, size=(1400, 1400)):
     from PIL import Image, ImageDraw, ImageFont
 
     W, H = size
-    bg = (13, 17, 23)        # dark slate
-    accent = (255, 153, 0)   # AWS orange
-    fg = (230, 236, 241)
+    bg = (13, 17, 23)          # dark slate
+    card_bg = (22, 27, 34)     # slightly lighter card
+    accent = (255, 153, 0)     # AWS orange (left bar of each card)
+    fg = (233, 237, 243)
 
     img = Image.new('RGB', (W, H), bg)
     draw = ImageDraw.Draw(img)
 
-    def _font(sz, bold=False):
-        candidates = [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold
-            else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        ]
-        for p in candidates:
-            if os.path.exists(p):
-                return ImageFont.truetype(p, sz)
+    def _font(sz, bold=True):
+        path = ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold
+                else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+        if os.path.exists(path):
+            return ImageFont.truetype(path, sz)
         return ImageFont.load_default()
 
-    # Header band
-    draw.rectangle([0, 0, W, 200], fill=accent)
-    draw.text((60, 60), "AWS What's New", font=_font(72, bold=True), fill=(13, 17, 23))
+    items = [t for t in (titles or []) if t and t.strip()]
+    if not items:
+        img.save(out_png, 'PNG')
+        return out_png
 
-    # Episode subtitle
-    draw.text((60, 240), episode_title[:40], font=_font(48, bold=True), fill=fg)
+    # --- Layout: 2 columns, N rows. Fill the full canvas. ---
+    margin = 40
+    gap = 24
+    cols = 2 if len(items) > 1 else 1
+    rows = (len(items) + cols - 1) // cols
 
-    # Bulleted list of news titles
-    y = 360
-    line_h = 90
-    for t in titles[:12]:
-        draw.ellipse([64, y + 20, 92, y + 48], fill=accent)
-        draw.text((120, y), t, font=_font(52), fill=fg)
-        y += line_h
-        if y > H - line_h:
-            break
+    grid_w = W - 2 * margin
+    grid_h = H - 2 * margin
+    card_w = (grid_w - (cols - 1) * gap) // cols
+    card_h = (grid_h - (rows - 1) * gap) // rows
+
+    # Adaptive font: fit BOTH card height and the widest title's width, so
+    # titles are shown in full (no ellipsis) whenever possible.
+    text_w_budget = card_w - (max(8, card_w // 40) + 24) - 20
+    # Start from a height-based size, then shrink until the longest title fits width.
+    font_sz = max(22, min(88, int(card_h * 0.40)))
+    def _mk(sz):
+        path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+        return ImageFont.truetype(path, sz) if os.path.exists(path) else ImageFont.load_default()
+    longest = max(items, key=len)
+    font = _mk(font_sz)
+    while font_sz > 22 and draw.textlength(longest, font=font) > text_w_budget:
+        font_sz -= 2
+        font = _mk(font_sz)
+
+    def _wrap(text, max_w, max_lines=2):
+        """Wrap text to <=max_lines lines within max_w; ellipsize last line if needed."""
+        words = text.split()
+        lines, cur = [], ""
+        for w in words:
+            trial = (cur + " " + w).strip()
+            if draw.textlength(trial, font=font) <= max_w or not cur:
+                cur = trial
+            else:
+                lines.append(cur)
+                cur = w
+                if len(lines) == max_lines:
+                    break
+        if cur and len(lines) < max_lines:
+            lines.append(cur)
+        # Ellipsize if content remains beyond max_lines
+        if lines and draw.textlength(lines[-1], font=font) > max_w:
+            s = lines[-1]
+            while s and draw.textlength(s + "…", font=font) > max_w:
+                s = s[:-1]
+            lines[-1] = s + "…"
+        return lines[:max_lines]
+
+    bar_w = max(8, card_w // 40)
+    text_pad = bar_w + 24
+
+    for idx, title in enumerate(items):
+        r = idx // cols
+        c = idx % cols
+        x0 = margin + c * (card_w + gap)
+        y0 = margin + r * (card_h + gap)
+        x1 = x0 + card_w
+        y1 = y0 + card_h
+        draw.rounded_rectangle([x0, y0, x1, y1], radius=18, fill=card_bg)
+        draw.rounded_rectangle([x0, y0, x0 + bar_w, y1], radius=6, fill=accent)
+        lines = _wrap(title.strip(), card_w - text_pad - 20, max_lines=2)
+        line_h = font_sz + 6
+        block_h = line_h * len(lines)
+        ty = y0 + (card_h - block_h) // 2
+        for ln in lines:
+            draw.text((x0 + text_pad, ty), ln, font=font, fill=fg)
+            ty += line_h
 
     img.save(out_png, 'PNG')
     return out_png
