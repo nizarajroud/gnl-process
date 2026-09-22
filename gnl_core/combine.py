@@ -127,4 +127,29 @@ def combine(parent_id, output_file, db_path=None, suffix=None):
         except Exception:
             pass  # cover art must never break the combine
 
+        # Companion PDF booklet: one poster per episode, in combination order,
+        # with timecodes. Only for categories with a poster provider.
+        try:
+            from .poster import build_episode_pdf
+            _theme = category.partition('/')[0]
+            _booklet_ok = (category == 'aws/aws-whats-new') or (_theme == 'exams')
+            pdf_parts_folder = os.getenv('PDF_PARTS_FOLDER', '')
+            parts_dir = Path(pdf_parts_folder) / theme / subfolder / parent_file
+
+            def _num(p):
+                m = re.search(r'\d+', Path(p).stem)
+                return int(m.group()) if m else 0
+            chunks = sorted(
+                list(parts_dir.glob("*.pdf")) + list(parts_dir.glob("*.md")) + list(parts_dir.glob("*.txt")),
+                key=_num,
+            ) if parts_dir.is_dir() else []
+            ordered_chunks = [str(c) for c in chunks]
+            ordered_mp3s = [str(f) for f in mp3_files]
+
+            if _booklet_ok and ordered_chunks:
+                pdf_path = str(output_path).rsplit('.mp3', 1)[0] + '.pdf'
+                build_episode_pdf(category, ordered_chunks, ordered_mp3s, pdf_path)
+        except Exception:
+            pass  # booklet must never break the combine
+
     return str(output_path)
