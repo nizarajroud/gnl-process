@@ -45,9 +45,10 @@ def extract_news_titles(text, max_titles=30):
     prompt = (
         "This text contains AWS 'What's New' announcements. List EVERY SINGLE "
         "distinct announcement/feature — do NOT skip any, do NOT summarize. "
-        "For each, produce a concise title of 2 to 4 words (service + feature). "
-        "Return ONLY a JSON array of strings, in the order they appear. No prose, "
-        f"no limit below the actual count (up to {max_titles}).\n\nTEXT:\n{snippet}"
+        "For each, produce a very short label of 2 to 3 words MAX (service or "
+        "feature name only, no filler words). Return ONLY a JSON array of strings, "
+        f"in the order they appear. No prose, no limit below the actual count "
+        f"(up to {max_titles}).\n\nTEXT:\n{snippet}"
     )
     client = boto3.client('bedrock-runtime', region_name=region)
     resp = client.invoke_model(
@@ -171,7 +172,7 @@ def render_cover(episode_title, titles, out_png, size=(1400, 1400)):
         y1 = y0 + card_h
         draw.rounded_rectangle([x0, y0, x1, y1], radius=18, fill=card_bg)
         draw.rounded_rectangle([x0, y0, x0 + bar_w, y1], radius=6, fill=accent)
-        lines = _wrap(title.strip(), card_w - text_pad - 20, max_lines=2)
+        lines = _wrap(title.strip(), card_w - text_pad - 20, max_lines=3)
         line_h = font_sz + 6
         block_h = line_h * len(lines)
         ty = y0 + (card_h - block_h) // 2

@@ -103,9 +103,10 @@ def _items_exam(chunk_path):
     # One grouped call: give all question stems, get a 2-4 word problem label each.
     joined = "\n\n".join(f"Q{n}: {t[:600]}" for n, t in blocks)
     prompt = (
-        "For each exam question below, output a 2 to 4 word label capturing the "
-        "CORE problem to solve (the scenario's goal), NOT the constraints or the "
-        "answer. Return ONLY a JSON array of strings, in order, one per question.\n\n"
+        "For each exam question below, output a very short label of 2 to 3 words "
+        "MAX capturing the CORE problem to solve (the scenario's goal), NOT the "
+        "constraints or the answer. Return ONLY a JSON array of strings, in order, "
+        "one per question.\n\n"
         f"{joined}"
     )
     try:
