@@ -19,6 +19,26 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 ws_clients: list[WebSocket] = []
 scheduler = AsyncIOScheduler()
 
+# Event loop of the app (captured at startup, main thread). Scheduler jobs run
+# in worker threads that have NO current loop, so they must use this reference
+# instead of asyncio.get_event_loop().
+_MAIN_LOOP = None
+
+
+def _get_main_loop():
+    """Return the app's event loop, falling back gracefully.
+
+    Safe to call from APScheduler worker threads (which have no current loop).
+    """
+    import asyncio
+    global _MAIN_LOOP
+    if _MAIN_LOOP is not None:
+        return _MAIN_LOOP
+    try:
+        return asyncio.get_event_loop()
+    except RuntimeError:
+        return None
+
 
 def _resolve_file(directory, filename):
     """Resolve a filename in a directory, handling Unicode normalization (NFC/NFD)
@@ -48,10 +68,12 @@ def _deliver_all_sync(loop=None):
     from gnl_core.convert import convert
 
     if loop is None:
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
+        loop = _get_main_loop()
+        if loop is None:
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
 
     def notify(msg):
         asyncio.run_coroutine_threadsafe(broadcast_log(msg), loop)
@@ -81,8 +103,9 @@ def _scheduled_linkedin_fetch():
     """Scheduled: fetch LinkedIn saved posts."""
     import asyncio
     try:
-        loop = asyncio.get_event_loop()
-        asyncio.run_coroutine_threadsafe(_fetch_saved_articles('linkedin'), loop)
+        loop = _get_main_loop()
+        if loop:
+            asyncio.run_coroutine_threadsafe(_fetch_saved_articles('linkedin'), loop)
     except Exception:
         pass
 
@@ -91,8 +114,9 @@ def _scheduled_linkedin_generate():
     """Scheduled: batch generate for LinkedIn articles."""
     import asyncio
     try:
-        loop = asyncio.get_event_loop()
-        asyncio.run_coroutine_threadsafe(_batch_generate('linkedin'), loop)
+        loop = _get_main_loop()
+        if loop:
+            asyncio.run_coroutine_threadsafe(_batch_generate('linkedin'), loop)
     except Exception:
         pass
 
@@ -113,7 +137,9 @@ def _scheduled_auto_generate():
     from gnl_core.auto_wiring import list_pending, make_generate_fn, make_finalize_fn
     from gnl_core.quota import get_quota_status, has_budget, next_recharge_local
 
-    loop = asyncio.get_event_loop()
+    loop = _get_main_loop()
+    if loop is None:
+        return  # no event loop available; cannot broadcast/schedule safely
 
     def on_p(msg):
         try:
@@ -247,6 +273,14 @@ async def lifespan(app: FastAPI):
                 IntervalTrigger(hours=every_hours, start_date=first, timezone='America/Toronto'),
                 id='auto_generate', replace_existing=True, misfire_grace_time=3600,
             )
+
+    # Capture the running event loop so scheduler jobs (worker threads) can use it.
+    import asyncio as _asyncio
+    global _MAIN_LOOP
+    try:
+        _MAIN_LOOP = _asyncio.get_running_loop()
+    except RuntimeError:
+        _MAIN_LOOP = _asyncio.get_event_loop()
 
     scheduler.start()
 
