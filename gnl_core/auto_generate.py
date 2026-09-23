@@ -102,7 +102,7 @@ def run_auto_generation(
 
     Returns GenerationReport.
     """
-    from gnl_core.quota import SessionExpiredError
+    from gnl_core.quota import SessionExpiredError, NetworkTimeoutError
 
     report = GenerationReport(dry_run=dry_run)
 
@@ -116,6 +116,10 @@ def run_auto_generation(
     except SessionExpiredError as e:
         report.stopped_reason = "session_expired"
         log(f"⚠ {e}")
+        return report
+    except NetworkTimeoutError as e:
+        report.stopped_reason = "network_timeout"
+        log(f"⏳ Timeout réseau (transitoire): {str(e)[:80]}")
         return report
     except Exception as e:
         report.stopped_reason = f"quota_error: {str(e)[:80]}"
@@ -148,6 +152,10 @@ def run_auto_generation(
         except SessionExpiredError as e:
             report.stopped_reason = "session_expired"
             log(f"⚠ {e}")
+            break
+        except NetworkTimeoutError as e:
+            report.stopped_reason = "network_timeout"
+            log(f"⏳ Timeout réseau (transitoire): {str(e)[:80]}")
             break
         if not has_budget_fn(status, min_percent):
             report.stopped_reason = "no_budget"
@@ -216,6 +224,8 @@ RECHARGE_BUFFER_SECONDS = 120
 # When budget is still available after a pass, wait a bit and go again
 # (queue not empty, more can be produced within the current window).
 CONTINUE_DELAY_SECONDS = 60
+# Transient network timeout -> retry soon (the network usually recovers fast).
+NETWORK_RETRY_DELAY_SECONDS = 150
 # Safety floor / ceiling.
 MIN_DELAY_SECONDS = 30
 MAX_DELAY_SECONDS = 6 * 3600
@@ -226,12 +236,16 @@ def compute_next_delay_seconds(status, stopped_reason, min_percent=1):
 
     Logic:
       - session_expired / quota_error -> back off MAX (nothing productive to do)
+      - network_timeout -> retry soon (transient; the network recovers fast)
       - budget still available (stopped 'completed' with material left, or
         'no_material') -> short CONTINUE delay to drain remaining queue soon
       - budget exhausted ('no_budget') -> wait until the 5h window resets
         (resets_in_h) + buffer
       - fallback -> CONTINUE delay
     """
+    if stopped_reason == "network_timeout":
+        return NETWORK_RETRY_DELAY_SECONDS
+
     if stopped_reason in ("session_expired",) or (stopped_reason or "").startswith("quota_error"):
         return MAX_DELAY_SECONDS
 

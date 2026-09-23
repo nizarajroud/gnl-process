@@ -5,6 +5,7 @@ Pure logic, zero quota.
 from gnl_core.auto_generate import (
     compute_next_delay_seconds,
     RECHARGE_BUFFER_SECONDS, CONTINUE_DELAY_SECONDS,
+    NETWORK_RETRY_DELAY_SECONDS,
     MIN_DELAY_SECONDS, MAX_DELAY_SECONDS,
 )
 
@@ -69,3 +70,10 @@ def test_delay_never_below_min():
 def test_no_budget_without_reset_info_backs_off():
     s = {"window_5h": {"percent_remaining": 0}}  # no resets_in_h
     assert compute_next_delay_seconds(s, "no_budget") == MAX_DELAY_SECONDS
+
+
+def test_network_timeout_retries_soon():
+    """A transient network timeout must reschedule soon, not back off to MAX."""
+    delay = compute_next_delay_seconds({}, "network_timeout")
+    assert delay == NETWORK_RETRY_DELAY_SECONDS
+    assert delay < MAX_DELAY_SECONDS

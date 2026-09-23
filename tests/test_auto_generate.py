@@ -142,6 +142,21 @@ def test_session_expired_stops_cleanly():
     assert report.generated == []
 
 
+def test_network_timeout_stops_as_network_timeout():
+    from gnl_core.quota import NetworkTimeoutError
+    def raise_timeout():
+        raise NetworkTimeoutError("read operation timed out")
+    report = run_auto_generation(
+        category_defaults=DEFAULTS,
+        list_pending_fn=make_pending({"exams/sap-c02": ["e1"]}),
+        quota_status_fn=raise_timeout,
+        has_budget_fn=always_budget,
+        generate_fn=lambda i: True,
+    )
+    assert report.stopped_reason == "network_timeout"
+    assert report.generated == []
+
+
 # --- no material ---
 
 def test_no_material():

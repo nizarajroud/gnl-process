@@ -6,7 +6,7 @@
 
 ## US-001 — Résilience de l'auto-génération aux aléas réseau transitoires
 
-**Statut :** À faire
+**Statut :** ✅ Fait (2026-09-23)
 **Priorité :** Haute
 **Créée le :** 2026-09-23
 **Origine :** Incident du 2026-09-23 ~15h — alerte Telegram « Pass auto generation issue: the read operation timed out »

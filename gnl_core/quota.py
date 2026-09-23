@@ -27,7 +27,26 @@ class SessionExpiredError(Exception):
     """Raised when the NLM session is expired (usage RPC error code 16)."""
 
 
-def get_quota_status(client=None):
+class NetworkTimeoutError(Exception):
+    """Raised when the usage RPC times out transiently (retryable, NOT fatal)."""
+
+
+def _is_timeout_error(exc):
+    """Heuristic: does this exception look like a transient network timeout?"""
+    msg = str(exc).lower()
+    signatures = (
+        'read operation timed out', 'timed out', 'timeout',
+        'deadline_exceeded', 'deadline exceeded', 'temporarily unavailable',
+        'connection reset', 'unavailable',
+    )
+    if any(s in msg for s in signatures):
+        return True
+    # socket.timeout / TimeoutError types
+    import socket
+    return isinstance(exc, (TimeoutError, socket.timeout))
+
+
+def get_quota_status(client=None, retries=2, retry_delay=3):
     """Fetch current NLM usage for both windows.
 
     Returns a dict:
@@ -44,16 +63,30 @@ def get_quota_status(client=None):
         from notebooklm_tools.mcp.tools._utils import get_client
         client = get_client()
 
-    try:
-        usage = client.get_usage()
-    except Exception as e:
-        msg = str(e)
-        # Error code 16 = expired session (NOT quota exhausted)
-        if 'code 16' in msg or 'UNAUTHENTICATED' in msg or '16' == msg.strip():
-            raise SessionExpiredError(
-                "NLM session expired (code 16). Run: nlm auth refresh"
-            ) from e
-        raise
+    import time as _time
+    attempt = 0
+    while True:
+        try:
+            usage = client.get_usage()
+            break
+        except Exception as e:
+            msg = str(e)
+            # Error code 16 = expired session (NOT quota exhausted, NOT retryable)
+            if 'code 16' in msg or 'UNAUTHENTICATED' in msg or '16' == msg.strip():
+                raise SessionExpiredError(
+                    "NLM session expired (code 16). Run: nlm auth refresh"
+                ) from e
+            # Transient network timeout -> retry a few times before giving up
+            if _is_timeout_error(e):
+                if attempt < retries:
+                    attempt += 1
+                    _time.sleep(retry_delay * attempt)  # 3s, 6s, ...
+                    continue
+                raise NetworkTimeoutError(
+                    f"NLM usage RPC timed out after {retries + 1} attempts: {msg[:80]}"
+                ) from e
+            # Any other error -> propagate as-is
+            raise
 
     try:
         tier = client.get_entitlement_tier()

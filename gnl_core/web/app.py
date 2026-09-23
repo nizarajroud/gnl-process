@@ -179,6 +179,12 @@ def _scheduled_auto_generate():
                     alert('nlm-session-expired',
                           "⚠️ GNL: session NotebookLM expirée — l'auto-génération est bloquée. "
                           "Relancer le login NLM.", once_per='day')
+                elif report.stopped_reason == 'network_timeout':
+                    # Transient — retried automatically soon. Soft, de-duplicated note.
+                    alert('gnl-network-timeout',
+                          "⏳ GNL: timeout réseau transitoire lors d'une passe — nouvelle "
+                          "tentative automatique dans quelques minutes. Rien à faire.",
+                          once_per='day')
                 elif report.finalized:
                     names = ', '.join(f"{c}" for c, _ in report.finalized)
                     alert('gnl-generated',

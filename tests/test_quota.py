@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from gnl_core import quota
 from gnl_core.quota import (
     get_quota_status, has_budget, next_recharge_local,
-    SessionExpiredError, WINDOW_5H, WINDOW_WEEKLY,
+    SessionExpiredError, NetworkTimeoutError, WINDOW_5H, WINDOW_WEEKLY,
 )
 
 
@@ -158,3 +158,60 @@ def test_tier_fallback_on_error():
     status = get_quota_status(c)
     assert status["tier"] is None
     assert status["ok"] is True
+
+
+# --- US-001: transient network timeout handling ---
+
+def _ok_usage():
+    return [
+        {"window": WINDOW_5H, "percent_remaining": 100, "resets_at": _future_ts(5)},
+        {"window": WINDOW_WEEKLY, "percent_remaining": 100, "resets_at": _future_ts(168)},
+    ]
+
+
+def test_timeout_retries_then_succeeds():
+    """First call times out, second succeeds -> status returned, no error."""
+    c = MagicMock()
+    c.get_usage.side_effect = [
+        Exception("the read operation timed out"),
+        _ok_usage(),
+    ]
+    c.get_entitlement_tier.return_value = "T"
+    status = get_quota_status(c, retries=2, retry_delay=0)  # retry_delay=0 -> fast test
+    assert status["ok"] is True
+    assert status["window_5h"]["percent_remaining"] == 100
+    assert c.get_usage.call_count == 2
+
+
+def test_timeout_persists_raises_network_timeout():
+    """Timeout on every attempt -> NetworkTimeoutError (not a generic failure)."""
+    c = MagicMock()
+    c.get_usage.side_effect = Exception("read operation timed out")
+    with pytest.raises(NetworkTimeoutError):
+        get_quota_status(c, retries=2, retry_delay=0)
+    assert c.get_usage.call_count == 3  # 1 + 2 retries
+
+
+def test_timeout_error_type_detected():
+    c = MagicMock()
+    c.get_usage.side_effect = TimeoutError("socket timed out")
+    with pytest.raises(NetworkTimeoutError):
+        get_quota_status(c, retries=1, retry_delay=0)
+
+
+def test_session_expired_not_retried():
+    """Code 16 is fatal (session) — must NOT be retried as a timeout."""
+    c = MagicMock()
+    c.get_usage.side_effect = Exception("RPC failed with code 16")
+    with pytest.raises(SessionExpiredError):
+        get_quota_status(c, retries=3, retry_delay=0)
+    assert c.get_usage.call_count == 1  # no retry
+
+
+def test_other_error_not_retried():
+    c = MagicMock()
+    c.get_usage.side_effect = Exception("some unexpected boom")
+    with pytest.raises(Exception) as exc:
+        get_quota_status(c, retries=3, retry_delay=0)
+    assert not isinstance(exc.value, (NetworkTimeoutError, SessionExpiredError))
+    assert c.get_usage.call_count == 1
