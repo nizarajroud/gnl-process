@@ -342,6 +342,15 @@ def finalize_category(category, items, on_progress=None):
         return None
 
     backlog_dir = os.path.join(config.get('GNL_BACKLOG', ''), 'saved-articles', 'linkedin')
+    # Ensure the Drive is really accessible before writing (self-heal zombie mount).
+    try:
+        from gnl_core.drive import ensure_drive, DRIVE_MOUNT
+        if backlog_dir.startswith(DRIVE_MOUNT) and not ensure_drive(on_progress=on_progress):
+            if on_progress:
+                on_progress("  ⚠ Finalize: Drive inaccessible — livraison impossible")
+            return None
+    except Exception:
+        pass
     os.makedirs(backlog_dir, exist_ok=True)
     final_date = datetime.now().strftime('%Y-%m-%d')
     output_file = os.path.join(backlog_dir, f"batch-{final_date}.mp3")

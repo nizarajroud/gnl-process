@@ -101,7 +101,7 @@ et alerte comme un échec grave via `alerts.alert('gnl-pass-error', ...)`.
 
 ## US-003 — Self-heal du montage Google Drive + alerte si livraison échoue
 
-**Statut :** À faire
+**Statut :** ✅ Fait (2026-09-23)
 **Priorité :** Haute
 **Créée le :** 2026-09-23
 **Origine :** Incident du 2026-09-23 matin — Drive drvfs déconnecté (« No such device »), passe de 6h a généré mais n'a pas livré le fichier combiné ; échec silencieux.

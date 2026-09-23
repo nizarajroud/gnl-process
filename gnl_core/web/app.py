@@ -190,6 +190,12 @@ def _scheduled_auto_generate():
                     alert('gnl-generated',
                           f"🎙️ GNL: {len(report.generated)} épisode(s) généré(s), "
                           f"{len(report.finalized)} livré(s) sur le Drive ({names}).")
+                elif report.generated:
+                    # Generated audio but nothing was delivered -> likely Drive KO.
+                    alert('gnl-delivery-failed',
+                          f"🚨 GNL: {len(report.generated)} épisode(s) généré(s) mais "
+                          f"AUCUN livré sur le Drive (Drive inaccessible ?). "
+                          f"Vérifier le montage /mnt/g.", once_per='day')
             except Exception:
                 pass
         except Exception as e:
@@ -245,8 +251,12 @@ def _scheduled_auto_generate():
 async def lifespan(app: FastAPI):
     # Mount Google Drive if not available
     import subprocess
-    if not os.path.ismount('/mnt/g'):
-        subprocess.run(['sudo', 'mount', '-t', 'drvfs', 'G:', '/mnt/g'], capture_output=True)
+    # Ensure Google Drive is really accessible (self-heal zombie/stacked mounts).
+    try:
+        from gnl_core.drive import ensure_drive
+        ensure_drive()
+    except Exception:
+        pass
 
     # Self-heal: recreate the LinkedIn MCP venv if it vanished (WSL cleanup/reboot).
     import asyncio as _aio_boot

@@ -38,6 +38,15 @@ def combine(parent_id, output_file, db_path=None, suffix=None):
     if suffix:
         output_file = output_file.replace('.mp3', f'-part{suffix}.mp3')
 
+    # Ensure the Drive backlog is really accessible before writing (self-heal).
+    if not test_mode:
+        try:
+            from .drive import ensure_drive, DRIVE_MOUNT
+            if str(gnl_backlog).startswith(DRIVE_MOUNT):
+                ensure_drive()
+        except Exception:
+            pass
+
     output_dir = Path(gnl_backlog) / theme / subfolder
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / output_file
