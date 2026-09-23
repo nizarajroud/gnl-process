@@ -247,6 +247,33 @@ def _scheduled_auto_generate():
         pass
 
 
+def _scheduled_health_check():
+    """Scheduled dry-run: verify all components (zero quota) + Telegram recap."""
+    import asyncio
+    loop = _get_main_loop()
+    if loop is None:
+        return
+
+    def _run():
+        from gnl_core.health import health_check, format_recap
+        results = health_check()
+        return results, format_recap(results)
+
+    async def _driver():
+        try:
+            results, recap = await loop.run_in_executor(None, _run)
+            await broadcast_log("🧪 " + recap.replace("\n", " · "))
+            from gnl_core.alerts import send_telegram
+            await loop.run_in_executor(None, lambda: send_telegram(recap))
+        except Exception as e:
+            await broadcast_log(f"⚠ Test à blanc échoué: {str(e)[:80]}")
+
+    try:
+        asyncio.run_coroutine_threadsafe(_driver(), loop)
+    except Exception:
+        pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Mount Google Drive if not available
@@ -317,6 +344,21 @@ async def lifespan(app: FastAPI):
                 IntervalTrigger(hours=every_hours, start_date=first, timezone='America/Toronto'),
                 id='auto_generate', replace_existing=True, misfire_grace_time=3600,
             )
+
+    # Health-check dry-run (US-002): evening (18h) + just before the pass (5h30).
+    # Enabled by default; times overridable via SCHEDULER.health_check.times.
+    hc_cfg = sched_config.get('health_check', {})
+    if hc_cfg.get('enabled', True):
+        for t in hc_cfg.get('times', ['18:00', '05:30']):
+            try:
+                hh, mm = t.split(':')
+                scheduler.add_job(
+                    _scheduled_health_check,
+                    CronTrigger(hour=int(hh), minute=int(mm), timezone='America/Toronto'),
+                    id=f'health_check_{hh}{mm}', replace_existing=True, misfire_grace_time=3600,
+                )
+            except Exception:
+                pass
 
     # Capture the running event loop so scheduler jobs (worker threads) can use it.
     import asyncio as _asyncio
@@ -2225,6 +2267,19 @@ async def alert_test():
     ok = await loop.run_in_executor(
         None, lambda: send_telegram("✅ GNL: test d'alerte Telegram — le canal fonctionne."))
     return {"sent": ok}
+
+
+@app.post("/api/health-check")
+async def health_check_now():
+    """Run the dry-run health-check on demand + send the Telegram recap."""
+    from gnl_core.health import health_check, format_recap
+    from gnl_core.alerts import send_telegram
+    loop = asyncio.get_event_loop()
+    results = await loop.run_in_executor(None, health_check)
+    recap = format_recap(results)
+    await loop.run_in_executor(None, lambda: send_telegram(recap))
+    return {"results": {k: {"ok": v[0], "detail": v[1]} for k, v in results.items()},
+            "recap": recap}
 
 
 @app.get("/api/nlm-usage")

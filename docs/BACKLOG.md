@@ -68,7 +68,7 @@ et alerte comme un échec grave via `alerts.alert('gnl-pass-error', ...)`.
 
 ## US-002 — Test à blanc (health-check préventif) la veille + juste avant la passe
 
-**Statut :** À faire
+**Statut :** ✅ Fait (2026-09-23)
 **Priorité :** Haute
 **Créée le :** 2026-09-23
 **Origine :** Proposition utilisateur suite aux 3 incidents (crash loop, venv LinkedIn disparu, Drive déconnecté)
