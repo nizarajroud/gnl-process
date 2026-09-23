@@ -1,5 +1,7 @@
 # 🎙️ GNL Process — Documentation
 
+📋 [Backlog & User Stories](BACKLOG.md)
+
 ## Table des matières
 
 ### Architecture (Diagrammes)
