@@ -924,25 +924,18 @@ async def _fetch_saved_articles(source):
         count = await loop.run_in_executor(None, _fetch_linkedin_from_cache)
         if count >= 0:
             await broadcast_log(f"✓ {count} nouveaux articles importés")
-            # Compute totals for the notification.
-            def _totals():
+            # Notification: exactly two figures — new fetched + total unprocessed.
+            def _pending():
                 from gnl_core.db import get_db
                 with get_db() as conn:
-                    total = conn.execute("SELECT COUNT(*) c FROM saved_articles WHERE source='linkedin'").fetchone()['c']
-                    processed = conn.execute("SELECT COUNT(*) c FROM saved_articles WHERE source='linkedin' AND processed=1").fetchone()['c']
-                    pending = conn.execute("SELECT COUNT(*) c FROM saved_articles WHERE source='linkedin' AND processed=0").fetchone()['c']
-                return total, processed, pending
-            total, processed, pending = await loop.run_in_executor(None, _totals)
-            if count > 0:
-                alert('lk-fetch-ok',
-                      f"📥 GNL: fetch LinkedIn — {count} nouveau(x) article(s) récupéré(s).\n"
-                      f"Total: {total} · traités: {processed} · en attente: {pending}",
-                      once_per='day')
-            else:
-                alert('lk-fetch-ok',
-                      f"📥 GNL: fetch LinkedIn — aucun nouvel article aujourd'hui.\n"
-                      f"Total: {total} · traités: {processed} · en attente: {pending}",
-                      once_per='day')
+                    return conn.execute(
+                        "SELECT COUNT(*) c FROM saved_articles WHERE source='linkedin' AND processed=0"
+                    ).fetchone()['c']
+            pending = await loop.run_in_executor(None, _pending)
+            alert('lk-fetch-ok',
+                  f"Nouvel article récupéré : {count}\n"
+                  f"Total des articles non traités : {pending}",
+                  once_per='day')
         else:
             await broadcast_log("⚠ Cache LinkedIn introuvable")
             alert('lk-fetch-nocache',
