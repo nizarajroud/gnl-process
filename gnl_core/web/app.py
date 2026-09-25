@@ -191,11 +191,23 @@ def _scheduled_auto_generate():
                           f"🎙️ GNL: {len(report.generated)} épisode(s) généré(s), "
                           f"{len(report.finalized)} livré(s) sur le Drive ({names}).")
                 elif report.generated:
-                    # Generated audio but nothing was delivered -> likely Drive KO.
-                    alert('gnl-delivery-failed',
-                          f"🚨 GNL: {len(report.generated)} épisode(s) généré(s) mais "
-                          f"AUCUN livré sur le Drive (Drive inaccessible ?). "
-                          f"Vérifier le montage /mnt/g.", once_per='day')
+                    # Only a real delivery failure if a DELIVERABLE category
+                    # (linkedin) was generated but nothing finalized AND the Drive
+                    # is really inaccessible. aws/* 'prepare' does not deliver a
+                    # combined file, so it must NOT trigger this alert.
+                    deliverable = [w for w in report.generated
+                                   if w.category == 'saved-articles/linkedin']
+                    drive_ok = True
+                    try:
+                        from gnl_core.drive import is_drive_accessible
+                        drive_ok = is_drive_accessible()
+                    except Exception:
+                        pass
+                    if deliverable and not drive_ok:
+                        alert('gnl-delivery-failed',
+                              f"🚨 GNL: {len(deliverable)} batch(es) LinkedIn généré(s) mais "
+                              f"AUCUN livré — Drive inaccessible. Vérifier /mnt/g.",
+                              once_per='day')
             except Exception:
                 pass
         except Exception as e:
@@ -869,15 +881,22 @@ async def _fetch_saved_articles(source):
 
     if source == 'linkedin':
         loop = asyncio.get_event_loop()
+        from gnl_core.alerts import alert
         # Step 1: Call LinkedIn MCP to refresh cache
         await broadcast_log("🔄 Appel MCP LinkedIn (scraping)...")
         refresh_ok = await _call_linkedin_mcp()
         if refresh_ok == 'session_expired':
             await broadcast_log("⚠ Session LinkedIn expirée — relancer: cd ~/HomeWspce/linkedin-mcp-fork && .venv/bin/python -m linkedin_mcp_server --login")
+            alert('lk-fetch-session',
+                  "🚨 GNL: fetch LinkedIn échoué — session expirée. "
+                  "Relancer: linkedin_mcp_server --login", once_per='day')
             await broadcast_log("__done__")
             return
         elif refresh_ok == 'no_data':
             await broadcast_log("⚠ Aucun article récupéré (session expirée ou profil vide)")
+            alert('lk-fetch-nodata',
+                  "⚠️ GNL: fetch LinkedIn — 0 article récupéré (session expirée ou profil vide ?).",
+                  once_per='day')
             await broadcast_log("__done__")
             return
         elif isinstance(refresh_ok, str) and refresh_ok.startswith('venv_missing:'):
@@ -885,11 +904,17 @@ async def _fetch_saved_articles(source):
             await broadcast_log(f"⚠ Environnement MCP LinkedIn manquant: {path}/.venv")
             await broadcast_log(f"  → Réparer: cd {path} && uv sync")
             await broadcast_log("  (cache existant préservé)")
+            alert('lk-fetch-venv',
+                  f"🚨 GNL: fetch LinkedIn échoué — venv MCP manquant. Réparer: cd {path} && uv sync",
+                  once_per='day')
             await broadcast_log("__done__")
             return
         elif isinstance(refresh_ok, str) and refresh_ok.startswith('error:'):
             await broadcast_log(f"⚠ Scraping échoué — {refresh_ok[6:]}")
             await broadcast_log("  (cache existant préservé)")
+            alert('lk-fetch-error',
+                  f"🚨 GNL: fetch LinkedIn — scraping échoué ({refresh_ok[6:][:60]}). Cache préservé.",
+                  once_per='day')
         elif refresh_ok is True:
             await broadcast_log("✓ Cache LinkedIn mis à jour")
         else:
@@ -899,8 +924,20 @@ async def _fetch_saved_articles(source):
         count = await loop.run_in_executor(None, _fetch_linkedin_from_cache)
         if count >= 0:
             await broadcast_log(f"✓ {count} nouveaux articles importés")
+            # Daily success notification with the count.
+            if count > 0:
+                alert('lk-fetch-ok',
+                      f"📥 GNL: fetch LinkedIn — {count} nouveau(x) article(s) récupéré(s).",
+                      once_per='day')
+            else:
+                alert('lk-fetch-ok',
+                      "📥 GNL: fetch LinkedIn — aucun nouvel article aujourd'hui.",
+                      once_per='day')
         else:
             await broadcast_log("⚠ Cache LinkedIn introuvable")
+            alert('lk-fetch-nocache',
+                  "⚠️ GNL: fetch LinkedIn — cache introuvable (scraping a échoué ?).",
+                  once_per='day')
     else:
         await broadcast_log(f"⚠ Fetch {source}: pas encore implémenté")
     await broadcast_log("__done__")

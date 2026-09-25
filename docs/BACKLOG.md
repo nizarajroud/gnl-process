@@ -4,6 +4,38 @@
 
 ---
 
+## US-004 — Alerte Telegram sur le fetch LinkedIn + fix faux positif « livraison échouée »
+
+**Statut :** ✅ Fait (2026-09-25)
+**Priorité :** Haute
+**Créée le :** 2026-09-25
+**Origine :** (1) Le fetch LinkedIn de 2h n'envoyait aucune alerte Telegram → panne silencieuse possible. (2) Fausse alerte « 🚨 Drive inaccessible » le 25-sept alors que le fichier avait bien été livré (la 2ᵉ passe adaptative sur du prepare aws/* déclenchait l'alerte à tort).
+
+### User story
+
+> **En tant que** utilisateur, **je veux** être notifié sur Telegram du résultat du
+> fetch LinkedIn (nombre d'articles récupérés, ou l'erreur exacte), **et** ne pas
+> recevoir de fausse alerte « livraison échouée » quand ce n'est pas le cas,
+> **afin de** savoir chaque matin si le fetch a réussi et de ne pas être alarmé à tort.
+
+### Critères d'acceptation
+
+- [x] Le fetch LinkedIn envoie une alerte Telegram (1×/jour) selon le résultat :
+      📥 « N nouveaux articles » · « aucun nouvel article » · 🚨 session expirée ·
+      🚨 venv manquant · 🚨 scraping échoué · ⚠️ cache introuvable.
+- [x] L'alerte « livraison échouée » ne se déclenche QUE si une catégorie livrable
+      (`saved-articles/linkedin`) a été générée SANS être finalisée ET que le Drive
+      est **réellement** inaccessible (`is_drive_accessible()`). Le prepare aws/*
+      ne la déclenche plus.
+- [x] Aucune régression (117 tests verts).
+
+### Notes techniques
+
+- `app.py::_fetch_saved_articles` (branche linkedin) — alertes par cas.
+- `app.py::_scheduled_auto_generate` driver — condition delivery-failed resserrée.
+
+---
+
 ## US-001 — Résilience de l'auto-génération aux aléas réseau transitoires
 
 **Statut :** ✅ Fait (2026-09-23)
