@@ -598,8 +598,10 @@
                         return;
                     }
                     if (d.ok) {
-                        const w5 = d.window_5h?.percent_remaining ?? '?';
-                        const ww = d.window_weekly?.percent_remaining ?? '?';
+                        const w5v = d.window_5h?.percent_remaining;
+                        const wwv = d.window_weekly?.percent_remaining;
+                        const w5 = (typeof w5v === 'number') ? Math.round(w5v) : '?';
+                        const ww = (typeof wwv === 'number') ? Math.round(wwv) : '?';
                         usageLine = `<p class="text-gray-300">Budget restant — 5h: <b>${w5}%</b> · Semaine: <b>${ww}%</b></p><p class="text-xs text-gray-500">Prochaine recharge 5h: ${d.next_recharge || '?'}</p>`;
                     }
                 } catch(e) {}
@@ -1362,8 +1364,10 @@
                     }
                     return;
                 }
-                const w5 = d.window_5h?.percent_remaining ?? '?';
-                const ww = d.window_weekly?.percent_remaining ?? '?';
+                const w5r = d.window_5h?.percent_remaining;
+                const wwr = d.window_weekly?.percent_remaining;
+                const w5 = (typeof w5r === 'number') ? Math.round(w5r) : '?';
+                const ww = (typeof wwr === 'number') ? Math.round(wwr) : '?';
                 q.textContent = `🎯 5h: ${w5}% · Sem: ${ww}%`;
                 const low = Math.min(w5 === '?' ? 100 : w5, ww === '?' ? 100 : ww);
                 q.className = 'text-sm ' + (low > 25 ? 'text-green-400' : (low > 0 ? 'text-yellow-400' : 'text-red-400'));
