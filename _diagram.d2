@@ -1,0 +1,48 @@
+# Schéma : 2 colonnes ACCOLÉES (Internet | AWS) séparées par une ligne verticale,
+# au-dessus d'un tableau 3 colonnes.
+
+style.fill: white
+
+root: "" {
+  grid-columns: 1
+  grid-gap: 50
+  style: { stroke: transparent; fill: transparent }
+
+  # --- Rangée du haut : Internet | AWS accolés (grid 2 colonnes, sans gap) ---
+  zones: "" {
+    grid-columns: 2
+    grid-gap: 0
+    style: { stroke: "#d9d9d9"; fill: transparent }
+
+    internet: Internet {
+      style: { stroke: "#d9d9d9"; fill: transparent; font-size: 20 }
+      datacenter: Onpromise Datacenter {
+        style: {
+          stroke: "#bfbfbf"; stroke-dash: 4; fill: transparent
+          border-radius: 8; font-size: 18
+        }
+      }
+    }
+
+    aws: AWS {
+      style: { stroke: "#d9d9d9"; fill: transparent; font-size: 20 }
+    }
+  }
+
+  # --- Tableau des exigences (3 colonnes) en bas ---
+  requirements: "" {
+    grid-columns: 3
+    grid-gap: 0
+    style: { stroke: "#d9d9d9"; fill: transparent }
+
+    fr: Functional Requirements {
+      style: { stroke: "#d9d9d9"; fill: transparent; font-size: 16 }
+    }
+    nfr: Non Functional Requirements {
+      style: { stroke: "#d9d9d9"; fill: transparent; font-size: 16 }
+    }
+    cons: Constraints {
+      style: { stroke: "#d9d9d9"; fill: transparent; font-size: 16 }
+    }
+  }
+}

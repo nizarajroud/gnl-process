@@ -133,6 +133,11 @@ def combine(parent_id, output_file, db_path=None, suffix=None):
                                 pass
                 episode_title = os.path.splitext(os.path.basename(output_file))[0]
                 add_cover_for_whatsnew(category, str(output_path), source_text, episode_title)
+            else:
+                # Every other category gets the default cover image (fallback).
+                from .coverart import embed_default_cover
+                episode_title = os.path.splitext(os.path.basename(output_file))[0]
+                embed_default_cover(str(output_path), metadata={'title': episode_title})
         except Exception:
             pass  # cover art must never break the combine
 

@@ -740,6 +740,21 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
             .correct {{ color: #28a745; font-weight: bold; }}
             .wrong {{ color: #dc3545; font-weight: bold; }}
             b {{ color: #0073bb; }}
+            /* Question-side background (default cover), faint so text stays readable */
+            .qbg {{
+                background-image: url('default-cover.png');
+                background-size: cover;
+                background-position: center;
+                background-repeat: no-repeat;
+                min-height: 100%;
+                padding: 14px;
+                border-radius: 8px;
+            }}
+            .qbg-inner {{
+                background: rgba(255,255,255,0.82);
+                padding: 12px;
+                border-radius: 6px;
+            }}
         """
     )
 
@@ -815,7 +830,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
             if d.get('png') and diagram_back:
                 back += f"<br><br><img src='Q{num}.png'>"
 
-        note = genanki.Note(model=model, fields=[front, back], guid=f"{name}-q{num}")
+        note = genanki.Note(model=model, fields=[f"<div class='qbg'><div class='qbg-inner'>{front}</div></div>", back], guid=f"{name}-q{num}")
         deck.add_note(note)
         cards_count += 1
         if debug and on_progress:
@@ -827,8 +842,14 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     apkg_path = anki_dir / f"{name}.apkg"
 
     package = genanki.Package(deck)
+    media_files = []
     if diagrams:
         media_files = [diagrams[num]['png'] for num in diagrams if diagrams[num].get('png')]
+    # Bundle the default cover so the question-side background resolves in Anki.
+    from gnl_core.coverart import DEFAULT_COVER
+    if os.path.exists(DEFAULT_COVER):
+        media_files.append(DEFAULT_COVER)
+    if media_files:
         package.media_files = media_files
     package.write_to_file(str(apkg_path))
 

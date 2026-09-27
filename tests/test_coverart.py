@@ -9,7 +9,7 @@ import pytest
 from gnl_core import coverart
 from gnl_core.coverart import (
     extract_news_titles, render_cover, embed_cover,
-    add_cover_for_whatsnew, COVER_CATEGORY,
+    add_cover_for_whatsnew, COVER_CATEGORY, embed_default_cover, DEFAULT_COVER,
 )
 
 
@@ -117,3 +117,22 @@ def test_embed_builds_attached_pic_command(monkeypatch, tmp_path):
 def test_embed_missing_files_returns_false(monkeypatch):
     monkeypatch.setenv('TEST_MODE', '0')
     assert embed_cover("/nope.mp3", "/nope.png") is False
+
+
+# --- default cover (fallback for non-whatsnew) ---
+
+def test_embed_default_cover_test_mode(test_mode):
+    assert embed_default_cover("/no/mp3") is True  # no-op
+
+
+def test_default_cover_file_exists():
+    """The default cover asset must be present in the repo."""
+    import os
+    assert os.path.exists(DEFAULT_COVER), f"missing {DEFAULT_COVER}"
+
+
+def test_embed_default_cover_missing_file(monkeypatch, tmp_path):
+    monkeypatch.setenv('TEST_MODE', '0')
+    monkeypatch.setattr(coverart, 'DEFAULT_COVER', str(tmp_path / 'nope.png'))
+    mp3 = tmp_path / "a.mp3"; mp3.write_bytes(b'\x00' * 10)
+    assert coverart.embed_default_cover(str(mp3)) is False

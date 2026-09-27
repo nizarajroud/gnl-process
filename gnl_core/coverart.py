@@ -18,6 +18,35 @@ import subprocess
 # Only this category gets dynamic cover art (per product decision).
 COVER_CATEGORY = "aws/aws-whats-new"
 
+# Default cover image (fallback for every category EXCEPT aws-whats-new,
+# which uses its own dynamic cover).
+DEFAULT_COVER = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    'assets', 'default-cover.png',
+)
+
+
+def embed_default_cover(mp3_path, metadata=None, on_progress=None):
+    """Attach the DEFAULT cover image to an MP3 (fallback for non-whatsnew).
+
+    Best-effort; never raises. TEST_MODE no-op returns True.
+    """
+    if _is_test_mode():
+        return True
+    try:
+        if not os.path.exists(DEFAULT_COVER):
+            if on_progress:
+                on_progress(f"  ⚠ Cover par défaut absente: {DEFAULT_COVER}")
+            return False
+        ok = embed_cover(mp3_path, DEFAULT_COVER, metadata=metadata)
+        if on_progress:
+            on_progress("  🖼️ Cover par défaut ajoutée" if ok else "  ⚠ Cover par défaut: embed échoué")
+        return ok
+    except Exception as e:
+        if on_progress:
+            on_progress(f"  ⚠ Cover par défaut échouée: {str(e)[:60]}")
+        return False
+
 
 def _is_test_mode():
     return os.getenv('TEST_MODE', '0') == '1'

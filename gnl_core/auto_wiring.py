@@ -379,6 +379,13 @@ def finalize_category(category, items, on_progress=None):
         pass
 
     if os.path.exists(output_file):
+        # LinkedIn is not aws-whats-new -> attach the default cover image.
+        try:
+            from gnl_core.coverart import embed_default_cover
+            embed_default_cover(output_file, metadata={'title': os.path.basename(output_file)[:-4]},
+                                on_progress=on_progress)
+        except Exception:
+            pass
         if on_progress:
             on_progress(f"  ✓ Combiné sur Drive: {output_file}")
         return output_file
