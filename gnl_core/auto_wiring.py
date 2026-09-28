@@ -24,13 +24,18 @@ def list_pending(category, cfg):
     if category == 'saved-articles/linkedin':
         # Option A: batch articles so 1 WorkItem = 1 notebook = 1 audio = 1 quota unit.
         # The identifier is a tuple of article ids; generate_linkedin_batch consumes it.
+        # Accumulation: only generate once enough articles are pending (min batch),
+        # so we deliver substantial combined episodes instead of tiny 1-article files.
         from gnl_core.db import get_db
         batch_size = int(config.get('ARTICLES_NLM_BATCH_SIZE', '5'))
+        min_batch = int(config.get('ARTICLES_MIN_BATCH', '5'))
         with get_db() as conn:
             rows = conn.execute(
                 "SELECT id FROM saved_articles WHERE source='linkedin' AND processed=0 ORDER BY id"
             ).fetchall()
         ids = [r[0] for r in rows]
+        if len(ids) < min_batch:
+            return []  # not enough yet — accumulate, retry next pass
         batches = [tuple(ids[i:i + batch_size]) for i in range(0, len(ids), batch_size)]
         return batches
 

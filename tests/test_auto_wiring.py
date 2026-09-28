@@ -113,7 +113,7 @@ def test_linkedin_list_pending_returns_batches(monkeypatch):
     """13 articles with batch_size 5 -> 3 batches of (5,5,3)."""
     import gnl_core.config as cfgmod
     import gnl_core.db as dbmod
-    monkeypatch.setattr(cfgmod, 'get_config', lambda: {'ARTICLES_NLM_BATCH_SIZE': '5'})
+    monkeypatch.setattr(cfgmod, 'get_config', lambda: {'ARTICLES_NLM_BATCH_SIZE': '5', 'ARTICLES_MIN_BATCH': '5'})
     ids = list(range(1, 14))  # 13 ids
     monkeypatch.setattr(dbmod, 'get_db', lambda: _FakeConn(ids))
     batches = auto_wiring.list_pending('saved-articles/linkedin', {})
@@ -121,6 +121,26 @@ def test_linkedin_list_pending_returns_batches(monkeypatch):
     assert [len(b) for b in batches] == [5, 5, 3]
     assert batches[0] == (1, 2, 3, 4, 5)
     assert batches[2] == (11, 12, 13)
+
+
+def test_linkedin_accumulates_below_threshold(monkeypatch):
+    """Fewer than ARTICLES_MIN_BATCH pending -> no batches (accumulate)."""
+    import gnl_core.config as cfgmod
+    import gnl_core.db as dbmod
+    monkeypatch.setattr(cfgmod, 'get_config', lambda: {'ARTICLES_NLM_BATCH_SIZE': '5', 'ARTICLES_MIN_BATCH': '5'})
+    monkeypatch.setattr(dbmod, 'get_db', lambda: _FakeConn([1, 2, 3]))  # only 3 < 5
+    assert auto_wiring.list_pending('saved-articles/linkedin', {}) == []
+
+
+def test_linkedin_generates_exactly_at_threshold(monkeypatch):
+    """Exactly ARTICLES_MIN_BATCH pending -> one batch."""
+    import gnl_core.config as cfgmod
+    import gnl_core.db as dbmod
+    monkeypatch.setattr(cfgmod, 'get_config', lambda: {'ARTICLES_NLM_BATCH_SIZE': '5', 'ARTICLES_MIN_BATCH': '5'})
+    monkeypatch.setattr(dbmod, 'get_db', lambda: _FakeConn([1, 2, 3, 4, 5]))
+    batches = auto_wiring.list_pending('saved-articles/linkedin', {})
+    assert len(batches) == 1
+    assert batches[0] == (1, 2, 3, 4, 5)
 
 
 # --- finalize_category ---
