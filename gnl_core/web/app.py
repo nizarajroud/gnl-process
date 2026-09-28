@@ -1170,10 +1170,11 @@ def _fetch_linkedin_from_cache():
             else:
                 date_str = today.strftime('%Y-%m-%d')
             try:
-                conn.execute(
+                cur = conn.execute(
                     "INSERT OR IGNORE INTO saved_articles (source, source_id, title, content, source_url, saved_date, fetched_at, processed, category) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
                     ('linkedin', url, title, content, url, date_str, now, category)
                 )
+                inserted = (cur.rowcount == 1)  # True only if a NEW row was inserted
                 # Update category for existing rows
                 conn.execute("UPDATE saved_articles SET category=? WHERE source_id=? AND (category IS NULL OR category='')", (category, url))
                 # Update title for existing articles if Bedrock generated a better one
@@ -1182,7 +1183,8 @@ def _fetch_linkedin_from_cache():
                         "UPDATE saved_articles SET title = ? WHERE source_id = ? AND (title = 'Sans titre' OR length(title) > 60)",
                         (title, url)
                     )
-                added += 1
+                if inserted:
+                    added += 1
                 # Save original content to INBOX_FOLDER
                 from gnl_core.config import get_config
                 config = get_config()
