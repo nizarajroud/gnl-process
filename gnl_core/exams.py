@@ -725,6 +725,17 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                     q_lines.append(line.strip())
             question_texts[num] = ' '.join(q_lines[:5])
 
+    # Extract the full written explanation per question (same source as the
+    # error document) to embed a hidden field the 'Copy' button can read.
+    explanations = {}
+    try:
+        from gnl_core.anki_review import parse_exam_questions
+        for qn, data in parse_exam_questions(source_path).items():
+            if data.get('explanation'):
+                explanations[str(qn)] = data['explanation']
+    except Exception:
+        explanations = {}
+
     # Model for exam cards
     font_size = os.environ.get('ANKI_FONT_SIZE', '16')
     model_id = random.randrange(1 << 30, 1 << 31)
@@ -734,11 +745,43 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         fields=[
             {'name': 'Front'},
             {'name': 'Back'},
+            {'name': 'Explanation'},   # hidden — used by the Copy button
         ],
         templates=[{
             'name': 'Card 1',
             'qfmt': '{{Front}}',
-            'afmt': '{{Back}}',
+            # Answer side + a hidden Explanation block + a 'Copy for Meta AI'
+            # button that assembles question + options + explanation as clean
+            # plain text and puts it on the clipboard.
+            'afmt': (
+                '{{Back}}'
+                '<div id="copysrc" style="display:none">{{Explanation}}</div>'
+                '<div style="margin-top:14px">'
+                '<button type="button" onclick="gnlCopy(this)" '
+                'style="cursor:pointer;background:#4f46e5;color:#fff;border:none;'
+                'padding:8px 14px;border-radius:6px;font-size:14px;">'
+                '📋 Copier</button></div>'
+                '<script>function gnlCopy(btn){'
+                # Build clean text: strip HTML from the answer side, keep option
+                # correctness markers, then append the full explanation text.
+                'var card=btn.closest(".card")||document;'
+                'var back=card.querySelector("#copysrc");'
+                'function txt(el){var c=el.cloneNode(true);'
+                'c.querySelectorAll("script,button").forEach(function(n){n.remove();});'
+                'return c.innerText.replace(/\\n{3,}/g,"\\n\\n").trim();}'
+                # The answer body is everything before #copysrc/button; grab the
+                # rendered card text minus the hidden block and the button label.
+                'var whole=card.cloneNode(true);'
+                'whole.querySelectorAll("script,button,#copysrc").forEach(function(n){n.remove();});'
+                'var answer=whole.innerText.replace(/\\n{3,}/g,"\\n\\n").trim();'
+                'var expl=back?back.innerText.trim():"";'
+                'var out=answer+(expl?("\\n\\nExplanation:\\n"+expl):"");'
+                'navigator.clipboard.writeText(out).then(function(){'
+                'var t=btn.textContent;btn.textContent="✅ Copié";'
+                'setTimeout(function(){btn.textContent=t;},1500);},function(){'
+                'btn.textContent="⚠ Erreur copie";});}'
+                '</script>'
+            ),
         }],
         css=f"""
             .card {{ text-align: left; font-family: Arial; font-size: {font_size}px; padding: 10px; }}
@@ -829,7 +872,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
             if d.get('png') and diagram_back:
                 back += f"<br><br><img src='Q{num}.png'>"
 
-        note = genanki.Note(model=model, fields=[front, back], guid=f"{name}{guid_suffix}-q{num}")
+        note = genanki.Note(model=model, fields=[front, back, explanations.get(str(num), '')], guid=f"{name}{guid_suffix}-q{num}")
         deck.add_note(note)
         cards_count += 1
         if debug and on_progress:

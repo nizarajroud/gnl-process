@@ -210,3 +210,29 @@ def test_highlight_only_questions_scopes_bedrock(tmp_path, monkeypatch):
 
     exams.step3_highlight(str(md_dir / "MyExam.md"), only_questions=[40])
     assert captured['nums'] == ['40']  # only the failed question reached Bedrock
+
+
+def test_apkg_has_explanation_field_and_copy_button(tmp_path, monkeypatch):
+    """Generated cards must carry a hidden Explanation field + a Copy button."""
+    monkeypatch.setenv('TEST_MODE', '0')
+    monkeypatch.setenv('INBOX_FOLDER', str(tmp_path / "inbox"))
+    import zipfile, sqlite3, tempfile, os, json
+    from gnl_core import exams
+    answers = {'1': {'type': 'single', 'options': ['A', 'B'], 'correct': ['A']}}
+    md = tmp_path / "MyExam.md"
+    md.write_text(
+        "## Question 1:\nWhat is A?\n- A\n- B\n\nExplanations:\n"
+        "A is correct because it is the first letter. B is incorrect because it is second.\n"
+    )
+    out = exams.step5_anki(answers, str(md), 'exams', 'sap-c02')
+    z = zipfile.ZipFile(out)
+    tmp = tempfile.mkdtemp(); z.extract('collection.anki2', tmp)
+    db = sqlite3.connect(os.path.join(tmp, 'collection.anki2'))
+    flds = db.execute('SELECT flds FROM notes').fetchone()[0].split('\x1f')
+    models = json.loads(db.execute('SELECT models FROM col').fetchone()[0])
+    afmt = list(models.values())[0]['tmpls'][0]['afmt']
+    db.close()
+    assert len(flds) == 3                                  # Front, Back, Explanation
+    assert 'A is correct because' in flds[2]               # explanation embedded
+    assert '📋 Copier' in afmt                             # copy button present
+    assert 'display:none' in afmt and 'copysrc' in afmt    # explanation hidden
