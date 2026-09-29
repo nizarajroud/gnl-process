@@ -452,6 +452,50 @@
                     </div>
                 </div>
 
+                <!-- Anki Review : questions ratées -->
+                <div class="bg-gray-800 rounded-lg p-5">
+                    <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('span').textContent=this.nextElementSibling.classList.contains('hidden')?'▶':'▼'" class="flex items-center gap-2 font-semibold w-full text-left">
+                        <span class="text-xs">▶</span> 🎯 Révision — questions ratées (Anki)
+                    </button>
+                    <div class="hidden mt-4 space-y-3">
+                        <p class="text-xs text-gray-500">Récupère les questions ratées depuis Anki (pas besoin de fermer Anki). Génère un document d'erreurs + un deck reset pour une 2ᵉ passe, par examen.</p>
+                        <div class="flex flex-wrap gap-2">
+                            <button type="button" onclick="ankiReviewFailed(this)" class="px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm">🔍 Lister les ratées</button>
+                            <button type="button" onclick="ankiReviewAction('error-docs', this)" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">📄 Document d'erreurs</button>
+                            <button type="button" onclick="ankiReviewAction('reset-apkg', this)" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">🔁 Deck reset (2ᵉ passe)</button>
+                        </div>
+                        <div id="anki-review-result" class="text-xs text-gray-300 font-mono whitespace-pre-wrap"></div>
+                    </div>
+                </div>
+                <script>
+                    async function ankiReviewFailed(btn) {
+                        const el = document.getElementById('anki-review-result');
+                        el.textContent = '⏳ Lecture de la collection Anki…';
+                        try {
+                            const d = await (await fetch('/api/anki-review/failed')).json();
+                            if (d.error) { el.textContent = '⚠ ' + d.error; return; }
+                            if (!d.total) { el.textContent = 'Aucune question ratée détectée.'; return; }
+                            let lines = [`Total ratées : ${d.total}`];
+                            for (const [exam, nums] of Object.entries(d.failed)) lines.push(`  ${exam} : Q${nums.join(', Q')}`);
+                            el.textContent = lines.join('\n');
+                        } catch (e) { el.textContent = '⚠ Erreur: ' + e; }
+                    }
+                    async function ankiReviewAction(kind, btn) {
+                        const el = document.getElementById('anki-review-result');
+                        btn.disabled = true; const t = btn.textContent; btn.textContent = '⏳…';
+                        el.textContent = (kind === 'reset-apkg')
+                            ? '⏳ Génération des decks reset (peut prendre quelques minutes)…'
+                            : '⏳ Génération des documents d\'erreurs…';
+                        try {
+                            const d = await (await fetch('/api/anki-review/' + kind, {method:'POST'})).json();
+                            const items = d.documents || d.apkgs || [];
+                            if (!items.length) { el.textContent = 'Rien à générer (aucune question ratée ?).'; return; }
+                            el.textContent = `✓ ${d.count} généré(s) :\n` + items.map(i => `  ${i.exam} → ${i.path}`).join('\n');
+                        } catch (e) { el.textContent = '⚠ Erreur: ' + e; }
+                        finally { btn.disabled = false; btn.textContent = t; }
+                    }
+                </script>
+
                 <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium">💾 Sauvegarder</button>
                 <button type="button" onclick="window.location.href='/admin/export'" class="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-sm font-medium">📥 Exporter</button>
             </form>

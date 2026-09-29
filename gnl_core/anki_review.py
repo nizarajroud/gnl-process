@@ -38,20 +38,30 @@ def _is_test_mode():
 def _read_failed_guids(collection_path):
     """Return the list of GUIDs whose LAST review was ease=1 (wrong).
 
-    Reads a COPY of the collection (Anki holds a lock on the live file).
+    Copies the collection to a private temp dir INCLUDING the -wal and -shm
+    sidecar files, so recent reviews (still in the Write-Ahead Log while Anki
+    is OPEN) are included. Opens the copy read-write so SQLite checkpoints the
+    WAL. The user does NOT need to close Anki. Everything is cleaned up after.
     """
     if not os.path.exists(collection_path):
         return []
-    tmp = os.path.join(tempfile.gettempdir(), 'anki-collection-copy.anki2')
-    try:
-        shutil.copy2(collection_path, tmp)
-    except Exception:
-        # Fallback: try opening read-only via URI if copy fails
-        tmp = collection_path
+
+    workdir = tempfile.mkdtemp(prefix='anki-review-')
+    tmp_db = os.path.join(workdir, 'collection.anki2')
     guids = []
     conn = None
     try:
-        conn = sqlite3.connect(f'file:{tmp}?mode=ro', uri=True)
+        # Copy main DB + WAL + SHM (WAL holds Anki's in-flight reviews).
+        shutil.copy2(collection_path, tmp_db)
+        for ext in ('-wal', '-shm'):
+            src = collection_path + ext
+            if os.path.exists(src):
+                try:
+                    shutil.copy2(src, tmp_db + ext)
+                except Exception:
+                    pass
+        # Read-WRITE so SQLite applies (checkpoints) the WAL into our copy.
+        conn = sqlite3.connect(tmp_db)
         rows = conn.execute(
             """
             SELECT n.guid
@@ -68,11 +78,10 @@ def _read_failed_guids(collection_path):
     finally:
         if conn:
             conn.close()
-        if tmp != collection_path:
-            try:
-                os.unlink(tmp)
-            except Exception:
-                pass
+        try:
+            shutil.rmtree(workdir, ignore_errors=True)
+        except Exception:
+            pass
     return guids
 
 
