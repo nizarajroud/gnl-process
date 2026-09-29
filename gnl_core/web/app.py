@@ -2324,6 +2324,52 @@ async def health_check_now():
             "recap": recap}
 
 
+@app.get("/api/anki-review/failed")
+async def anki_review_failed():
+    """List failed Anki questions grouped by exam (read-only, from the collection)."""
+    from gnl_core.anki_review import failed_questions_by_exam
+    loop = asyncio.get_event_loop()
+    try:
+        by_exam = await loop.run_in_executor(None, failed_questions_by_exam)
+        return {"failed": by_exam, "total": sum(len(v) for v in by_exam.values())}
+    except Exception as e:
+        return {"error": str(e)[:120]}
+
+
+@app.post("/api/anki-review/error-docs")
+async def anki_review_error_docs():
+    """Artefact 1: generate the error-review markdown document per exam."""
+    from gnl_core.anki_review import generate_error_documents
+    loop = asyncio.get_event_loop()
+
+    def on_p(msg):
+        try:
+            asyncio.run_coroutine_threadsafe(broadcast_log(msg), loop)
+        except Exception:
+            pass
+
+    await broadcast_log("▶ Génération des documents d'erreurs (questions ratées)")
+    results = await loop.run_in_executor(None, lambda: generate_error_documents(on_progress=on_p))
+    return {"documents": [{"exam": e, "path": p} for e, p in results], "count": len(results)}
+
+
+@app.post("/api/anki-review/reset-apkg")
+async def anki_review_reset_apkg():
+    """Artefact 2: generate a reset .apkg (failed questions, 2nd pass) per exam."""
+    from gnl_core.anki_review import generate_reset_apkgs
+    loop = asyncio.get_event_loop()
+
+    def on_p(msg):
+        try:
+            asyncio.run_coroutine_threadsafe(broadcast_log(msg), loop)
+        except Exception:
+            pass
+
+    await broadcast_log("▶ Génération des apkg reset (questions ratées, 2e passe)")
+    results = await loop.run_in_executor(None, lambda: generate_reset_apkgs(on_progress=on_p))
+    return {"apkgs": [{"exam": e, "path": p} for e, p in results], "count": len(results)}
+
+
 @app.get("/api/nlm-usage")
 async def nlm_usage():
     """Return current NLM compute usage (5h + weekly windows)."""

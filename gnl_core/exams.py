@@ -678,7 +678,7 @@ def step4_compact(source_path, answers, theme, subtheme, on_progress=None):
     return str(md_path)
 
 
-def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams=None, diagram_front=True, diagram_back=True):
+def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams=None, diagram_front=True, diagram_back=True, only_questions=None, guid_suffix='', deck_suffix='', apkg_suffix=''):
     """Step 5: Generate Anki .apkg package directly from answers dict.
     
     Args:
@@ -743,13 +743,17 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         """
     )
 
-    # Deck with exam name
+    # Deck with exam name (+ optional suffix for reset/round-2 decks)
     deck_id = random.randrange(1 << 30, 1 << 31)
-    deck = genanki.Deck(deck_id, name)
+    deck = genanki.Deck(deck_id, name + deck_suffix)
 
     debug = _get_config().get('DEBUG_NLM', '0') == '1'
     cards_count = 0
+    # Optional filter: only keep the requested question numbers (as strings).
+    _only = set(str(x) for x in only_questions) if only_questions else None
     for num in sorted(answers.keys(), key=lambda x: int(x)):
+        if _only is not None and str(num) not in _only:
+            continue
         entry = answers[num]
         q_type = entry.get('type', 'single')
         options = entry.get('options', [])
@@ -815,7 +819,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
             if d.get('png') and diagram_back:
                 back += f"<br><br><img src='Q{num}.png'>"
 
-        note = genanki.Note(model=model, fields=[front, back], guid=f"{name}-q{num}")
+        note = genanki.Note(model=model, fields=[front, back], guid=f"{name}{guid_suffix}-q{num}")
         deck.add_note(note)
         cards_count += 1
         if debug and on_progress:
@@ -824,7 +828,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     # Save .apkg (with media files if diagrams present)
     anki_dir = base / 'Anki-generation' / 'anki'
     anki_dir.mkdir(parents=True, exist_ok=True)
-    apkg_path = anki_dir / f"{name}.apkg"
+    apkg_path = anki_dir / f"{name}{apkg_suffix}.apkg"
 
     package = genanki.Package(deck)
     media_files = []
