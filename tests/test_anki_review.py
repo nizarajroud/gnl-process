@@ -16,20 +16,20 @@ def test_mode(monkeypatch):
 
 
 def _make_anki_db(path, entries):
-    """entries: list of (guid, ease_of_last_review). Builds minimal Anki schema."""
+    """entries: list of (guid, failed_bool). Builds minimal Anki schema.
+
+    Detection is now based on the RED FLAG (cards.flags & 7 == 1), which is how
+    the user marks a missed question in Anki (works even for New cards).
+    """
     c = sqlite3.connect(path)
     c.executescript("""
         CREATE TABLE notes (id INTEGER PRIMARY KEY, guid TEXT);
-        CREATE TABLE cards (id INTEGER PRIMARY KEY, nid INTEGER);
-        CREATE TABLE revlog (id INTEGER PRIMARY KEY, cid INTEGER, ease INTEGER);
+        CREATE TABLE cards (id INTEGER PRIMARY KEY, nid INTEGER, flags INTEGER DEFAULT 0);
     """)
-    rid = 1
-    for i, (guid, ease) in enumerate(entries, start=1):
+    for i, (guid, failed) in enumerate(entries, start=1):
         c.execute("INSERT INTO notes(id, guid) VALUES(?,?)", (i, guid))
-        c.execute("INSERT INTO cards(id, nid) VALUES(?,?)", (i, i))
-        # two reviews: an early ease=3, then the LAST review with the given ease
-        c.execute("INSERT INTO revlog(id, cid, ease) VALUES(?,?,?)", (rid, i, 3)); rid += 1
-        c.execute("INSERT INTO revlog(id, cid, ease) VALUES(?,?,?)", (rid, i, ease)); rid += 1
+        c.execute("INSERT INTO cards(id, nid, flags) VALUES(?,?,?)",
+                  (i, i, 1 if failed else 0))  # flag 1 = red = failed
     c.commit(); c.close()
 
 
@@ -46,30 +46,42 @@ def test_groups_failed_by_exam(monkeypatch, tmp_path):
     monkeypatch.setenv('TEST_MODE', '0')
     db = str(tmp_path / "col.anki2")
     _make_anki_db(db, [
-        ("Dojo-Timed-Mode-2-q40", 1),   # failed
-        ("Dojo-Timed-Mode-2-q12", 1),   # failed
-        ("Dojo-Timed-Mode-2-q5", 3),    # passed (last review good)
-        ("Dojo-Timed-Mode-1-q3", 1),    # failed, other exam
-        ("weird-guid-no-match", 1),     # ignored (bad format)
+        ("Dojo-Timed-Mode-2-q40", True),   # failed (red flag)
+        ("Dojo-Timed-Mode-2-q12", True),   # failed (red flag)
+        ("Dojo-Timed-Mode-2-q5", False),   # not flagged -> passed
+        ("Dojo-Timed-Mode-1-q3", True),    # failed, other exam
+        ("weird-guid-no-match", True),     # ignored (bad format)
     ])
     res = anki_review.failed_questions_by_exam(db)
     assert res == {"Dojo-Timed-Mode-2": [12, 40], "Dojo-Timed-Mode-1": [3]}
 
 
-def test_only_last_review_counts(monkeypatch, tmp_path):
-    """A card failed early but passed on its LAST review must NOT be reported."""
+def test_new_card_flagged_red_is_detected(monkeypatch, tmp_path):
+    """A NEW card (never reviewed) flagged red must be reported (the bug)."""
+    monkeypatch.setenv('TEST_MODE', '0')
+    db = str(tmp_path / "col.anki2")
+    _make_anki_db(db, [
+        ("Dojo-Timed-Mode-2-q4", True),    # New + red flag -> failed
+        ("Dojo-Timed-Mode-2-q16", True),   # New + red flag -> failed
+        ("Dojo-Timed-Mode-2-q2", False),   # New, no flag -> not failed
+    ])
+    res = anki_review.failed_questions_by_exam(db)
+    assert res == {"Dojo-Timed-Mode-2": [4, 16]}
+
+
+def test_unflagged_card_not_reported(monkeypatch, tmp_path):
+    """A card without a red flag must NOT be reported, even if reviewed before."""
     monkeypatch.setenv('TEST_MODE', '0')
     db = str(tmp_path / "col.anki2")
     c = sqlite3.connect(db)
     c.executescript("""
         CREATE TABLE notes (id INTEGER PRIMARY KEY, guid TEXT);
-        CREATE TABLE cards (id INTEGER PRIMARY KEY, nid INTEGER);
-        CREATE TABLE revlog (id INTEGER PRIMARY KEY, cid INTEGER, ease INTEGER);
+        CREATE TABLE cards (id INTEGER PRIMARY KEY, nid INTEGER, flags INTEGER DEFAULT 0);
     """)
     c.execute("INSERT INTO notes VALUES(1,'Exam-A-q1')")
-    c.execute("INSERT INTO cards VALUES(1,1)")
-    c.execute("INSERT INTO revlog VALUES(1,1,1)")  # early: failed
-    c.execute("INSERT INTO revlog VALUES(2,1,3)")  # last: passed
+    c.execute("INSERT INTO cards VALUES(1,1,0)")   # no flag
+    c.execute("INSERT INTO notes VALUES(2,'Exam-A-q2')")
+    c.execute("INSERT INTO cards VALUES(2,2,2)")   # orange flag (not red) -> ignored
     c.commit(); c.close()
     assert anki_review.failed_questions_by_exam(db) == {}
 

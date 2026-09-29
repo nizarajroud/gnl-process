@@ -36,11 +36,16 @@ def _is_test_mode():
 
 
 def _read_failed_guids(collection_path):
-    """Return the list of GUIDs whose LAST review was ease=1 (wrong).
+    """Return the list of GUIDs the user marked as WRONG.
+
+    Source of truth = the Anki RED FLAG (cards.flags = 1). The user flags a
+    card red to mark a missed question. This works even for 'New' cards that
+    were never reviewed (no revlog entry), which is why we do NOT rely on
+    revlog anymore.
 
     Copies the collection to a private temp dir INCLUDING the -wal and -shm
-    sidecar files, so recent reviews (still in the Write-Ahead Log while Anki
-    is OPEN) are included. Opens the copy read-write so SQLite checkpoints the
+    sidecar files, so recent flags (still in the Write-Ahead Log while Anki is
+    OPEN) are included. Opens the copy read-write so SQLite checkpoints the
     WAL. The user does NOT need to close Anki. Everything is cleaned up after.
     """
     if not os.path.exists(collection_path):
@@ -51,7 +56,7 @@ def _read_failed_guids(collection_path):
     guids = []
     conn = None
     try:
-        # Copy main DB + WAL + SHM (WAL holds Anki's in-flight reviews).
+        # Copy main DB + WAL + SHM (WAL holds Anki's in-flight edits/flags).
         shutil.copy2(collection_path, tmp_db)
         for ext in ('-wal', '-shm'):
             src = collection_path + ext
@@ -62,14 +67,14 @@ def _read_failed_guids(collection_path):
                     pass
         # Read-WRITE so SQLite applies (checkpoints) the WAL into our copy.
         conn = sqlite3.connect(tmp_db)
+        # flags & 7 == 1 -> RED flag (Anki stores the flag color in the low
+        # 3 bits of cards.flags). Distinct guids across a note's cards.
         rows = conn.execute(
             """
-            SELECT n.guid
-            FROM revlog r
-            JOIN cards c ON c.id = r.cid
+            SELECT DISTINCT n.guid
+            FROM cards c
             JOIN notes n ON n.id = c.nid
-            WHERE r.id IN (SELECT MAX(id) FROM revlog GROUP BY cid)
-              AND r.ease = 1
+            WHERE (c.flags & 7) = 1
             """
         ).fetchall()
         guids = [row[0] for row in rows]
