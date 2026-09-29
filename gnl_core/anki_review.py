@@ -243,7 +243,10 @@ def generate_reset_apkg(exam_name, failed_nums, theme='exams', subtheme='sap-c02
                 on_progress(f"  ⚠ markdown source introuvable pour {exam_name}")
             return None
         from gnl_core.exams import step3_highlight, step5_anki
-        answers = step3_highlight(str(md), on_progress=on_progress)
+        # Only highlight the failed questions (avoids re-analysing the whole
+        # exam through Bedrock just to keep a handful of questions).
+        answers = step3_highlight(str(md), on_progress=on_progress,
+                                  only_questions=failed_nums)
         out = step5_anki(
             answers, str(md), theme, subtheme, on_progress=on_progress,
             only_questions=failed_nums,           # only the failed ones

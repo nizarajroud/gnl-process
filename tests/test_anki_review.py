@@ -181,3 +181,32 @@ def test_reset_apkg_filter_and_guid(tmp_path, monkeypatch):
     guids = [r[0] for r in db.execute('SELECT guid FROM notes').fetchall()]
     db.close()
     assert guids == ['MyExam-r2-q40']  # only q40, distinct guid
+
+
+def test_highlight_only_questions_scopes_bedrock(tmp_path, monkeypatch):
+    """step3_highlight(only_questions=[...]) must send ONLY those blocks to Bedrock."""
+    monkeypatch.setenv('TEST_MODE', '0')
+    monkeypatch.setenv('EXAM_USE_NLM', '0')
+    from gnl_core import exams
+    from docx import Document
+
+    # Build a tiny .docx with 3 questions at the path step3 derives from the .md
+    word_dir = tmp_path / "word"
+    word_dir.mkdir()
+    doc = Document()
+    for n in (1, 2, 40):
+        doc.add_paragraph(f"Question {n}: Q{n}?")
+        doc.add_paragraph("- A\n- B")
+    doc.save(str(word_dir / "MyExam.docx"))
+    md_dir = tmp_path / "full-markdown"
+    md_dir.mkdir()
+    (md_dir / "MyExam.md").write_text("stub")
+
+    captured = {}
+    def fake_bedrock(blocks, *a, **k):
+        captured['nums'] = [n for n, _ in blocks]
+        return {n: {'type': 'single', 'options': ['A', 'B'], 'correct': ['A']} for n, _ in blocks}
+    monkeypatch.setattr(exams, '_highlight_via_bedrock', fake_bedrock)
+
+    exams.step3_highlight(str(md_dir / "MyExam.md"), only_questions=[40])
+    assert captured['nums'] == ['40']  # only the failed question reached Bedrock

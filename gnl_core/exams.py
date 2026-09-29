@@ -203,7 +203,7 @@ def step2b_full_markdown(word_path, theme, subtheme, on_progress=None):
     return str(md_path)
 
 
-def step3_highlight(source_path, on_progress=None):
+def step3_highlight(source_path, on_progress=None, only_questions=None):
     """Step 3: Identify correct answers.
     
     Strategy (3-tier fallback):
@@ -213,6 +213,9 @@ def step3_highlight(source_path, on_progress=None):
     
     Args:
         source_path: Path to formatted DOCX or full Markdown file
+        only_questions: optional iterable of question numbers to restrict the
+            highlight to (e.g. failed questions for a reset deck). When set,
+            only those blocks are sent to NLM/Bedrock — big speed/cost saving.
     Returns:
         Dict {question_number: {"type": str, "options": list, "correct": list}}
     """
@@ -240,6 +243,13 @@ def step3_highlight(source_path, on_progress=None):
             q_num = re.search(r'\d+', questions[i])
             if q_num:
                 question_blocks.append((q_num.group(), questions[i] + questions[i + 1]))
+
+    # Restrict to a subset of questions if requested (e.g. failed ones only).
+    if only_questions is not None:
+        _wanted = set(str(x) for x in only_questions)
+        question_blocks = [(n, c) for n, c in question_blocks if n in _wanted]
+        if on_progress:
+            on_progress(f"  ↳ highlight restreint à {len(question_blocks)} question(s) ratée(s)")
 
     # Load prompt template
     prompt_file = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / 'prompts' / 'exam-highlight.txt'
