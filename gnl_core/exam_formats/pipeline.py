@@ -58,6 +58,40 @@ def pivot_to_answers(pivot):
     return answers
 
 
+def resolve_format_output(fmt, origin_path, name, theme, subtheme, on_progress=None):
+    """Parse a document with the detected format and return everything the
+    exam pipeline needs, format-agnostically:
+
+        (pivot, md_path, answers)
+
+    - DOJO: reuses its unchanged step1/step2b/step3 pipeline -> byte-identical
+      md_path + answers (zero regression). We DON'T rebuild them from the pivot.
+    - Other formats (AWS Practice Exam, ...): answers come straight from the
+      document (no Bedrock); the markdown is rendered from the pivot.
+    """
+    from pathlib import Path
+    from gnl_core.exams import get_exam_base
+
+    if fmt.name == 'dojo':
+        pivot = fmt.parse(origin_path, on_progress=on_progress,
+                          theme=theme, subtheme=subtheme)
+        md_path = getattr(fmt, '_last_md_path', None)
+        answers = getattr(fmt, '_last_answers', None)
+        return pivot, md_path, answers
+
+    # Generic path: parse -> pivot -> derive md + answers (no Bedrock).
+    pivot = fmt.parse(origin_path, on_progress=on_progress)
+    base = get_exam_base(theme, subtheme)
+    md_dir = base / 'pdf-formatting' / 'full-markdown'
+    md_dir.mkdir(parents=True, exist_ok=True)
+    md_path = str(md_dir / f"{name}.md")
+    Path(md_path).write_text(pivot_to_markdown(pivot, name), encoding='utf-8')
+    answers = pivot_to_answers(pivot)
+    if on_progress:
+        on_progress(f"markdown → {md_path}")
+    return pivot, md_path, answers
+
+
 def build_artifacts(pivot, name, theme, subtheme, on_progress=None,
                     md_path=None, answers=None):
     """Write the full markdown (if not provided) and generate the Anki apkg.

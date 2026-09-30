@@ -2695,12 +2695,13 @@ async def prepare_from_inbox(request: Request):
 
     # Exam-specific: branched pipeline (trunk + anki/generate/both)
     if theme == 'exams':
-        from gnl_core.exams import get_exam_base, step1_format, step2b_full_markdown, step3_highlight, step5_anki, split_exam_by_questions
+        from gnl_core.exams import get_exam_base, step5_anki, split_exam_by_questions
+        from gnl_core.exam_formats import detect_format
+        from gnl_core.exam_formats.pipeline import resolve_format_output
         import shutil
 
         base = get_exam_base(theme, subtheme)
         loop = asyncio.get_event_loop()
-        origin = 'dojo' if 'dojo' in filename.lower() else 'udemy'
         questions_per_chunk = pages_per_episode if pages_per_episode > 0 else 5
         do_anki = pipeline in ('anki', 'both', '')
         do_generate = pipeline in ('generate', 'both', '')
@@ -2709,30 +2710,34 @@ async def prepare_from_inbox(request: Request):
             asyncio.run_coroutine_threadsafe(broadcast_log(f"  {msg}"), loop)
 
         try:
-            # === TRONC COMMUN (Format) ===
-            # Step 1: Copy to origin + format
+            # === TRONC COMMUN (Format + détection) ===
+            # Copy to origin/
             origin_dir = base / 'pdf-formatting' / 'origin'
             origin_dir.mkdir(parents=True, exist_ok=True)
             origin_path = origin_dir / filename
             if not origin_path.exists():
                 shutil.copy2(pdf_path, str(origin_path))
 
-            await broadcast_log("▶ [FORMAT] Reformatage du document")
-            word_path = await loop.run_in_executor(None, lambda: step1_format(str(origin_path), theme, subtheme, origin, on_progress=on_p))
+            # Auto-detect the exam format (plug-and-play registry)
+            fmt = await loop.run_in_executor(None, lambda: detect_format(str(origin_path)))
+            if fmt is None:
+                await broadcast_log("⚠ Format d'examen non reconnu — aucun parser ne correspond")
+                await broadcast_log("__done__")
+                return {"status": "error", "error": "Unknown exam format"}
+            await broadcast_log(f"▶ [FORMAT] détecté: {fmt.label} ({fmt.name})")
 
-            await broadcast_log("▶ [MARKDOWN] Word → Markdown")
-            md_path = await loop.run_in_executor(None, lambda: step2b_full_markdown(word_path, theme, subtheme, on_progress=on_p))
-            await broadcast_log(f"  ✓ {md_path}")
+            # Parse -> pivot, and resolve markdown + answers (format-agnostic).
+            # DOJO reuses its unchanged pipeline (byte-identical); other formats
+            # read answers directly from the document (no Bedrock).
+            await broadcast_log("▶ [PARSE] énoncés, options, réponses correctes")
+            pivot, md_path, answers = await loop.run_in_executor(
+                None, lambda: resolve_format_output(
+                    fmt, str(origin_path), name, theme, subtheme, on_progress=on_p))
+            await broadcast_log(f"  ✓ {len(pivot)} questions | markdown: {md_path}")
 
             # === BRANCHE ANKI ===
             if do_anki:
-                await broadcast_log("▶ [HIGHLIGHT] Identification des réponses (Bedrock)")
-                answers = await loop.run_in_executor(None, lambda: step3_highlight(md_path, on_progress=on_p))
-                await broadcast_log(f"  ✓ {len(answers)} questions")
-
                 # Optional: generate draw.io diagrams BEFORE Anki
-                from gnl_core.config import get_config as _gc
-                _cfg = _gc()
                 diagrams = None
                 if do_diagrams:
                     await broadcast_log("▶ [DIAGRAMS] Génération draw.io")
