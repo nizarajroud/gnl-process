@@ -234,5 +234,32 @@ def test_apkg_has_explanation_field_and_copy_button(tmp_path, monkeypatch):
     db.close()
     assert len(flds) == 3                                  # Front, Back, Explanation
     assert 'A is correct because' in flds[2]               # explanation embedded
-    assert '📋 Copier' in afmt                             # copy button present
+    assert 'gnlCopyArea' in afmt                           # selectable textarea present
+    assert 'Copier' in afmt                                # copy button present
     assert 'display:none' in afmt and 'copysrc' in afmt    # explanation hidden
+
+
+def test_apkg_meta_prompt_injected_and_configurable(tmp_path, monkeypatch):
+    """The card JS must embed the (configurable) Meta AI prompt + answer detection."""
+    monkeypatch.setenv('TEST_MODE', '0')
+    monkeypatch.setenv('INBOX_FOLDER', str(tmp_path / "inbox"))
+    import zipfile, sqlite3, tempfile, os, json
+    from gnl_core import exams, config as cfgmod
+    # Inject a custom prompt via the config layer
+    monkeypatch.setattr(exams, '_get_config', lambda: {
+        'META_PROMPT_WRONG': 'CUSTOM WRONG {MY_ANSWER} / {CORRECT}',
+        'META_PROMPT_CORRECT': 'CUSTOM RIGHT {MY_ANSWER} / {CORRECT}',
+    })
+    answers = {'1': {'type': 'single', 'options': ['A', 'B'], 'correct': ['A']}}
+    md = tmp_path / "MyExam.md"
+    md.write_text("## Question 1:\nWhat is A?\n- A\n- B\n\nExplanations:\nA is right.\n")
+    out = exams.step5_anki(answers, str(md), 'exams', 'sap-c02')
+    z = zipfile.ZipFile(out)
+    tmp = tempfile.mkdtemp(); z.extract('collection.anki2', tmp)
+    db = sqlite3.connect(os.path.join(tmp, 'collection.anki2'))
+    afmt = list(json.loads(db.execute('SELECT models FROM col').fetchone()[0]).values())[0]['tmpls'][0]['afmt']
+    db.close()
+    assert 'CUSTOM WRONG' in afmt          # configurable wrong prompt injected
+    assert 'CUSTOM RIGHT' in afmt          # configurable correct prompt injected
+    assert 'localStorage.getItem(key)' in afmt   # detects user's answer
+    assert 'a.wrong||!a.answered' in afmt        # wrong/not-answered branch

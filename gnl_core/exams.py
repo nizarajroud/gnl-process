@@ -736,6 +736,37 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     except Exception:
         explanations = {}
 
+    # Configurable Meta AI prompts (editable in the dashboard config).
+    # Placeholders filled by the card JS at copy time:
+    #   {MY_ANSWER}  -> the options the user checked (or "not answered")
+    #   {CORRECT}    -> the correct option(s)
+    _cfg = _get_config()
+    default_wrong = (
+        "I'm studying for the AWS SAP-C02 exam. Here is a question I answered.\n"
+        "My answer(s):\n{MY_ANSWER}\n"
+        "Correct answer(s):\n{CORRECT}\n\n"
+        "My answer was WRONG. Based ONLY on the question statement and the "
+        "explanations below, explain why my option is wrong and why the correct "
+        "one(s) are right.\n\n"
+        "IMPORTANT: do not elaborate now. Just reply \"OK, got it.\" — I'll "
+        "continue by voice on mobile to go deeper."
+    )
+    default_correct = (
+        "I'm studying for the AWS SAP-C02 exam. Here is a question I answered.\n"
+        "My answer(s):\n{MY_ANSWER}\n"
+        "Correct answer(s):\n{CORRECT}\n\n"
+        "My answer was CORRECT. Still, discuss the options and the underlying "
+        "concepts so I understand them fully.\n\n"
+        "IMPORTANT: do not elaborate now. Just reply \"OK, got it.\" — I'll "
+        "continue by voice on mobile to go deeper."
+    )
+    prompt_wrong = _cfg.get('META_PROMPT_WRONG') or default_wrong
+    prompt_correct = _cfg.get('META_PROMPT_CORRECT') or default_correct
+    # JSON-encode so the strings are safe to embed in the card JavaScript.
+    import json as _json
+    js_prompt_wrong = _json.dumps(prompt_wrong)
+    js_prompt_correct = _json.dumps(prompt_correct)
+
     # Model for exam cards
     font_size = os.environ.get('ANKI_FONT_SIZE', '16')
     model_id = random.randrange(1 << 30, 1 << 31)
@@ -750,47 +781,104 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         templates=[{
             'name': 'Card 1',
             'qfmt': '{{Front}}',
-            # Answer side + a hidden Explanation block + a 'Copy for Meta AI'
-            # button that assembles question + options + explanation as clean
-            # plain text and puts it on the clipboard.
+            # Answer side + hidden Explanation + a HIDDEN textarea holding the
+            # final Meta AI prompt (built at render time). The 'Copier' button
+            # selects & copies that textarea. The prompt is prepended with a
+            # configurable preamble, the user's answer (detected from
+            # localStorage), the correct answer, and a wrong/correct branch.
             'afmt': (
                 '{{Back}}'
                 '<div id="copysrc" style="display:none">{{Explanation}}</div>'
+                '<textarea id="gnlCopyArea" readonly '
+                'style="position:absolute;left:-9999px;top:0;opacity:0;height:1px;width:1px;">'
+                '</textarea>'
                 '<div style="margin-top:14px">'
-                '<button type="button" id="gnlCopyBtn" onclick="gnlCopy()" '
+                '<button type="button" id="gnlCopyBtn" '
                 'style="cursor:pointer;background:#4f46e5;color:#fff;border:none;'
                 'padding:8px 14px;border-radius:6px;font-size:14px;">'
-                '📋 Copier</button> '
+                '\U0001F4CB Copier</button> '
                 '<span id="gnlCopyMsg" style="font-size:13px;margin-left:8px;"></span>'
                 '</div>'
-                '<script>function gnlCopy(){'
+                '<script>(function(){'
+                'var area=document.getElementById("gnlCopyArea");if(!area)return;'
+                # --- Configurable prompts (injected from server config) ---
+                'var P_WRONG=' + js_prompt_wrong + ';'
+                'var P_CORRECT=' + js_prompt_correct + ';'
+                # --- Build the CLEAN question+options text (no CSS, no ★/⚑) ---
+                # Only take .option rows + the question <b>/text, never <style>.
+                'var card=document.querySelector(".card")||document.body;'
+                'function cleanText(){'
+                'var opts=card.querySelectorAll(".option");'
+                'var qb=card.querySelector("b");'  # "Question N:" label
+                'var parts=[];'
+                # question statement: text of the card up to the first option,
+                # taken from a clone stripped of style/script/options/controls.
+                'var clone=card.cloneNode(true);'
+                'clone.querySelectorAll("style,script,textarea,button,#copysrc,#gnlCopyMsg,.option").forEach(function(n){n.remove();});'
+                'var stmt=(clone.innerText||"").replace(/[\\u2605\\u2691]/g,"").replace(/\\n{3,}/g,"\\n\\n").trim();'
+                'if(stmt)parts.push(stmt);'
+                'opts.forEach(function(el){'
+                'var t=(el.innerText||"").trim();if(!t)return;'
+                'var correct=el.getAttribute("data-correct")==="1";'
+                'parts.push((correct?"[CORRECT] ":"- ")+t);'
+                '});'
+                'return parts.join("\\n");'
+                '}'
+                # --- Detect MY answer + the CORRECT answer from the options ---
+                'function analyse(){'
+                'var opts=card.querySelectorAll(".option[data-qkey]");'
+                'var mine=[],correct=[];'
+                'opts.forEach(function(el){'
+                'var key=el.getAttribute("data-qkey");'
+                'var isCorrect=el.getAttribute("data-correct")==="1";'
+                'var label=(el.innerText||"").trim();'
+                'var picked=false;try{picked=localStorage.getItem(key)==="1";}catch(e){}'
+                'if(isCorrect)correct.push(label);'
+                'if(picked)mine.push(label);'
+                '});'
+                'var answered=mine.length>0;'
+                # wrong if: answered AND (picked a non-correct OR missed a correct)
+                'var wrong=false;'
+                'if(answered){'
+                'var correctSet={};correct.forEach(function(c){correctSet[c]=1;});'
+                'var mineSet={};mine.forEach(function(m){mineSet[m]=1;});'
+                'opts.forEach(function(el){'
+                'var isCorrect=el.getAttribute("data-correct")==="1";'
+                'var label=(el.innerText||"").trim();'
+                'var picked=mineSet[label]===1;'
+                'if(picked&&!isCorrect)wrong=true;'
+                'if(!picked&&isCorrect)wrong=true;'
+                '});}'
+                # Format as a bullet list: each option on its own line "- ...".
+                'function bullets(arr){return arr.map(function(x){return "- "+x;}).join("\\n");}'
+                'return {answered:answered,wrong:wrong,'
+                'mine:answered?bullets(mine):"not answered",'
+                'correct:bullets(correct)};'
+                '}'
+                'var a=analyse();'
+                'var back=document.getElementById("copysrc");'
+                'var expl=back?(back.innerText||"").replace(/[\\u2605\\u2691]/g,"").trim():"";'
+                # choose prompt: wrong branch also used when not answered
+                'var tmpl=(a.wrong||!a.answered)?P_WRONG:P_CORRECT;'
+                'var preamble=tmpl.replace("{MY_ANSWER}",a.mine).replace("{CORRECT}",a.correct);'
+                'var body=cleanText()+(expl?("\\n\\nExplanation:\\n"+expl):"");'
+                'area.value=preamble+"\\n\\n---\\n"+body;'
+                # --- Wire the copy button ---
                 'var btn=document.getElementById("gnlCopyBtn");'
                 'var msg=document.getElementById("gnlCopyMsg");'
-                # Assemble clean text: whole card minus script/button/hidden block,
-                # then append the full explanation from the hidden #copysrc div.
-                'var root=document.querySelector(".card")||document.body;'
-                'var whole=root.cloneNode(true);'
-                'whole.querySelectorAll("script,button,#copysrc,#gnlCopyMsg").forEach(function(n){n.remove();});'
-                'var answer=(whole.innerText||"").replace(/\\n{3,}/g,"\\n\\n").trim();'
-                'var back=document.getElementById("copysrc");'
-                'var expl=back?(back.innerText||"").trim():"";'
-                'var out=answer+(expl?("\\n\\nExplanation:\\n"+expl):"");'
-                'function done(ok){if(msg){msg.textContent=ok?"✅ Copié":"⚠ Copie impossible";'
-                'msg.style.color=ok?"#28a745":"#dc3545";'
-                'setTimeout(function(){msg.textContent="";},2500);}}'
-                # 1) Try the modern async clipboard API (AnkiWeb / secure contexts).
-                'try{if(navigator.clipboard&&navigator.clipboard.writeText){'
-                'navigator.clipboard.writeText(out).then(function(){done(true);},function(){gnlFallback(out,done);});'
-                'return;}}catch(e){}'
-                # 2) Fallback for Anki Desktop (Qt WebView): hidden textarea + execCommand.
-                'gnlFallback(out,done);}'
-                'function gnlFallback(text,done){'
-                'try{var ta=document.createElement("textarea");ta.value=text;'
-                'ta.style.position="fixed";ta.style.top="-1000px";document.body.appendChild(ta);'
-                'ta.focus();ta.select();'
+                'if(btn){btn.addEventListener("click",function(){'
+                'area.style.position="static";area.style.opacity="1";'
+                'area.focus();area.select();'
                 'var ok=false;try{ok=document.execCommand("copy");}catch(e){ok=false;}'
-                'document.body.removeChild(ta);done(ok);}catch(e){done(false);}}'
-                '</script>'
+                'if(!ok&&navigator.clipboard&&navigator.clipboard.writeText){'
+                'try{navigator.clipboard.writeText(area.value);ok=true;}catch(e){}}'
+                'area.style.position="absolute";area.style.left="-9999px";area.style.opacity="0";'
+                'window.getSelection&&window.getSelection().removeAllRanges&&window.getSelection().removeAllRanges();'
+                'if(msg){msg.textContent=ok?"\\u2705 Copi\\u00e9":"\\u26a0 R\\u00e9essaie";'
+                'msg.style.color=ok?"#28a745":"#dc3545";'
+                'setTimeout(function(){msg.textContent="";},2500);}'
+                '});}'
+                '})();</script>'
             ),
         }],
         css=f"""
@@ -833,9 +921,11 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
             back = f"<b>Question {num}:</b><br><br>{q_text}<br><br><b>Correct order:</b><ol>{order_html}</ol>"
         else:
             # Front: interactive checkboxes that save state to localStorage (persists on device)
-            # Key prefixed with deck name to avoid collisions across exams
+            # Key prefixed with deck name + guid_suffix so a reset ('-r2') deck
+            # does NOT share localStorage state with the original deck.
+            kb = f"{name}{guid_suffix}"
             front_items = "".join(
-                f"<div class='option'><input type='checkbox' id='{name}-q{num}o{i}' onchange=\"localStorage.setItem('{name}-q{num}o{i}', this.checked?'1':'0')\"> <label for='{name}-q{num}o{i}'>{o}</label></div>"
+                f"<div class='option'><input type='checkbox' id='{kb}-q{num}o{i}' onchange=\"localStorage.setItem('{kb}-q{num}o{i}', this.checked?'1':'0')\"> <label for='{kb}-q{num}o{i}'>{o}</label></div>"
                 for i, o in enumerate(options)
             )
             front = f"<b>Question {num}:</b><br><br>{q_text}<br><br>{front_items}"
@@ -848,14 +938,14 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 if is_correct:
                     # Correct answer — always green, checked
                     back_items.append(
-                        f"<div class='option' data-qkey='{name}-q{num}o{i}' data-correct='1'>"
+                        f"<div class='option' data-qkey='{kb}-q{num}o{i}' data-correct='1'>"
                         f"<input type='checkbox' checked disabled> "
                         f"<span class='correct'>{opt}</span></div>"
                     )
                 else:
                     # Incorrect option — will turn red if user had checked it
                     back_items.append(
-                        f"<div class='option' data-qkey='{name}-q{num}o{i}' data-correct='0'>"
+                        f"<div class='option' data-qkey='{kb}-q{num}o{i}' data-correct='0'>"
                         f"<input type='checkbox' disabled> "
                         f"<span class='opt-text'>{opt}</span></div>"
                     )

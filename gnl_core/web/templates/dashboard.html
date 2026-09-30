@@ -452,7 +452,7 @@
                     </div>
                 </div>
 
-                <!-- Anki Review : questions ratées -->
+                <!-- Test -->
                 <div class="bg-gray-800 rounded-lg p-5">
                     <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('span').textContent=this.nextElementSibling.classList.contains('hidden')?'▶':'▼'" class="flex items-center gap-2 font-semibold w-full text-left">
                         <span class="text-xs">▶</span> 🧪 Test
@@ -469,6 +469,24 @@
                         <div>
                             <label class="text-xs text-gray-400">Délai simulation (secondes)</label>
                             <input type="number" name="TEST_GENERATION_DELAY" value="{{ config.TEST_GENERATION_DELAY or '5' }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Meta AI prompts (bouton Copier des cartes Anki) -->
+                <div class="bg-gray-800 rounded-lg p-5">
+                    <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('span').textContent=this.nextElementSibling.classList.contains('hidden')?'▶':'▼'" class="flex items-center gap-2 font-semibold w-full text-left">
+                        <span class="text-xs">▶</span> 🤖 Prompts Meta AI (bouton Copier des cartes)
+                    </button>
+                    <div class="hidden mt-4 space-y-3">
+                        <p class="text-xs text-gray-500">Préambule ajouté au texte copié depuis une carte Anki. Placeholders : <code>{MY_ANSWER}</code> (ta réponse) et <code>{CORRECT}</code> (bonne réponse). Laisser vide pour utiliser le défaut.</p>
+                        <div>
+                            <label class="text-xs text-gray-400">Prompt — réponse FAUSSE (ou non répondue)</label>
+                            <textarea name="META_PROMPT_WRONG" rows="6" class="w-full bg-gray-700 rounded px-3 py-2 text-sm font-mono" placeholder="Laisser vide = prompt par défaut">{{ config.META_PROMPT_WRONG or '' }}</textarea>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">Prompt — réponse CORRECTE</label>
+                            <textarea name="META_PROMPT_CORRECT" rows="6" class="w-full bg-gray-700 rounded px-3 py-2 text-sm font-mono" placeholder="Laisser vide = prompt par défaut">{{ config.META_PROMPT_CORRECT or '' }}</textarea>
                         </div>
                     </div>
                 </div>

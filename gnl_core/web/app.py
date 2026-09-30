@@ -2056,9 +2056,14 @@ async def admin_save(request: Request):
     config_keys = ['AUDIO_PARTS_FOLDER', 'GNL_BACKLOG', 'PDF_PARTS_FOLDER', 
                    'NOTEBOOKLM_LANGUAGE', 'DEFAULT_SPEED', 'MCP_DOWNLOAD_TIMEOUT',
                    'MAX_GENERATION_RETRIES', 'TEST_MODE', 'TEST_GENERATION_DELAY',
-                   'BEDROCK_MODEL_ID', 'AWS_REGION', 'AWS_PROFILE']
+                   'BEDROCK_MODEL_ID', 'AWS_REGION', 'AWS_PROFILE',
+                   'META_PROMPT_WRONG', 'META_PROMPT_CORRECT']
     
     data = {key: form.get(key, '') for key in config_keys}
+    # Don't clobber saved Meta prompts if the form didn't include them.
+    for pk in ('META_PROMPT_WRONG', 'META_PROMPT_CORRECT'):
+        if pk not in form.keys():
+            data.pop(pk, None)
 
     # Validation
     errors = []
@@ -2099,7 +2104,11 @@ async def admin_save(request: Request):
             sched[job_key]['time'] = form.get(time_field)
         sched[job_key]['enabled'] = enabled_field in form.keys()
     data['SCHEDULER'] = sched
-    save_config(data)
+    # Merge over the existing config so keys not present in this form
+    # (INBOX_FOLDER, EXAM_*, TTS_*, etc.) are preserved instead of dropped.
+    merged = dict(config)
+    merged.update(data)
+    save_config(merged)
 
     await broadcast_log("✓ Configuration sauvegardée")
     return {"status": "ok"}
