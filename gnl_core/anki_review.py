@@ -275,3 +275,101 @@ def generate_reset_apkgs(collection_path=None, theme='exams', subtheme='sap-c02'
         if on_progress:
             on_progress(f"  ⚠ generate_reset_apkgs: {str(e)[:60]}")
     return results
+
+
+# --- Practice-exam .docx format parser -------------------------------------
+# Structure (per question, 75 total):
+#   Paragraphs: "Question N" / "Multiple Choice" / "Answer status:" / <status>
+#               / "Question" / <statement paras...> / "Answer options"
+#   Table (4 cols): Option | Correct answer | Your selection | Rationale
+#     - Option:         "A. ...", "B. ...", ...
+#     - Correct answer: "Correct" on the right row(s), else empty
+#     - Your selection: "Selected" / "Not selected"  (the user's own answer)
+#     - Rationale:      per-option explanation (correct AND incorrect)
+
+def parse_practice_exam(docx_path):
+    """Parse a practice-exam .docx into a list of question dicts.
+
+    Returns: list of {
+        'num': int, 'status': 'Correct'|'Incorrect'|'',
+        'statement': str,
+        'options': [ {'letter': 'A', 'text': str, 'correct': bool,
+                      'selected': bool, 'rationale': str}, ... ]
+    }
+    Best-effort; skips malformed blocks. Requires python-docx.
+    """
+    from docx import Document
+    from docx.oxml.ns import qn
+    from docx.text.paragraph import Paragraph
+    from docx.table import Table
+
+    doc = Document(docx_path)
+
+    def iter_blocks(parent):
+        for child in parent.iterchildren():
+            if child.tag == qn('w:p'):
+                yield ('p', Paragraph(child, doc))
+            elif child.tag == qn('w:tbl'):
+                yield ('tbl', Table(child, doc))
+
+    blocks = list(iter_blocks(doc.element.body))
+    questions = []
+    i = 0
+    n = len(blocks)
+    while i < n:
+        kind, el = blocks[i]
+        if kind == 'p' and re.match(r'^Question\s+\d+\s*$', el.text.strip()):
+            num = int(re.search(r'\d+', el.text).group())
+            status = ''
+            statement_lines = []
+            in_statement = False
+            j = i + 1
+            # walk paragraphs until we hit the option table
+            while j < n:
+                k2, e2 = blocks[j]
+                if k2 == 'tbl':
+                    break
+                if k2 == 'p':
+                    t = e2.text.strip()
+                    if re.match(r'^Question\s+\d+\s*$', t):
+                        break  # next question with no table (safety)
+                    if t == 'Answer status:':
+                        # status is the next non-empty paragraph
+                        pass
+                    elif t in ('Correct', 'Incorrect') and status == '':
+                        status = t
+                    elif t == 'Question':
+                        in_statement = True
+                    elif t == 'Answer options':
+                        in_statement = False
+                    elif in_statement and t:
+                        statement_lines.append(t)
+                j += 1
+            # parse the option table if present
+            options = []
+            if j < n and blocks[j][0] == 'tbl':
+                tbl = blocks[j][1]
+                rows = tbl.rows
+                if rows and rows[0].cells[0].text.strip().lower() == 'option':
+                    for r in rows[1:]:
+                        cells = r.cells
+                        opt_text = cells[0].text.strip()
+                        m = re.match(r'^([A-Z])\.\s*(.*)', opt_text, re.S)
+                        letter = m.group(1) if m else ''
+                        text = (m.group(2).strip() if m else opt_text)
+                        correct = cells[1].text.strip().lower() == 'correct'
+                        selected = cells[2].text.strip().lower() == 'selected'
+                        rationale = cells[3].text.strip() if len(cells) > 3 else ''
+                        options.append({
+                            'letter': letter, 'text': text,
+                            'correct': correct, 'selected': selected,
+                            'rationale': rationale,
+                        })
+                i = j  # advance to the table; outer loop will move past it
+            questions.append({
+                'num': num, 'status': status,
+                'statement': '\n'.join(statement_lines).strip(),
+                'options': options,
+            })
+        i += 1
+    return questions

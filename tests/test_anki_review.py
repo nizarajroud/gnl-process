@@ -263,3 +263,39 @@ def test_apkg_meta_prompt_injected_and_configurable(tmp_path, monkeypatch):
     assert 'CUSTOM RIGHT' in afmt          # configurable correct prompt injected
     assert 'localStorage.getItem(key)' in afmt   # detects user's answer
     assert 'a.wrong||!a.answered' in afmt        # wrong/not-answered branch
+
+
+def test_parse_practice_exam(tmp_path):
+    """Parse the practice-exam docx format (paragraphs + 4-col option table)."""
+    from docx import Document
+    from gnl_core.anki_review import parse_practice_exam
+    doc = Document()
+    doc.add_paragraph("Question 1")
+    doc.add_paragraph("Multiple Choice")
+    doc.add_paragraph("Answer status:")
+    doc.add_paragraph("Incorrect")
+    doc.add_paragraph("Question")
+    doc.add_paragraph("What is the best storage for X?")
+    doc.add_paragraph("Which solution is cheapest?")
+    doc.add_paragraph("Answer options")
+    t = doc.add_table(rows=3, cols=4)
+    hdr = t.rows[0].cells
+    hdr[0].text, hdr[1].text, hdr[2].text, hdr[3].text = 'Option', 'Correct answer', 'Your selection', 'Rationale'
+    r1 = t.rows[1].cells
+    r1[0].text, r1[1].text, r1[2].text, r1[3].text = 'A. Use S3', '', 'Selected', 'S3 is object storage but not cheapest here.'
+    r2 = t.rows[2].cells
+    r2[0].text, r2[1].text, r2[2].text, r2[3].text = 'B. Use Glacier', 'Correct', 'Not selected', 'Glacier is the cheapest for archival.'
+    p = tmp_path / "prac.docx"
+    doc.save(str(p))
+
+    qs = parse_practice_exam(str(p))
+    assert len(qs) == 1
+    q = qs[0]
+    assert q['num'] == 1
+    assert q['status'] == 'Incorrect'
+    assert 'best storage' in q['statement'] and 'cheapest' in q['statement']
+    assert len(q['options']) == 2
+    a, b = q['options']
+    assert a['letter'] == 'A' and a['selected'] and not a['correct']
+    assert b['letter'] == 'B' and b['correct'] and not b['selected']
+    assert 'Glacier is the cheapest' in b['rationale']

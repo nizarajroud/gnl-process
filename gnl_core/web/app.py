@@ -762,10 +762,11 @@ async def _process_exam(theme, subtheme, filename):
 
     loop = asyncio.get_event_loop()
     name = os.path.splitext(filename)[0]
-    origin = 'dojo' if 'dojo' in filename.lower() else 'udemy'
 
     try:
-        from gnl_core.exams import get_exam_base, step1_format, step2b_full_markdown, step3_highlight, step5_anki
+        from gnl_core.exam_formats import detect_format
+        from gnl_core.exam_formats.pipeline import build_artifacts
+        from gnl_core.exams import get_exam_base
         import shutil
 
         # Move file to assets/pdf-formatting/origin/
@@ -773,34 +774,45 @@ async def _process_exam(theme, subtheme, filename):
         origin_dir = base / 'pdf-formatting' / 'origin'
         origin_dir.mkdir(parents=True, exist_ok=True)
         origin_path = origin_dir / filename
-
         if not origin_path.exists():
             shutil.copy2(file_path, str(origin_path))
             await broadcast_log(f"📂 Copié vers origin/{filename}")
 
-        # Step 1: origin/ → word/
-        await broadcast_log(f"▶ [1/5] FORMAT (origin → word)")
-
-        def on_p1(msg):
+        def on_p(msg):
             asyncio.run_coroutine_threadsafe(broadcast_log(f"  {msg}"), loop)
 
-        word_path = await loop.run_in_executor(None, lambda: step1_format(str(origin_path), theme, subtheme, origin, on_progress=on_p1))
-        await broadcast_log(f"  ✓ {word_path}")
+        # 1) Auto-detect the exam format (plug-and-play registry)
+        fmt = await loop.run_in_executor(None, lambda: detect_format(str(origin_path)))
+        if fmt is None:
+            await broadcast_log("⚠ Format non reconnu — aucun parser ne correspond")
+            await broadcast_log("__done__")
+            return
+        await broadcast_log(f"▶ [1/3] FORMAT détecté: {fmt.label} ({fmt.name})")
 
-        # Step 2: word/ → markdown/
-        await broadcast_log("▶ [2/5] MARKDOWN (word → md)")
-        md_path = await loop.run_in_executor(None, lambda: step2b_full_markdown(word_path, theme, subtheme, on_progress=on_p1))
-        await broadcast_log(f"  ✓ {md_path}")
+        # 2) Parse -> normalized pivot. DOJO needs theme/subtheme + reuses its
+        #    existing (unchanged) pipeline; other formats parse the doc directly.
+        await broadcast_log("▶ [2/3] PARSE (énoncés, options, réponses correctes)")
+        if fmt.name == 'dojo':
+            pivot = await loop.run_in_executor(
+                None, lambda: fmt.parse(str(origin_path), on_progress=on_p,
+                                        theme=theme, subtheme=subtheme))
+            md_override = getattr(fmt, '_last_md_path', None)
+            ans_override = getattr(fmt, '_last_answers', None)
+        else:
+            pivot = await loop.run_in_executor(
+                None, lambda: fmt.parse(str(origin_path), on_progress=on_p))
+            md_override = None
+            ans_override = None
+        await broadcast_log(f"  ✓ {len(pivot)} questions")
 
-        # Step 3: highlight (Bedrock)
-        await broadcast_log("▶ [3/5] HIGHLIGHT (Bedrock → correct answers)")
-        answers = await loop.run_in_executor(None, lambda: step3_highlight(md_path, on_progress=on_p1))
-        await broadcast_log(f"  ✓ {len(answers)} questions analysées")
-
-        # Step 4: anki cards (directly from answers)
-        await broadcast_log("▶ [4/4] ANKI (flashcards)")
-        anki_path = await loop.run_in_executor(None, lambda: step5_anki(answers, md_path, theme, subtheme, on_progress=on_p1))
-        await broadcast_log(f"  ✓ {anki_path}")
+        # 3) Build artifacts (markdown + Anki) from the pivot
+        await broadcast_log("▶ [3/3] ANKI (flashcards + bouton Copier)")
+        res = await loop.run_in_executor(
+            None, lambda: build_artifacts(pivot, name, theme, subtheme,
+                                          on_progress=on_p,
+                                          md_path=md_override,
+                                          answers=ans_override))
+        await broadcast_log(f"  ✓ {res['anki_path']}")
 
         await broadcast_log(f"✓ Pipeline terminé: {name}")
     except Exception as e:
