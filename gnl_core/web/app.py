@@ -392,6 +392,39 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="GNL Process", lifespan=lifespan)
 
+# --- PWA: manifest + icons (makes Chrome show "Install app") ---
+_WEB_DIR = Path(__file__).parent.parent.parent / 'web'
+
+
+@app.get("/manifest.webmanifest")
+async def pwa_manifest():
+    from fastapi.responses import FileResponse
+    return FileResponse(str(_WEB_DIR / 'manifest.webmanifest'),
+                        media_type='application/manifest+json')
+
+
+@app.get("/icons/{filename}")
+async def pwa_icon(filename: str):
+    from fastapi.responses import FileResponse, Response
+    # Prevent path traversal: only serve known image files from web/img.
+    safe = os.path.basename(filename)
+    p = _WEB_DIR / 'img' / safe
+    if not p.exists() or p.suffix.lower() not in ('.png', '.svg', '.ico'):
+        return Response(status_code=404)
+    mt = {'.png': 'image/png', '.svg': 'image/svg+xml',
+          '.ico': 'image/x-icon'}[p.suffix.lower()]
+    return FileResponse(str(p), media_type=mt)
+
+
+@app.get("/favicon.ico")
+async def favicon():
+    from fastapi.responses import FileResponse, Response
+    p = _WEB_DIR / 'img' / 'gnl-icon.ico'
+    if p.exists():
+        return FileResponse(str(p), media_type='image/x-icon')
+    return Response(status_code=404)
+
+
 
 def _get_quota():
     from gnl_core.db import get_db
