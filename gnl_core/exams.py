@@ -748,8 +748,8 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         "My answer was WRONG. Based ONLY on the question statement and the "
         "explanations below, explain why my option is wrong and why the correct "
         "one(s) are right.\n\n"
-        "IMPORTANT: do not elaborate now. Just reply \"OK, got it.\" — I'll "
-        "continue by voice on mobile to go deeper."
+        "IMPORTANT: do not elaborate now. Just reply \"OK, got it.(Question {QNUM})\" "
+        "— I'll continue by voice on mobile to go deeper."
     )
     default_correct = (
         "I'm studying for the AWS SAP-C02 exam. Here is a question I answered.\n"
@@ -757,8 +757,8 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         "Correct answer(s):\n{CORRECT}\n\n"
         "My answer was CORRECT. Still, discuss the options and the underlying "
         "concepts so I understand them fully.\n\n"
-        "IMPORTANT: do not elaborate now. Just reply \"OK, got it.\" — I'll "
-        "continue by voice on mobile to go deeper."
+        "IMPORTANT: do not elaborate now. Just reply \"OK, got it.(Question {QNUM})\" "
+        "— I'll continue by voice on mobile to go deeper."
     )
     prompt_wrong = _cfg.get('META_PROMPT_WRONG') or default_wrong
     prompt_correct = _cfg.get('META_PROMPT_CORRECT') or default_correct
@@ -858,9 +858,14 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 'var a=analyse();'
                 'var back=document.getElementById("copysrc");'
                 'var expl=back?(back.innerText||"").replace(/[\\u2605\\u2691]/g,"").trim():"";'
+                # extract the question number from the "Question N:" label
+                'var qb=card.querySelector("b");'
+                'var qnum="";if(qb){var mm=(qb.innerText||"").match(/(\\d+)/);if(mm)qnum=mm[1];}'
                 # choose prompt: wrong branch also used when not answered
                 'var tmpl=(a.wrong||!a.answered)?P_WRONG:P_CORRECT;'
-                'var preamble=tmpl.replace("{MY_ANSWER}",a.mine).replace("{CORRECT}",a.correct);'
+                'var preamble=tmpl.split("{MY_ANSWER}").join(a.mine)'
+                '.split("{CORRECT}").join(a.correct)'
+                '.split("{QNUM}").join(qnum);'
                 'var body=cleanText()+(expl?("\\n\\nExplanation:\\n"+expl):"");'
                 'area.value=preamble+"\\n\\n---\\n"+body;'
                 # --- Wire the copy button ---
