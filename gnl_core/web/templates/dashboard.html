@@ -41,8 +41,13 @@
                     </div>
                     <div class="text-xs text-gray-500 text-center">+ (optionnel) texte collé ci-dessous</div>
                     <div>
-                        <input type="text" id="docmeta-name" placeholder="Nom (optionnel) pour le texte collé" class="w-full bg-gray-700 rounded px-3 py-2 text-sm mb-2">
-                        <textarea id="docmeta-text" rows="8" placeholder="Colle ton texte ici (n'importe quelle longueur)…" class="w-full bg-gray-700 rounded px-3 py-2 text-sm"></textarea>
+                        <input type="text" id="docmeta-name" placeholder="Nom (optionnel) pour le corpus combiné" class="w-full bg-gray-700 rounded px-3 py-2 text-sm mb-2">
+                        <textarea id="docmeta-text" rows="6" placeholder="Colle ton texte ici (n'importe quelle longueur)…" class="w-full bg-gray-700 rounded px-3 py-2 text-sm"></textarea>
+                    </div>
+                    <div class="text-xs text-gray-500 text-center">+ (optionnel) liens ci-dessous (le contenu des pages sera récupéré)</div>
+                    <div>
+                        <label class="text-xs text-gray-400">Liens (une URL par ligne)</label>
+                        <textarea id="docmeta-links" rows="3" placeholder="https://exemple.com/page1&#10;https://exemple.com/page2" class="w-full bg-gray-700 rounded px-3 py-2 text-sm font-mono"></textarea>
                     </div>
                     <button type="button" onclick="docExport()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium text-white">📤 Générer les parts</button>
                     <div id="docmeta-status" class="text-sm text-gray-400"></div>
@@ -1049,8 +1054,10 @@
             const nameEl = document.getElementById('docmeta-name');
             const status = document.getElementById('docmeta-status');
             const pasted = (textEl && textEl.value || '').trim();
+            const linksEl = document.getElementById('docmeta-links');
+            const links = (linksEl && linksEl.value || '').trim();
             const hasFile = input.files && input.files.length;
-            if (!hasFile && !pasted) { status.textContent = '⚠ Sélectionne un fichier et/ou colle du texte.'; return; }
+            if (!hasFile && !pasted && !links) { status.textContent = '⚠ Fournis un fichier, du texte, et/ou des liens.'; return; }
 
             const fd = new FormData();
             const labels = [];
@@ -1061,6 +1068,10 @@
             if (pasted) {
                 fd.append('text', pasted);
                 labels.push('texte collé (' + pasted.length + ' chars)');
+            }
+            if (links) {
+                fd.append('links', links);
+                labels.push(links.split('\n').filter(l=>l.trim()).length + ' lien(s)');
             }
             if (nameEl && nameEl.value.trim()) fd.append('name', nameEl.value.trim());
             const label = labels.join(' + ');

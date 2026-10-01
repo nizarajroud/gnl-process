@@ -2502,15 +2502,17 @@ def _doc_export_dir():
 
 @app.post("/api/doc-export")
 async def doc_export_generate(request: Request):
-    """Split a document (file upload) OR pasted text into Meta AI parts."""
+    """Split documents (files) + pasted text + scraped links into Meta AI parts."""
     from fastapi import UploadFile
     from gnl_core.config import get_config
     from gnl_core.doc_extract import extract_text, SUPPORTED
+    from gnl_core.url_fetch import fetch_url_text
     from gnl_core.meta_export import generate_doc_export
     form = await request.form()
     uploads = form.getlist("file") if hasattr(form, 'getlist') else [form.get("file")]
     uploads = [u for u in uploads if u is not None and hasattr(u, 'filename') and u.filename]
     pasted = (form.get("text") or "").strip()
+    links = [ln.strip() for ln in (form.get("links") or "").splitlines() if ln.strip()]
 
     loop = asyncio.get_event_loop()
     config = get_config()
@@ -2555,14 +2557,25 @@ async def doc_export_generate(request: Request):
                 on_p(f"✓ texte collé: {len(pasted)} chars")
             texts.append(f"# Texte collé\n\n{pasted}")
 
+        if links:
+            await broadcast_log(f"▶ [DOC→META] {len(links)} lien(s) à récupérer")
+            for url in links:
+                try:
+                    t = await loop.run_in_executor(None, lambda u=url: fetch_url_text(u))
+                    texts.append(f"# {url}\n\n{t}")
+                    on_p(f"✓ {url[:60]}: {len(t)} chars")
+                except Exception as le:
+                    skipped.append(f"{url[:50]} ({str(le)[:50]})")
+                    await broadcast_log(f"  ⚠ ignoré {url[:50]}: {str(le)[:70]}")
+
         if not texts:
             return {"status": "error",
-                    "error": "Fournis au moins un fichier exploitable OU du texte à coller."
+                    "error": "Fournis au moins un fichier/texte/lien exploitable."
                              + ((" Ignorés: " + "; ".join(skipped)) if skipped else "")}
 
         text = "\n\n".join(texts)
         # name: single file alone -> its name; otherwise combined label.
-        if len(uploads) == 1 and not pasted and not skipped:
+        if len(uploads) == 1 and not pasted and not links and not skipped:
             name = os.path.splitext(os.path.basename(uploads[0].filename))[0]
         else:
             name = (form.get("name") or "documents-combines").strip() or "documents-combines"
