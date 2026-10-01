@@ -2502,30 +2502,19 @@ def _doc_export_dir():
 
 @app.post("/api/doc-export")
 async def doc_export_generate(request: Request):
-    """Upload any document, extract text, split into Meta AI parts."""
+    """Split a document (file upload) OR pasted text into Meta AI parts."""
     from fastapi import UploadFile
     from gnl_core.config import get_config
     from gnl_core.doc_extract import extract_text, SUPPORTED
     from gnl_core.meta_export import generate_doc_export
     form = await request.form()
     upload = form.get("file")
-    if upload is None or not hasattr(upload, 'filename'):
-        return {"status": "error", "error": "Aucun fichier fourni"}
-    filename = os.path.basename(upload.filename or 'document')
-    name = os.path.splitext(filename)[0]
-    ext = os.path.splitext(filename)[1].lower()
-    if ext not in SUPPORTED:
-        return {"status": "error",
-                "error": f"Format {ext or '?'} non supporté. Acceptés: {', '.join(SUPPORTED)}"}
-
-    _ddir = _doc_export_dir()
-    _ddir.mkdir(parents=True, exist_ok=True)
-    tmp_in = _ddir / f"_in_{name}{ext}"
-    content = await upload.read()
-    tmp_in.write_bytes(content)
+    pasted = (form.get("text") or "").strip()
 
     loop = asyncio.get_event_loop()
     config = get_config()
+    _ddir = _doc_export_dir()
+    _ddir.mkdir(parents=True, exist_ok=True)
 
     def on_p(msg):
         try:
@@ -2533,10 +2522,32 @@ async def doc_export_generate(request: Request):
         except Exception:
             pass
 
+    # --- Determine source: pasted text takes precedence if provided ---
+    tmp_in = None
     try:
-        await broadcast_log(f"▶ [DOC→META] {filename}")
-        text = await loop.run_in_executor(None, lambda: extract_text(str(tmp_in)))
-        await broadcast_log(f"  ✓ texte extrait ({len(text)} chars)")
+        if pasted:
+            name = (form.get("name") or "texte-colle").strip() or "texte-colle"
+            name = os.path.splitext(os.path.basename(name))[0]
+            await broadcast_log(f"▶ [DOC→META] texte collé ({len(pasted)} chars)")
+            text = pasted
+        elif upload is not None and hasattr(upload, 'filename'):
+            filename = os.path.basename(upload.filename or 'document')
+            name = os.path.splitext(filename)[0]
+            ext = os.path.splitext(filename)[1].lower()
+            if ext not in SUPPORTED:
+                return {"status": "error",
+                        "error": f"Format {ext or '?'} non supporté. Acceptés: {', '.join(SUPPORTED)}"}
+            tmp_in = _ddir / f"_in_{name}{ext}"
+            tmp_in.write_bytes(await upload.read())
+            await broadcast_log(f"▶ [DOC→META] {filename}")
+            text = await loop.run_in_executor(None, lambda: extract_text(str(tmp_in)))
+            await broadcast_log(f"  ✓ texte extrait ({len(text)} chars)")
+        else:
+            return {"status": "error", "error": "Fournis un fichier OU du texte à coller."}
+
+        if not text.strip():
+            return {"status": "error", "error": "Contenu vide."}
+
         out_dir = _ddir / name
         max_chars = config.get('GENERIC_EXPORT_MAX_CHARS') or None
         prompt_tpl = config.get('GENERIC_EXPORT_PROMPT') or None
@@ -2556,10 +2567,11 @@ async def doc_export_generate(request: Request):
         await broadcast_log(f"⚠ Erreur: {str(e)[:100]}")
         return {"status": "error", "error": str(e)[:200]}
     finally:
-        try:
-            tmp_in.unlink()
-        except Exception:
-            pass
+        if tmp_in is not None:
+            try:
+                tmp_in.unlink()
+            except Exception:
+                pass
 
 
 @app.get("/api/doc-export/{name}/{part}")

@@ -33,12 +33,19 @@
         <div id="tab-docmeta" class="tab-content hidden">
             <div class="bg-gray-800 rounded-lg p-6">
                 <h2 class="text-lg font-semibold mb-2">📤 Document → Meta AI</h2>
-                <p class="text-sm text-gray-400 mb-4">Sélectionne n'importe quel document (PDF, DOCX, PPTX, XLSX, TXT, MD). Le contenu est extrait, découpé en parts prêtes à coller dans Meta AI, avec un prompt générique en tête de la Part 1.</p>
-                <div class="flex items-center gap-3">
-                    <input type="file" id="docmeta-file" accept=".pdf,.docx,.pptx,.xlsx,.txt,.md,.markdown" class="text-sm text-gray-300">
+                <p class="text-sm text-gray-400 mb-4">Deux options : sélectionne un document (PDF, DOCX, PPTX, XLSX, TXT, MD) <b>OU</b> colle du texte directement (n'importe quelle longueur). Le contenu est découpé en parts prêtes à coller dans Meta AI, avec un prompt générique en tête de la Part 1.</p>
+                <div class="space-y-4">
+                    <div class="flex items-center gap-3">
+                        <input type="file" id="docmeta-file" accept=".pdf,.docx,.pptx,.xlsx,.txt,.md,.markdown" class="text-sm text-gray-300">
+                    </div>
+                    <div class="text-xs text-gray-500 text-center">— ou —</div>
+                    <div>
+                        <input type="text" id="docmeta-name" placeholder="Nom (optionnel) pour le texte collé" class="w-full bg-gray-700 rounded px-3 py-2 text-sm mb-2">
+                        <textarea id="docmeta-text" rows="8" placeholder="Colle ton texte ici (n'importe quelle longueur)…" class="w-full bg-gray-700 rounded px-3 py-2 text-sm"></textarea>
+                    </div>
                     <button type="button" onclick="docExport()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium text-white">📤 Générer les parts</button>
+                    <div id="docmeta-status" class="text-sm text-gray-400"></div>
                 </div>
-                <div id="docmeta-status" class="text-sm text-gray-400 mt-3"></div>
             </div>
         </div>
 
@@ -1036,17 +1043,30 @@
             } catch (e) { if(msg){msg.textContent='⚠ Erreur: '+e;} }
         }
 
-        // --- Generic Doc→Meta: upload a file, split, show copy modal ---
+        // --- Generic Doc→Meta: upload a file OR paste text, split, show copy modal ---
         async function docExport() {
             const input = document.getElementById('docmeta-file');
+            const textEl = document.getElementById('docmeta-text');
+            const nameEl = document.getElementById('docmeta-name');
             const status = document.getElementById('docmeta-status');
-            if (!input.files || !input.files.length) { status.textContent = '⚠ Sélectionne un fichier d\'abord.'; return; }
-            const file = input.files[0];
-            status.textContent = '⏳ Extraction + découpage de ' + file.name + '…';
+            const pasted = (textEl && textEl.value || '').trim();
+            const hasFile = input.files && input.files.length;
+            if (!hasFile && !pasted) { status.textContent = '⚠ Sélectionne un fichier OU colle du texte.'; return; }
+
+            const fd = new FormData();
+            let label;
+            if (pasted) {
+                fd.append('text', pasted);
+                if (nameEl && nameEl.value.trim()) fd.append('name', nameEl.value.trim());
+                label = 'texte collé (' + pasted.length + ' chars)';
+            } else {
+                fd.append('file', input.files[0]);
+                label = input.files[0].name;
+            }
+            status.textContent = '⏳ Traitement de ' + label + '…';
             const box = _metaModal();
-            box.innerHTML = '⏳ Traitement de ' + file.name + '…';
+            box.innerHTML = '⏳ Traitement de ' + label + '…';
             try {
-                const fd = new FormData(); fd.append('file', file);
                 const d = await (await fetch('/api/doc-export', {method:'POST', body: fd})).json();
                 if (d.status !== 'ok') { box.innerHTML = '⚠ ' + (d.error || 'échec'); status.textContent = '⚠ ' + (d.error||''); return; }
                 status.textContent = `✓ ${d.parts.length} parts générées pour ${d.name}`;
