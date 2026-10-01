@@ -36,7 +36,8 @@
                 <p class="text-sm text-gray-400 mb-4">Deux options : sélectionne un document (PDF, DOCX, PPTX, XLSX, TXT, MD) <b>OU</b> colle du texte directement (n'importe quelle longueur). Le contenu est découpé en parts prêtes à coller dans Meta AI, avec un prompt générique en tête de la Part 1.</p>
                 <div class="space-y-4">
                     <div class="flex items-center gap-3">
-                        <input type="file" id="docmeta-file" accept=".pdf,.docx,.pptx,.xlsx,.txt,.md,.markdown" class="text-sm text-gray-300">
+                        <input type="file" id="docmeta-file" multiple accept=".pdf,.docx,.pptx,.xlsx,.txt,.md,.markdown" class="text-sm text-gray-300">
+                        <span class="text-xs text-gray-500">(plusieurs fichiers possibles — ils seront combinés)</span>
                     </div>
                     <div class="text-xs text-gray-500 text-center">— ou —</div>
                     <div>
@@ -1058,8 +1059,8 @@
                 if (nameEl && nameEl.value.trim()) fd.append('name', nameEl.value.trim());
                 label = 'texte collé (' + pasted.length + ' chars)';
             } else {
-                fd.append('file', input.files[0]);
-                label = input.files[0].name;
+                for (let i = 0; i < input.files.length; i++) fd.append('file', input.files[i]);
+                label = input.files.length === 1 ? input.files[0].name : (input.files.length + ' fichiers');
             }
             status.textContent = '⏳ Traitement de ' + label + '…';
             const box = _metaModal();

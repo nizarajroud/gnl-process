@@ -2508,7 +2508,8 @@ async def doc_export_generate(request: Request):
     from gnl_core.doc_extract import extract_text, SUPPORTED
     from gnl_core.meta_export import generate_doc_export
     form = await request.form()
-    upload = form.get("file")
+    uploads = form.getlist("file") if hasattr(form, 'getlist') else [form.get("file")]
+    uploads = [u for u in uploads if u is not None and hasattr(u, 'filename') and u.filename]
     pasted = (form.get("text") or "").strip()
 
     loop = asyncio.get_event_loop()
@@ -2522,26 +2523,37 @@ async def doc_export_generate(request: Request):
         except Exception:
             pass
 
-    # --- Determine source: pasted text takes precedence if provided ---
-    tmp_in = None
+    tmp_files = []
     try:
         if pasted:
             name = (form.get("name") or "texte-colle").strip() or "texte-colle"
             name = os.path.splitext(os.path.basename(name))[0]
             await broadcast_log(f"▶ [DOC→META] texte collé ({len(pasted)} chars)")
             text = pasted
-        elif upload is not None and hasattr(upload, 'filename'):
-            filename = os.path.basename(upload.filename or 'document')
-            name = os.path.splitext(filename)[0]
-            ext = os.path.splitext(filename)[1].lower()
-            if ext not in SUPPORTED:
-                return {"status": "error",
-                        "error": f"Format {ext or '?'} non supporté. Acceptés: {', '.join(SUPPORTED)}"}
-            tmp_in = _ddir / f"_in_{name}{ext}"
-            tmp_in.write_bytes(await upload.read())
-            await broadcast_log(f"▶ [DOC→META] {filename}")
-            text = await loop.run_in_executor(None, lambda: extract_text(str(tmp_in)))
-            await broadcast_log(f"  ✓ texte extrait ({len(text)} chars)")
+        elif uploads:
+            # Multiple files: extract each, merge the texts (one corpus).
+            await broadcast_log(f"▶ [DOC→META] {len(uploads)} fichier(s)")
+            texts = []
+            for up in uploads:
+                fn = os.path.basename(up.filename or 'document')
+                ext = os.path.splitext(fn)[1].lower()
+                if ext not in SUPPORTED:
+                    return {"status": "error",
+                            "error": f"Format {ext or '?'} non supporté ({fn}). Acceptés: {', '.join(SUPPORTED)}"}
+                tmp = _ddir / f"_in_{len(tmp_files)}_{fn}"
+                tmp.write_bytes(await up.read())
+                tmp_files.append(tmp)
+                t = await loop.run_in_executor(None, lambda tp=str(tmp): extract_text(tp))
+                texts.append(f"# {os.path.splitext(fn)[0]}\n\n{t}")
+                await on_p(f"✓ {fn}: {len(t)} chars") if False else on_p(f"✓ {fn}: {len(t)} chars")
+            text = "\n\n".join(texts)
+            # name: single file -> its name; multiple -> combined label
+            if len(uploads) == 1:
+                name = os.path.splitext(os.path.basename(uploads[0].filename))[0]
+            else:
+                name = (form.get("name") or "documents-combines").strip() or "documents-combines"
+                name = os.path.splitext(os.path.basename(name))[0]
+            await broadcast_log(f"  ✓ texte combiné ({len(text)} chars)")
         else:
             return {"status": "error", "error": "Fournis un fichier OU du texte à coller."}
 
@@ -2567,9 +2579,9 @@ async def doc_export_generate(request: Request):
         await broadcast_log(f"⚠ Erreur: {str(e)[:100]}")
         return {"status": "error", "error": str(e)[:200]}
     finally:
-        if tmp_in is not None:
+        for tf in tmp_files:
             try:
-                tmp_in.unlink()
+                tf.unlink()
             except Exception:
                 pass
 
