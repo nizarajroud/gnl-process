@@ -1069,6 +1069,9 @@
                 const d = await (await fetch('/api/doc-export', {method:'POST', body: fd})).json();
                 if (d.status !== 'ok') { box.innerHTML = '⚠ ' + (d.error || 'échec'); status.textContent = '⚠ ' + (d.error||''); return; }
                 status.textContent = `✓ ${d.parts.length} parts générées pour ${d.name}`;
+                if (d.skipped && d.skipped.length) {
+                    status.textContent += ` — ⚠ ignorés: ${d.skipped.join('; ')}`;
+                }
                 const name = d.name;
                 let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-weight:600;">📤 ${name} (${d.parts.length} parts)</div><button onclick="document.getElementById('meta-export-modal').remove()" style="background:none;border:none;color:#9ca3af;font-size:20px;cursor:pointer;">✕</button></div>`;
                 html += `<div style="font-size:12px;color:#9ca3af;margin-bottom:14px;">Clique chaque bouton dans l'ordre, colle dans un message Meta AI séparé, puis écris <code>ALL PARTS SENT</code>.</div>`;

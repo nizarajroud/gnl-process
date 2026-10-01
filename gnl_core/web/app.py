@@ -2532,20 +2532,31 @@ async def doc_export_generate(request: Request):
             text = pasted
         elif uploads:
             # Multiple files: extract each, merge the texts (one corpus).
+            # A failing file (bad format, extraction error) is SKIPPED with a
+            # warning — it does not abort the whole batch.
             await broadcast_log(f"▶ [DOC→META] {len(uploads)} fichier(s)")
             texts = []
+            skipped = []
             for up in uploads:
                 fn = os.path.basename(up.filename or 'document')
                 ext = os.path.splitext(fn)[1].lower()
                 if ext not in SUPPORTED:
-                    return {"status": "error",
-                            "error": f"Format {ext or '?'} non supporté ({fn}). Acceptés: {', '.join(SUPPORTED)}"}
+                    skipped.append(f"{fn} (format {ext or '?'} non supporté)")
+                    await broadcast_log(f"  ⚠ ignoré {fn}: format non supporté")
+                    continue
                 tmp = _ddir / f"_in_{len(tmp_files)}_{fn}"
                 tmp.write_bytes(await up.read())
                 tmp_files.append(tmp)
-                t = await loop.run_in_executor(None, lambda tp=str(tmp): extract_text(tp))
-                texts.append(f"# {os.path.splitext(fn)[0]}\n\n{t}")
-                await on_p(f"✓ {fn}: {len(t)} chars") if False else on_p(f"✓ {fn}: {len(t)} chars")
+                try:
+                    t = await loop.run_in_executor(None, lambda tp=str(tmp): extract_text(tp))
+                    texts.append(f"# {os.path.splitext(fn)[0]}\n\n{t}")
+                    on_p(f"✓ {fn}: {len(t)} chars")
+                except Exception as fe:
+                    skipped.append(f"{fn} ({str(fe)[:60]})")
+                    await broadcast_log(f"  ⚠ ignoré {fn}: {str(fe)[:80]}")
+            if not texts:
+                return {"status": "error",
+                        "error": "Aucun fichier exploitable. " + ("; ".join(skipped) if skipped else "")}
             text = "\n\n".join(texts)
             # name: single file -> its name; multiple -> combined label
             if len(uploads) == 1:
@@ -2570,6 +2581,7 @@ async def doc_export_generate(request: Request):
                                               prompt_template=prompt_tpl))
         await broadcast_log(f"  ✓ {len(parts)} parts générées")
         return {"status": "ok", "name": name,
+                "skipped": locals().get('skipped', []),
                 "parts": [{"part": p['part'], "total": p['total'],
                            "chars": p['chars']} for p in parts]}
     except ValueError as e:
