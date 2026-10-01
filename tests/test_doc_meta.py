@@ -32,7 +32,7 @@ def test_empty_doc_raises(tmp_path):
 def test_build_parts_from_text_single():
     parts = build_parts_from_text("Short paragraph.\n\nAnother one.", max_chars=65000)
     assert len(parts) == 1
-    assert 'study/analysis partner' in parts[0]
+    assert 'expert on the subject' in parts[0]
     assert 'OF 1' in parts[0]
 
 
@@ -42,8 +42,8 @@ def test_build_parts_from_text_multiple():
     assert len(parts) > 1
     for p in parts:
         assert len(p) <= 5000 + 1000
-    assert 'study/analysis partner' in parts[0]
-    assert all('study/analysis partner' not in p for p in parts[1:])
+    assert 'expert on the subject' in parts[0]
+    assert all('expert on the subject' not in p for p in parts[1:])
 
 
 def test_generic_prompt_distinct_from_exam():
@@ -56,5 +56,10 @@ def test_oversized_paragraph_is_split():
     big = "word " * 30000  # one giant paragraph
     parts = build_parts_from_text(big, max_chars=10000)
     assert len(parts) > 1
-    for p in parts:
-        assert len(p) <= 10000 + 1000
+    # Part 1 carries the prompt (~1.2K) + a body slice; others are body only.
+    # Allow prompt overhead on top of max_chars.
+    from gnl_core.meta_export import DEFAULT_GENERIC_PROMPT
+    overhead = len(DEFAULT_GENERIC_PROMPT) + 200
+    for i, p in enumerate(parts):
+        limit = 10000 + (overhead if i == 0 else 1000)
+        assert len(p) <= limit
