@@ -1005,13 +1005,11 @@
         }
 
         async function metaExport(theme, sub, filename) {
-            console.log('[meta] metaExport called', theme, sub, filename);
             const box = _metaModal();
             box.innerHTML = '⏳ Génération des parts Meta AI… (' + filename + ')';
             try {
                 const resp = await fetch(`/api/meta-export/${theme}/${sub}/${filename}`, {method:'POST'});
                 const d = await resp.json();
-                console.log('[meta] response', d);
                 if (d.status !== 'ok') { box.innerHTML = '⚠ ' + (d.error || 'échec'); return; }
                 const name = d.name;
                 let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-weight:600;">📤 Export Meta AI — ${name} (${d.parts.length} parts)</div><button onclick="document.getElementById('meta-export-modal').remove()" style="background:none;border:none;color:#9ca3af;font-size:20px;cursor:pointer;">✕</button></div>`;
@@ -1023,7 +1021,7 @@
                 html += '</div><div id="meta-copy-msg" style="font-size:14px;margin-top:12px;"></div>';
                 html += '<textarea id="meta-copy-area" readonly style="position:absolute;left:-9999px;top:0;opacity:0;height:1px;width:1px;"></textarea>';
                 box.innerHTML = html;
-            } catch (e) { box.innerHTML = '⚠ Erreur: ' + e; console.error('[meta]', e); }
+            } catch (e) { box.innerHTML = '⚠ Erreur: ' + e; }
         }
 
         async function metaCopyPart(theme, sub, name, part, total, btn) {
