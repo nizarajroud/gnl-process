@@ -33,13 +33,13 @@
         <div id="tab-docmeta" class="tab-content hidden">
             <div class="bg-gray-800 rounded-lg p-6">
                 <h2 class="text-lg font-semibold mb-2">📤 Document → Meta AI</h2>
-                <p class="text-sm text-gray-400 mb-4">Deux options : sélectionne un document (PDF, DOCX, PPTX, XLSX, TXT, MD) <b>OU</b> colle du texte directement (n'importe quelle longueur). Le contenu est découpé en parts prêtes à coller dans Meta AI, avec un prompt générique en tête de la Part 1.</p>
+                <p class="text-sm text-gray-400 mb-4">Sélectionne un ou plusieurs documents (PDF, DOCX, PPTX, XLSX, TXT, MD) <b>et/ou</b> colle du texte. Tout est combiné en un seul corpus, découpé en parts prêtes à coller dans Meta AI, avec un prompt générique en tête de la Part 1.</p>
                 <div class="space-y-4">
                     <div class="flex items-center gap-3">
                         <input type="file" id="docmeta-file" multiple accept=".pdf,.docx,.pptx,.xlsx,.txt,.md,.markdown" class="text-sm text-gray-300">
-                        <span class="text-xs text-gray-500">(plusieurs fichiers possibles — ils seront combinés)</span>
+                        <span class="text-xs text-gray-500">(plusieurs fichiers possibles)</span>
                     </div>
-                    <div class="text-xs text-gray-500 text-center">— ou —</div>
+                    <div class="text-xs text-gray-500 text-center">+ (optionnel) texte collé ci-dessous</div>
                     <div>
                         <input type="text" id="docmeta-name" placeholder="Nom (optionnel) pour le texte collé" class="w-full bg-gray-700 rounded px-3 py-2 text-sm mb-2">
                         <textarea id="docmeta-text" rows="8" placeholder="Colle ton texte ici (n'importe quelle longueur)…" class="w-full bg-gray-700 rounded px-3 py-2 text-sm"></textarea>
@@ -1050,18 +1050,20 @@
             const status = document.getElementById('docmeta-status');
             const pasted = (textEl && textEl.value || '').trim();
             const hasFile = input.files && input.files.length;
-            if (!hasFile && !pasted) { status.textContent = '⚠ Sélectionne un fichier OU colle du texte.'; return; }
+            if (!hasFile && !pasted) { status.textContent = '⚠ Sélectionne un fichier et/ou colle du texte.'; return; }
 
             const fd = new FormData();
-            let label;
+            const labels = [];
+            if (hasFile) {
+                for (let i = 0; i < input.files.length; i++) fd.append('file', input.files[i]);
+                labels.push(input.files.length === 1 ? input.files[0].name : (input.files.length + ' fichiers'));
+            }
             if (pasted) {
                 fd.append('text', pasted);
-                if (nameEl && nameEl.value.trim()) fd.append('name', nameEl.value.trim());
-                label = 'texte collé (' + pasted.length + ' chars)';
-            } else {
-                for (let i = 0; i < input.files.length; i++) fd.append('file', input.files[i]);
-                label = input.files.length === 1 ? input.files[0].name : (input.files.length + ' fichiers');
+                labels.push('texte collé (' + pasted.length + ' chars)');
             }
+            if (nameEl && nameEl.value.trim()) fd.append('name', nameEl.value.trim());
+            const label = labels.join(' + ');
             status.textContent = '⏳ Traitement de ' + label + '…';
             const box = _metaModal();
             box.innerHTML = '⏳ Traitement de ' + label + '…';

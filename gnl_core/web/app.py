@@ -2525,18 +2525,12 @@ async def doc_export_generate(request: Request):
 
     tmp_files = []
     try:
-        if pasted:
-            name = (form.get("name") or "texte-colle").strip() or "texte-colle"
-            name = os.path.splitext(os.path.basename(name))[0]
-            await broadcast_log(f"▶ [DOC→META] texte collé ({len(pasted)} chars)")
-            text = pasted
-        elif uploads:
-            # Multiple files: extract each, merge the texts (one corpus).
-            # A failing file (bad format, extraction error) is SKIPPED with a
-            # warning — it does not abort the whole batch.
-            await broadcast_log(f"▶ [DOC→META] {len(uploads)} fichier(s)")
-            texts = []
-            skipped = []
+        # Combine BOTH sources (files + pasted text) into one corpus.
+        texts = []
+        skipped = []
+        if uploads:
+            await broadcast_log(f"▶ [DOC→META] {len(uploads)} fichier(s)"
+                                + (" + texte collé" if pasted else ""))
             for up in uploads:
                 fn = os.path.basename(up.filename or 'document')
                 ext = os.path.splitext(fn)[1].lower()
@@ -2554,19 +2548,26 @@ async def doc_export_generate(request: Request):
                 except Exception as fe:
                     skipped.append(f"{fn} ({str(fe)[:60]})")
                     await broadcast_log(f"  ⚠ ignoré {fn}: {str(fe)[:80]}")
-            if not texts:
-                return {"status": "error",
-                        "error": "Aucun fichier exploitable. " + ("; ".join(skipped) if skipped else "")}
-            text = "\n\n".join(texts)
-            # name: single file -> its name; multiple -> combined label
-            if len(uploads) == 1:
-                name = os.path.splitext(os.path.basename(uploads[0].filename))[0]
+        if pasted:
+            if not uploads:
+                await broadcast_log(f"▶ [DOC→META] texte collé ({len(pasted)} chars)")
             else:
-                name = (form.get("name") or "documents-combines").strip() or "documents-combines"
-                name = os.path.splitext(os.path.basename(name))[0]
-            await broadcast_log(f"  ✓ texte combiné ({len(text)} chars)")
+                on_p(f"✓ texte collé: {len(pasted)} chars")
+            texts.append(f"# Texte collé\n\n{pasted}")
+
+        if not texts:
+            return {"status": "error",
+                    "error": "Fournis au moins un fichier exploitable OU du texte à coller."
+                             + ((" Ignorés: " + "; ".join(skipped)) if skipped else "")}
+
+        text = "\n\n".join(texts)
+        # name: single file alone -> its name; otherwise combined label.
+        if len(uploads) == 1 and not pasted and not skipped:
+            name = os.path.splitext(os.path.basename(uploads[0].filename))[0]
         else:
-            return {"status": "error", "error": "Fournis un fichier OU du texte à coller."}
+            name = (form.get("name") or "documents-combines").strip() or "documents-combines"
+            name = os.path.splitext(os.path.basename(name))[0]
+        await broadcast_log(f"  ✓ corpus combiné ({len(text)} chars, {len(texts)} source(s))")
 
         if not text.strip():
             return {"status": "error", "error": "Contenu vide."}
