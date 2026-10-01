@@ -119,6 +119,104 @@ def build_parts(pivot, max_chars=None, prompt_template=None):
     return parts
 
 
+# --- Generic (non-exam) text splitting -------------------------------------
+# Independent of the exam pivot. Used by the generic Doc→Meta tool. The exam
+# path (build_parts above) is NOT touched.
+
+DEFAULT_GENERIC_PROMPT = (
+    "You are my study/analysis partner. I will paste a document below, split "
+    "across {N} messages (Part 1 of {N}, Part 2 of {N}, ...).\n\n"
+    "Rules:\n"
+    "- Use EXCLUSIVELY the content I paste. Do not bring in outside knowledge "
+    "unless I explicitly ask.\n"
+    "- Do NOT start answering until I say \"ALL PARTS SENT\". After each part, "
+    "reply only \"Part K received.\"\n"
+    "- When I ask about the content, answer directly and precisely, grounded "
+    "only in what was pasted. If something is not in the pasted content, say so "
+    "plainly instead of guessing.\n"
+    "- Keep answers focused; no filler.\n\n"
+    "Reply \"Ready.\" once I say ALL PARTS SENT, then wait for my questions."
+)
+
+
+def build_parts_from_text(text, max_chars=None, prompt_template=None):
+    """Split arbitrary text into parts (list of strings), each < max_chars,
+    cutting at paragraph boundaries (never mid-paragraph when avoidable).
+    Part 1 is prefixed with the generic prompt (with {N} filled).
+    """
+    max_chars = int(max_chars or DEFAULT_MAX_CHARS)
+    prompt_template = prompt_template or DEFAULT_GENERIC_PROMPT
+
+    # Split into paragraphs; keep very long paragraphs splittable by lines.
+    paragraphs = re.split(r'\n\s*\n', text.strip())
+    units = []
+    for para in paragraphs:
+        if len(para) <= max_chars:
+            units.append(para)
+        else:
+            # hard-split an oversized paragraph by lines, then by slices
+            buf = ''
+            for line in para.split('\n'):
+                if len(buf) + len(line) + 1 > max_chars and buf:
+                    units.append(buf)
+                    buf = ''
+                while len(line) > max_chars:
+                    units.append(line[:max_chars])
+                    line = line[max_chars:]
+                buf = (buf + '\n' + line) if buf else line
+            if buf:
+                units.append(buf)
+
+    prompt_reserve = len(prompt_template.replace('{N}', '99')) + len(
+        "\n\n===PART 1 OF 99===\n")
+    part_header = "===PART {k} OF {n}===\n"
+
+    groups = [[]]
+    sizes = [prompt_reserve]
+    for u in units:
+        if sizes[-1] + len(u) + 2 + len(part_header) > max_chars and groups[-1]:
+            groups.append([])
+            sizes.append(0)
+        groups[-1].append(u)
+        sizes[-1] += len(u) + 2
+
+    n = len(groups)
+    parts = []
+    for k, g in enumerate(groups, start=1):
+        body = "\n\n".join(g)
+        if k == 1:
+            head = prompt_template.replace('{N}', str(n)) + f"\n\n===PART 1 OF {n}===\n"
+        else:
+            head = f"===PART {k} OF {n}===\n"
+        parts.append(head + body)
+    return parts
+
+
+def generate_doc_export(text, name, out_dir, on_progress=None,
+                        max_chars=None, prompt_template=None):
+    """Write generic Doc→Meta part files into out_dir and return a list of
+    {'part','total','path','chars'}. out_dir is created/cleaned."""
+    from pathlib import Path as _P
+    out = _P(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    for old in out.glob('part*_of_*.txt'):
+        try:
+            old.unlink()
+        except Exception:
+            pass
+    parts = build_parts_from_text(text, max_chars=max_chars,
+                                  prompt_template=prompt_template)
+    n = len(parts)
+    results = []
+    for k, content in enumerate(parts, start=1):
+        p = out / f"part{k}_of_{n}.txt"
+        p.write_text(content, encoding='utf-8')
+        results.append({'part': k, 'total': n, 'path': str(p), 'chars': len(content)})
+        if on_progress:
+            on_progress(f"Doc export part {k}/{n} → {p.name} ({len(content)} chars)")
+    return results
+
+
 def generate_meta_export(pivot, name, theme, subtheme, on_progress=None,
                          max_chars=None, prompt_template=None):
     """Write the Meta AI part files into assets/Meta-export/<name>/ and return

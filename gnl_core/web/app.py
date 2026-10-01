@@ -2104,12 +2104,14 @@ async def admin_save(request: Request):
                    'MAX_GENERATION_RETRIES', 'TEST_MODE', 'TEST_GENERATION_DELAY',
                    'BEDROCK_MODEL_ID', 'AWS_REGION', 'AWS_PROFILE',
                    'META_PROMPT_WRONG', 'META_PROMPT_CORRECT',
-                   'META_EXPORT_PROMPT', 'META_EXPORT_MAX_CHARS']
+                   'META_EXPORT_PROMPT', 'META_EXPORT_MAX_CHARS',
+                   'GENERIC_EXPORT_PROMPT', 'GENERIC_EXPORT_MAX_CHARS']
     
     data = {key: form.get(key, '') for key in config_keys}
     # Don't clobber saved Meta prompts if the form didn't include them.
     for pk in ('META_PROMPT_WRONG', 'META_PROMPT_CORRECT',
-               'META_EXPORT_PROMPT', 'META_EXPORT_MAX_CHARS'):
+               'META_EXPORT_PROMPT', 'META_EXPORT_MAX_CHARS',
+               'GENERIC_EXPORT_PROMPT', 'GENERIC_EXPORT_MAX_CHARS'):
         if pk not in form.keys():
             data.pop(pk, None)
 
@@ -2487,6 +2489,85 @@ async def meta_export_part(theme: str, subtheme: str, name: str, part: str):
     out_dir = base / 'Meta-export' / name
     safe = os.path.basename(part)
     p = out_dir / safe
+    if not p.exists() or p.suffix != '.txt':
+        return {"status": "error", "error": "Part not found"}
+    return {"status": "ok", "content": p.read_text(encoding='utf-8')}
+
+
+# --- Generic Doc→Meta (independent of exams) --------------------------------
+def _doc_export_dir():
+    import tempfile as _tf
+    return Path(_tf.gettempdir()) / 'gnl-doc-export'
+
+
+@app.post("/api/doc-export")
+async def doc_export_generate(request: Request):
+    """Upload any document, extract text, split into Meta AI parts."""
+    from fastapi import UploadFile
+    from gnl_core.config import get_config
+    from gnl_core.doc_extract import extract_text, SUPPORTED
+    from gnl_core.meta_export import generate_doc_export
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None or not hasattr(upload, 'filename'):
+        return {"status": "error", "error": "Aucun fichier fourni"}
+    filename = os.path.basename(upload.filename or 'document')
+    name = os.path.splitext(filename)[0]
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in SUPPORTED:
+        return {"status": "error",
+                "error": f"Format {ext or '?'} non supporté. Acceptés: {', '.join(SUPPORTED)}"}
+
+    _ddir = _doc_export_dir()
+    _ddir.mkdir(parents=True, exist_ok=True)
+    tmp_in = _ddir / f"_in_{name}{ext}"
+    content = await upload.read()
+    tmp_in.write_bytes(content)
+
+    loop = asyncio.get_event_loop()
+    config = get_config()
+
+    def on_p(msg):
+        try:
+            asyncio.run_coroutine_threadsafe(broadcast_log(f"  {msg}"), loop)
+        except Exception:
+            pass
+
+    try:
+        await broadcast_log(f"▶ [DOC→META] {filename}")
+        text = await loop.run_in_executor(None, lambda: extract_text(str(tmp_in)))
+        await broadcast_log(f"  ✓ texte extrait ({len(text)} chars)")
+        out_dir = _ddir / name
+        max_chars = config.get('GENERIC_EXPORT_MAX_CHARS') or None
+        prompt_tpl = config.get('GENERIC_EXPORT_PROMPT') or None
+        parts = await loop.run_in_executor(
+            None, lambda: generate_doc_export(text, name, str(out_dir),
+                                              on_progress=on_p,
+                                              max_chars=max_chars,
+                                              prompt_template=prompt_tpl))
+        await broadcast_log(f"  ✓ {len(parts)} parts générées")
+        return {"status": "ok", "name": name,
+                "parts": [{"part": p['part'], "total": p['total'],
+                           "chars": p['chars']} for p in parts]}
+    except ValueError as e:
+        await broadcast_log(f"⚠ {str(e)[:120]}")
+        return {"status": "error", "error": str(e)[:200]}
+    except Exception as e:
+        await broadcast_log(f"⚠ Erreur: {str(e)[:100]}")
+        return {"status": "error", "error": str(e)[:200]}
+    finally:
+        try:
+            tmp_in.unlink()
+        except Exception:
+            pass
+
+
+@app.get("/api/doc-export/{name}/{part}")
+async def doc_export_part(name: str, part: str):
+    """Return the raw text of a generated Doc→Meta part (for copy)."""
+    safe_name = os.path.basename(name)
+    safe_part = os.path.basename(part)
+    p = _doc_export_dir() / safe_name / safe_part
     if not p.exists() or p.suffix != '.txt':
         return {"status": "error", "error": "Part not found"}
     return {"status": "ok", "content": p.read_text(encoding='utf-8')}

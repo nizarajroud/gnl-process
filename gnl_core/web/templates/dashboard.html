@@ -25,14 +25,27 @@
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('history')">📜 Historique</button>
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('config')">⚙️ Configuration</button>
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('defaults')">🎛️ Config par défaut</button>
+            <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('docmeta')">📤 Doc→Meta</button>
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('changelog')">📋 Changelog</button>
+        </div>
+
+        <!-- Tab: Doc→Meta (generic document to Meta AI parts) -->
+        <div id="tab-docmeta" class="tab-content hidden">
+            <div class="bg-gray-800 rounded-lg p-6">
+                <h2 class="text-lg font-semibold mb-2">📤 Document → Meta AI</h2>
+                <p class="text-sm text-gray-400 mb-4">Sélectionne n'importe quel document (PDF, DOCX, PPTX, XLSX, TXT, MD). Le contenu est extrait, découpé en parts prêtes à coller dans Meta AI, avec un prompt générique en tête de la Part 1.</p>
+                <div class="flex items-center gap-3">
+                    <input type="file" id="docmeta-file" accept=".pdf,.docx,.pptx,.xlsx,.txt,.md,.markdown" class="text-sm text-gray-300">
+                    <button type="button" onclick="docExport()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium text-white">📤 Générer les parts</button>
+                </div>
+                <div id="docmeta-status" class="text-sm text-gray-400 mt-3"></div>
+            </div>
         </div>
 
         <!-- Tab: Production -->
         <div id="tab-production" class="tab-content hidden">
             <!-- Production toolbar -->
-            <div class="flex justify-between items-center mb-4">
-                <div></div>
+            <div class="flex justify-between items-center mb-4">                <div></div>
                 <div class="flex items-center gap-4">
                     <button onclick="openCombineEpisodes()" class="px-3 py-1 bg-green-700 hover:bg-green-600 rounded text-xs">🔗 Combiner épisodes</button>
                     <span id="quota" class="text-sm text-gray-400" title="Budget compute NotebookLM (5h / hebdo)">🎯 …</span>
@@ -513,6 +526,24 @@
                     </div>
                 </div>
 
+                <!-- Doc→Meta générique (onglet Doc→Meta) -->
+                <div class="bg-gray-800 rounded-lg p-5">
+                    <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('span').textContent=this.nextElementSibling.classList.contains('hidden')?'▶':'▼'" class="flex items-center gap-2 font-semibold w-full text-left">
+                        <span class="text-xs">▶</span> 📄 Doc→Meta générique (prompt indépendant du sujet)
+                    </button>
+                    <div class="hidden mt-4 space-y-3">
+                        <p class="text-xs text-gray-500">Prompt générique placé en tête de la Part 1 pour l'onglet Doc→Meta (n'importe quel document). Placeholder <code>{N}</code> = nombre de parts. Laisser vide = défaut.</p>
+                        <div>
+                            <label class="text-xs text-gray-400">Prompt générique (Part 1)</label>
+                            <textarea name="GENERIC_EXPORT_PROMPT" rows="8" class="w-full bg-gray-700 rounded px-3 py-2 text-sm font-mono" placeholder="Laisser vide = prompt par défaut">{{ config.GENERIC_EXPORT_PROMPT or '' }}</textarea>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">Taille max par part (caractères)</label>
+                            <input type="number" name="GENERIC_EXPORT_MAX_CHARS" value="{{ config.GENERIC_EXPORT_MAX_CHARS or '65000' }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                        </div>
+                    </div>
+                </div>
+
                 <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium">💾 Sauvegarder</button>
                 <button type="button" onclick="window.location.href='/admin/export'" class="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-sm font-medium">📥 Exporter</button>
             </form>
@@ -952,42 +983,40 @@
             });
         }
 
-        // --- Meta AI export: generate parts + per-part copy buttons ---
-        function _getMetaPanel() {
-            let panel = document.getElementById('meta-export-panel');
-            if (!panel) {
-                // Create it right after the content card if the list didn't include it.
-                panel = document.createElement('div');
-                panel.id = 'meta-export-panel';
-                panel.className = 'mt-4 bg-gray-800 rounded-lg p-4';
-                const anchor = document.getElementById('tab-content') || document.body;
-                anchor.appendChild(panel);
+        // --- Meta AI export: generate parts + per-part copy buttons (modal) ---
+        function _metaModal() {
+            let m = document.getElementById('meta-export-modal');
+            if (!m) {
+                m = document.createElement('div');
+                m.id = 'meta-export-modal';
+                m.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;';
+                m.innerHTML = '<div id="meta-export-box" style="background:#1f2937;color:#e5e7eb;max-width:640px;width:90%;max-height:80vh;overflow:auto;border-radius:12px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,0.5);"></div>';
+                m.addEventListener('click', function(e){ if(e.target===m) m.remove(); });
+                document.body.appendChild(m);
             }
-            panel.classList.remove('hidden');
-            return panel;
+            return m.querySelector('#meta-export-box');
         }
 
         async function metaExport(theme, sub, filename) {
             console.log('[meta] metaExport called', theme, sub, filename);
-            const panel = _getMetaPanel();
-            panel.innerHTML = '⏳ Génération des parts Meta AI… (' + filename + ')';
+            const box = _metaModal();
+            box.innerHTML = '⏳ Génération des parts Meta AI… (' + filename + ')';
             try {
                 const resp = await fetch(`/api/meta-export/${theme}/${sub}/${filename}`, {method:'POST'});
                 const d = await resp.json();
                 console.log('[meta] response', d);
-                if (d.status !== 'ok') { panel.innerHTML = '⚠ ' + (d.error || 'échec'); return; }
+                if (d.status !== 'ok') { box.innerHTML = '⚠ ' + (d.error || 'échec'); return; }
                 const name = d.name;
-                let html = `<div class="text-sm font-semibold mb-2">📤 Export Meta AI — ${name} (${d.parts.length} parts)</div>`;
-                html += `<div class="text-xs text-gray-400 mb-3">Colle chaque part dans un message séparé (dans l'ordre), puis écris <code>ALL PARTS SENT</code>.</div>`;
-                html += '<div class="flex flex-wrap gap-2">';
+                let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-weight:600;">📤 Export Meta AI — ${name} (${d.parts.length} parts)</div><button onclick="document.getElementById('meta-export-modal').remove()" style="background:none;border:none;color:#9ca3af;font-size:20px;cursor:pointer;">✕</button></div>`;
+                html += `<div style="font-size:12px;color:#9ca3af;margin-bottom:14px;">Clique chaque bouton dans l'ordre, colle dans un message Meta AI séparé, puis écris <code>ALL PARTS SENT</code>.</div>`;
+                html += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
                 for (const p of d.parts) {
-                    html += `<button type="button" onclick="metaCopyPart('${theme}','${sub}','${name}',${p.part},${p.total},this)" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded text-sm text-white">📋 Part ${p.part}/${p.total}</button>`;
+                    html += `<button type="button" onclick="metaCopyPart('${theme}','${sub}','${name}',${p.part},${p.total},this)" style="padding:8px 14px;background:#4f46e5;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;">📋 Part ${p.part}/${p.total}</button>`;
                 }
-                html += '</div><div id="meta-copy-msg" class="text-sm mt-2"></div>';
+                html += '</div><div id="meta-copy-msg" style="font-size:14px;margin-top:12px;"></div>';
                 html += '<textarea id="meta-copy-area" readonly style="position:absolute;left:-9999px;top:0;opacity:0;height:1px;width:1px;"></textarea>';
-                panel.innerHTML = html;
-                panel.scrollIntoView({behavior:'smooth', block:'nearest'});
-            } catch (e) { panel.innerHTML = '⚠ Erreur: ' + e; }
+                box.innerHTML = html;
+            } catch (e) { box.innerHTML = '⚠ Erreur: ' + e; console.error('[meta]', e); }
         }
 
         async function metaCopyPart(theme, sub, name, part, total, btn) {
@@ -1002,6 +1031,51 @@
                 if(!ok && navigator.clipboard && navigator.clipboard.writeText){ try{navigator.clipboard.writeText(area.value); ok=true;}catch(e){} }
                 area.style.position='absolute'; area.style.left='-9999px';
                 window.getSelection && window.getSelection().removeAllRanges && window.getSelection().removeAllRanges();
+                if(btn){ btn.textContent = ok ? `✅ Part ${part}/${total}` : `⚠ Part ${part}/${total}`; }
+                if(msg){ msg.textContent = ok ? `✅ Part ${part}/${total} copiée — colle-la dans Meta AI` : '⚠ Réessaie'; msg.style.color = ok ? '#28a745' : '#dc3545'; }
+            } catch (e) { if(msg){msg.textContent='⚠ Erreur: '+e;} }
+        }
+
+        // --- Generic Doc→Meta: upload a file, split, show copy modal ---
+        async function docExport() {
+            const input = document.getElementById('docmeta-file');
+            const status = document.getElementById('docmeta-status');
+            if (!input.files || !input.files.length) { status.textContent = '⚠ Sélectionne un fichier d\'abord.'; return; }
+            const file = input.files[0];
+            status.textContent = '⏳ Extraction + découpage de ' + file.name + '…';
+            const box = _metaModal();
+            box.innerHTML = '⏳ Traitement de ' + file.name + '…';
+            try {
+                const fd = new FormData(); fd.append('file', file);
+                const d = await (await fetch('/api/doc-export', {method:'POST', body: fd})).json();
+                if (d.status !== 'ok') { box.innerHTML = '⚠ ' + (d.error || 'échec'); status.textContent = '⚠ ' + (d.error||''); return; }
+                status.textContent = `✓ ${d.parts.length} parts générées pour ${d.name}`;
+                const name = d.name;
+                let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-weight:600;">📤 ${name} (${d.parts.length} parts)</div><button onclick="document.getElementById('meta-export-modal').remove()" style="background:none;border:none;color:#9ca3af;font-size:20px;cursor:pointer;">✕</button></div>`;
+                html += `<div style="font-size:12px;color:#9ca3af;margin-bottom:14px;">Clique chaque bouton dans l'ordre, colle dans un message Meta AI séparé, puis écris <code>ALL PARTS SENT</code>.</div>`;
+                html += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+                for (const p of d.parts) {
+                    html += `<button type="button" onclick="docCopyPart('${name.replace(/'/g,"\\'")}',${p.part},${p.total},this)" style="padding:8px 14px;background:#4f46e5;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;">📋 Part ${p.part}/${p.total}</button>`;
+                }
+                html += '</div><div id="meta-copy-msg" style="font-size:14px;margin-top:12px;"></div>';
+                html += '<textarea id="meta-copy-area" readonly style="position:absolute;left:-9999px;top:0;opacity:0;height:1px;width:1px;"></textarea>';
+                box.innerHTML = html;
+            } catch (e) { box.innerHTML = '⚠ Erreur: ' + e; status.textContent = '⚠ ' + e; }
+        }
+
+        async function docCopyPart(name, part, total, btn) {
+            const msg = document.getElementById('meta-copy-msg');
+            const area = document.getElementById('meta-copy-area');
+            try {
+                const d = await (await fetch(`/api/doc-export/${encodeURIComponent(name)}/part${part}_of_${total}.txt`)).json();
+                if (d.status !== 'ok') { if(msg){msg.textContent='⚠ '+(d.error||'introuvable');} return; }
+                area.value = d.content;
+                area.style.position='static'; area.focus(); area.select();
+                let ok=false; try{ok=document.execCommand('copy');}catch(e){ok=false;}
+                if(!ok && navigator.clipboard && navigator.clipboard.writeText){ try{navigator.clipboard.writeText(area.value); ok=true;}catch(e){} }
+                area.style.position='absolute'; area.style.left='-9999px';
+                window.getSelection && window.getSelection().removeAllRanges && window.getSelection().removeAllRanges();
+                if(btn){ btn.textContent = ok ? `✅ Part ${part}/${total}` : `⚠ Part ${part}/${total}`; }
                 if(msg){ msg.textContent = ok ? `✅ Part ${part}/${total} copiée — colle-la dans Meta AI` : '⚠ Réessaie'; msg.style.color = ok ? '#28a745' : '#dc3545'; }
             } catch (e) { if(msg){msg.textContent='⚠ Erreur: '+e;} }
         }
@@ -1170,8 +1244,7 @@
                 if (!files.length) { div.innerHTML = '<span class="text-gray-500">Aucun fichier PDF dans ce dossier.</span>'; return; }
                 div.innerHTML = '<table class="w-full text-xs"><thead><tr class="text-gray-400 border-b border-gray-700"><th class="text-left py-1">Fichier</th><th class="py-1">Statut</th><th class="text-right py-1">Action</th></tr></thead><tbody>' +
                     files.map(f => `<tr class="border-b border-gray-800"><td class="py-1">${f.name} ${f.anki ? '<span class="text-xs bg-green-800 text-green-200 px-1 rounded">Anki</span>' : ''} ${f.in_production ? '<span class="text-xs bg-blue-800 text-blue-200 px-1 rounded">Podcast</span>' : ''}</td><td class="py-1"><button onclick="prepareFromInbox('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-orange-600 hover:bg-orange-500 rounded text-white">Traiter</button>${theme === 'exams' ? ` <button onclick="metaExport('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-500 rounded text-white">📤 Meta</button>` : ''}</td><td class="text-right py-1">${theme === 'exams' ? `<button onclick="cleanExam('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-red-600 hover:bg-red-500 rounded text-white">🗑</button>` : `<button onclick="launchInteractive('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-purple-600 hover:bg-purple-500 rounded text-white">🎙️ Interactif</button>`}</td></tr>`).join('') +
-                    '</tbody></table>' +
-                    '<div id="meta-export-panel" class="hidden mt-4 bg-gray-800 rounded-lg p-4"></div>';
+                    '</tbody></table>';
             });
         }
 
