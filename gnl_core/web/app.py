@@ -2102,11 +2102,13 @@ async def admin_save(request: Request):
                    'NOTEBOOKLM_LANGUAGE', 'DEFAULT_SPEED', 'MCP_DOWNLOAD_TIMEOUT',
                    'MAX_GENERATION_RETRIES', 'TEST_MODE', 'TEST_GENERATION_DELAY',
                    'BEDROCK_MODEL_ID', 'AWS_REGION', 'AWS_PROFILE',
-                   'META_PROMPT_WRONG', 'META_PROMPT_CORRECT']
+                   'META_PROMPT_WRONG', 'META_PROMPT_CORRECT',
+                   'META_EXPORT_PROMPT', 'META_EXPORT_MAX_CHARS']
     
     data = {key: form.get(key, '') for key in config_keys}
     # Don't clobber saved Meta prompts if the form didn't include them.
-    for pk in ('META_PROMPT_WRONG', 'META_PROMPT_CORRECT'):
+    for pk in ('META_PROMPT_WRONG', 'META_PROMPT_CORRECT',
+               'META_EXPORT_PROMPT', 'META_EXPORT_MAX_CHARS'):
         if pk not in form.keys():
             data.pop(pk, None)
 
@@ -2422,6 +2424,71 @@ async def anki_review_reset_apkg():
     await broadcast_log("▶ Génération des apkg reset (questions ratées, 2e passe)")
     results = await loop.run_in_executor(None, lambda: generate_reset_apkgs(on_progress=on_p))
     return {"apkgs": [{"exam": e, "path": p} for e, p in results], "count": len(results)}
+
+
+@app.post("/api/meta-export/{theme}/{subtheme}/{filename}")
+async def meta_export_generate(theme: str, subtheme: str, filename: str):
+    """Generate Meta AI 'part' files for an exam document (any format)."""
+    from gnl_core.config import get_config
+    from gnl_core.exam_formats import detect_format
+    from gnl_core.exam_formats.pipeline import resolve_format_output
+    from gnl_core.meta_export import generate_meta_export
+    loop = asyncio.get_event_loop()
+    config = get_config()
+    inbox = config.get('INBOX_FOLDER', '')
+    origin_path = os.path.join(inbox, theme, subtheme, filename)
+    # Prefer the already-copied origin if present
+    from gnl_core.exams import get_exam_base
+    base = get_exam_base(theme, subtheme)
+    cand = base / 'pdf-formatting' / 'origin' / filename
+    src = str(cand) if cand.exists() else origin_path
+    if not os.path.isfile(src):
+        return {"status": "error", "error": "File not found"}
+
+    name = os.path.splitext(filename)[0]
+
+    def on_p(msg):
+        try:
+            asyncio.run_coroutine_threadsafe(broadcast_log(f"  {msg}"), loop)
+        except Exception:
+            pass
+
+    try:
+        await broadcast_log(f"▶ [META] Export Meta AI pour {name}")
+        fmt = await loop.run_in_executor(None, lambda: detect_format(src))
+        if fmt is None:
+            await broadcast_log("⚠ Format non reconnu")
+            return {"status": "error", "error": "Unknown exam format"}
+        pivot, _md, _ans = await loop.run_in_executor(
+            None, lambda: resolve_format_output(fmt, src, name, theme, subtheme, on_progress=on_p))
+        max_chars = config.get('META_EXPORT_MAX_CHARS') or None
+        prompt_tpl = config.get('META_EXPORT_PROMPT') or None
+        parts = await loop.run_in_executor(
+            None, lambda: generate_meta_export(pivot, name, theme, subtheme,
+                                               on_progress=on_p,
+                                               max_chars=max_chars,
+                                               prompt_template=prompt_tpl))
+        await broadcast_log(f"  ✓ {len(parts)} parts générées")
+        return {"status": "ok", "name": name, "theme": theme,
+                "subtheme": subtheme,
+                "parts": [{"part": p['part'], "total": p['total'],
+                           "chars": p['chars']} for p in parts]}
+    except Exception as e:
+        await broadcast_log(f"⚠ Erreur: {str(e)[:100]}")
+        return {"status": "error", "error": str(e)[:120]}
+
+
+@app.get("/api/meta-export/{theme}/{subtheme}/{name}/{part}")
+async def meta_export_part(theme: str, subtheme: str, name: str, part: str):
+    """Return the raw text content of a generated Meta AI part (for copy)."""
+    from gnl_core.exams import get_exam_base
+    base = get_exam_base(theme, subtheme)
+    out_dir = base / 'Meta-export' / name
+    safe = os.path.basename(part)
+    p = out_dir / safe
+    if not p.exists() or p.suffix != '.txt':
+        return {"status": "error", "error": "Part not found"}
+    return {"status": "ok", "content": p.read_text(encoding='utf-8')}
 
 
 @app.get("/api/nlm-usage")

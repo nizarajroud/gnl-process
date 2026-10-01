@@ -495,6 +495,24 @@
                     </div>
                 </div>
 
+                <!-- Meta AI Export (parts à coller) -->
+                <div class="bg-gray-800 rounded-lg p-5">
+                    <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('span').textContent=this.nextElementSibling.classList.contains('hidden')?'▶':'▼'" class="flex items-center gap-2 font-semibold w-full text-left">
+                        <span class="text-xs">▶</span> 📤 Export Meta AI (parts à coller)
+                    </button>
+                    <div class="hidden mt-4 space-y-3">
+                        <p class="text-xs text-gray-500">Prompt placé en tête de la Part 1 de l'export Meta AI. Placeholder <code>{N}</code> = nombre de parts. Laisser vide = défaut.</p>
+                        <div>
+                            <label class="text-xs text-gray-400">Prompt d'en-tête (Part 1)</label>
+                            <textarea name="META_EXPORT_PROMPT" rows="8" class="w-full bg-gray-700 rounded px-3 py-2 text-sm font-mono" placeholder="Laisser vide = prompt par défaut">{{ config.META_EXPORT_PROMPT or '' }}</textarea>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">Taille max par part (caractères — limite Meta AI ~75000)</label>
+                            <input type="number" name="META_EXPORT_MAX_CHARS" value="{{ config.META_EXPORT_MAX_CHARS or '65000' }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                        </div>
+                    </div>
+                </div>
+
                 <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium">💾 Sauvegarder</button>
                 <button type="button" onclick="window.location.href='/admin/export'" class="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-sm font-medium">📥 Exporter</button>
             </form>
@@ -934,6 +952,42 @@
             });
         }
 
+        // --- Meta AI export: generate parts + per-part copy buttons ---
+        async function metaExport(theme, sub, filename) {
+            const panel = document.getElementById('meta-export-panel');
+            if (panel) { panel.classList.remove('hidden'); panel.textContent = '⏳ Génération des parts Meta AI…'; }
+            try {
+                const d = await (await fetch(`/api/meta-export/${theme}/${sub}/${filename}`, {method:'POST'})).json();
+                if (d.status !== 'ok') { panel.textContent = '⚠ ' + (d.error || 'échec'); return; }
+                const name = d.name;
+                let html = `<div class="text-sm font-semibold mb-2">📤 Export Meta AI — ${name} (${d.parts.length} parts)</div>`;
+                html += `<div class="text-xs text-gray-400 mb-3">Colle chaque part dans un message séparé (dans l'ordre), puis écris <code>ALL PARTS SENT</code>.</div>`;
+                html += '<div class="flex flex-wrap gap-2">';
+                for (const p of d.parts) {
+                    html += `<button type="button" onclick="metaCopyPart('${theme}','${sub}','${name}',${p.part},${p.total},this)" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">📋 Part ${p.part}/${p.total}</button>`;
+                }
+                html += '</div><div id="meta-copy-msg" class="text-sm mt-2"></div>';
+                html += '<textarea id="meta-copy-area" readonly style="position:absolute;left:-9999px;top:0;opacity:0;height:1px;width:1px;"></textarea>';
+                panel.innerHTML = html;
+            } catch (e) { panel.textContent = '⚠ Erreur: ' + e; }
+        }
+
+        async function metaCopyPart(theme, sub, name, part, total, btn) {
+            const msg = document.getElementById('meta-copy-msg');
+            const area = document.getElementById('meta-copy-area');
+            try {
+                const d = await (await fetch(`/api/meta-export/${theme}/${sub}/${name}/part${part}_of_${total}.txt`)).json();
+                if (d.status !== 'ok') { if(msg){msg.textContent='⚠ '+(d.error||'introuvable');} return; }
+                area.value = d.content;
+                area.style.position='static'; area.focus(); area.select();
+                let ok=false; try{ok=document.execCommand('copy');}catch(e){ok=false;}
+                if(!ok && navigator.clipboard && navigator.clipboard.writeText){ try{navigator.clipboard.writeText(area.value); ok=true;}catch(e){} }
+                area.style.position='absolute'; area.style.left='-9999px';
+                window.getSelection && window.getSelection().removeAllRanges && window.getSelection().removeAllRanges();
+                if(msg){ msg.textContent = ok ? `✅ Part ${part}/${total} copiée — colle-la dans Meta AI` : '⚠ Réessaie'; msg.style.color = ok ? '#28a745' : '#dc3545'; }
+            } catch (e) { if(msg){msg.textContent='⚠ Erreur: '+e;} }
+        }
+
         function loadSavedArticles(source) {
             fetch(`/saved-articles/${source}`).then(r=>r.json()).then(articles => {
                 const div = document.getElementById(`articles-${source}`);
@@ -1097,8 +1151,9 @@
                 const div = document.getElementById(`filelist-${theme}-${sub}`);
                 if (!files.length) { div.innerHTML = '<span class="text-gray-500">Aucun fichier PDF dans ce dossier.</span>'; return; }
                 div.innerHTML = '<table class="w-full text-xs"><thead><tr class="text-gray-400 border-b border-gray-700"><th class="text-left py-1">Fichier</th><th class="py-1">Statut</th><th class="text-right py-1">Action</th></tr></thead><tbody>' +
-                    files.map(f => `<tr class="border-b border-gray-800"><td class="py-1">${f.name} ${f.anki ? '<span class="text-xs bg-green-800 text-green-200 px-1 rounded">Anki</span>' : ''} ${f.in_production ? '<span class="text-xs bg-blue-800 text-blue-200 px-1 rounded">Podcast</span>' : ''}</td><td class="py-1"><button onclick="prepareFromInbox('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-orange-600 hover:bg-orange-500 rounded text-white">Traiter</button></td><td class="text-right py-1">${theme === 'exams' ? `<button onclick="cleanExam('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-red-600 hover:bg-red-500 rounded text-white">🗑</button>` : `<button onclick="launchInteractive('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-purple-600 hover:bg-purple-500 rounded text-white">🎙️ Interactif</button>`}</td></tr>`).join('') +
-                    '</tbody></table>';
+                    files.map(f => `<tr class="border-b border-gray-800"><td class="py-1">${f.name} ${f.anki ? '<span class="text-xs bg-green-800 text-green-200 px-1 rounded">Anki</span>' : ''} ${f.in_production ? '<span class="text-xs bg-blue-800 text-blue-200 px-1 rounded">Podcast</span>' : ''}</td><td class="py-1"><button onclick="prepareFromInbox('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-orange-600 hover:bg-orange-500 rounded text-white">Traiter</button>${theme === 'exams' ? ` <button onclick="metaExport('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-500 rounded text-white">📤 Meta</button>` : ''}</td><td class="text-right py-1">${theme === 'exams' ? `<button onclick="cleanExam('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-red-600 hover:bg-red-500 rounded text-white">🗑</button>` : `<button onclick="launchInteractive('${theme}','${sub}','${f.name}')" class="px-2 py-0.5 bg-purple-600 hover:bg-purple-500 rounded text-white">🎙️ Interactif</button>`}</td></tr>`).join('') +
+                    '</tbody></table>' +
+                    '<div id="meta-export-panel" class="hidden mt-4 bg-gray-800 rounded-lg p-4"></div>';
             });
         }
 
