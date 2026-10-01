@@ -953,23 +953,39 @@
         }
 
         // --- Meta AI export: generate parts + per-part copy buttons ---
+        function _getMetaPanel() {
+            let panel = document.getElementById('meta-export-panel');
+            if (!panel) {
+                // Create it right after the content card if the list didn't include it.
+                panel = document.createElement('div');
+                panel.id = 'meta-export-panel';
+                panel.className = 'mt-4 bg-gray-800 rounded-lg p-4';
+                const anchor = document.getElementById('tab-content') || document.body;
+                anchor.appendChild(panel);
+            }
+            panel.classList.remove('hidden');
+            return panel;
+        }
+
         async function metaExport(theme, sub, filename) {
-            const panel = document.getElementById('meta-export-panel');
-            if (panel) { panel.classList.remove('hidden'); panel.textContent = '⏳ Génération des parts Meta AI…'; }
+            const panel = _getMetaPanel();
+            panel.innerHTML = '⏳ Génération des parts Meta AI…';
             try {
-                const d = await (await fetch(`/api/meta-export/${theme}/${sub}/${filename}`, {method:'POST'})).json();
-                if (d.status !== 'ok') { panel.textContent = '⚠ ' + (d.error || 'échec'); return; }
+                const resp = await fetch(`/api/meta-export/${theme}/${sub}/${filename}`, {method:'POST'});
+                const d = await resp.json();
+                if (d.status !== 'ok') { panel.innerHTML = '⚠ ' + (d.error || 'échec'); return; }
                 const name = d.name;
                 let html = `<div class="text-sm font-semibold mb-2">📤 Export Meta AI — ${name} (${d.parts.length} parts)</div>`;
                 html += `<div class="text-xs text-gray-400 mb-3">Colle chaque part dans un message séparé (dans l'ordre), puis écris <code>ALL PARTS SENT</code>.</div>`;
                 html += '<div class="flex flex-wrap gap-2">';
                 for (const p of d.parts) {
-                    html += `<button type="button" onclick="metaCopyPart('${theme}','${sub}','${name}',${p.part},${p.total},this)" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">📋 Part ${p.part}/${p.total}</button>`;
+                    html += `<button type="button" onclick="metaCopyPart('${theme}','${sub}','${name}',${p.part},${p.total},this)" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded text-sm text-white">📋 Part ${p.part}/${p.total}</button>`;
                 }
                 html += '</div><div id="meta-copy-msg" class="text-sm mt-2"></div>';
                 html += '<textarea id="meta-copy-area" readonly style="position:absolute;left:-9999px;top:0;opacity:0;height:1px;width:1px;"></textarea>';
                 panel.innerHTML = html;
-            } catch (e) { panel.textContent = '⚠ Erreur: ' + e; }
+                panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+            } catch (e) { panel.innerHTML = '⚠ Erreur: ' + e; }
         }
 
         async function metaCopyPart(theme, sub, name, part, total, btn) {
