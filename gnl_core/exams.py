@@ -707,6 +707,16 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     base = get_exam_base(theme, subtheme)
     name = Path(source_path).stem
 
+    # Build id for localStorage keys: a short hash of the exam name + the
+    # answers content. If the options/answers change between regenerations,
+    # the keys change too, so a stale checkbox state from a PREVIOUS version
+    # can never color the wrong option on the new cards. Re-generating the
+    # SAME content keeps the same keys (clean re-import).
+    import hashlib as _hashlib
+    _build_src = name + guid_suffix + repr(sorted(
+        (str(k), tuple(v.get('options', []))) for k, v in answers.items()))
+    build_id = _hashlib.md5(_build_src.encode('utf-8')).hexdigest()[:6]
+
     # Extract question texts from full markdown
     md_content = Path(source_path).read_text(encoding='utf-8')
     parts = re.split(r'## Question\s+\d+:', md_content)
@@ -926,9 +936,10 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
             back = f"<b>Question {num}:</b><br><br>{q_text}<br><br><b>Correct order:</b><ol>{order_html}</ol>"
         else:
             # Front: interactive checkboxes that save state to localStorage (persists on device)
-            # Key prefixed with deck name + guid_suffix so a reset ('-r2') deck
-            # does NOT share localStorage state with the original deck.
-            kb = f"{name}{guid_suffix}"
+            # Key = name + guid_suffix + build_id so (a) a reset ('-r2') deck
+            # doesn't share state with the original, and (b) a regeneration with
+            # DIFFERENT option content gets fresh keys (no stale wrong-coloring).
+            kb = f"{name}{guid_suffix}-{build_id}"
             front_items = "".join(
                 f"<div class='option'><input type='checkbox' id='{kb}-q{num}o{i}' onchange=\"localStorage.setItem('{kb}-q{num}o{i}', this.checked?'1':'0')\"> <label for='{kb}-q{num}o{i}'>{o}</label></div>"
                 for i, o in enumerate(options)
