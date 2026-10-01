@@ -968,11 +968,13 @@
         }
 
         async function metaExport(theme, sub, filename) {
+            console.log('[meta] metaExport called', theme, sub, filename);
             const panel = _getMetaPanel();
-            panel.innerHTML = '⏳ Génération des parts Meta AI…';
+            panel.innerHTML = '⏳ Génération des parts Meta AI… (' + filename + ')';
             try {
                 const resp = await fetch(`/api/meta-export/${theme}/${sub}/${filename}`, {method:'POST'});
                 const d = await resp.json();
+                console.log('[meta] response', d);
                 if (d.status !== 'ok') { panel.innerHTML = '⚠ ' + (d.error || 'échec'); return; }
                 const name = d.name;
                 let html = `<div class="text-sm font-semibold mb-2">📤 Export Meta AI — ${name} (${d.parts.length} parts)</div>`;

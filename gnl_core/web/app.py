@@ -582,7 +582,8 @@ async def dashboard(request: Request):
         "request": request, "parents": parents, "history": history,
         "schedule_time": schedule_time, "next_run": next_run, "test_mode": test_mode,
         "quota_remaining": quota_remaining, "config": config, "changelog_html": changelog_html
-    })
+    }, headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache", "Expires": "0"})
 @app.get("/api/catalog")
 async def get_catalog():
     """Return series catalog for form dropdowns."""
