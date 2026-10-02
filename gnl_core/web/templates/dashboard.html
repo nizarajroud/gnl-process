@@ -1089,7 +1089,7 @@
                     <h3 class="text-lg font-semibold">${t.title}</h3>
                     <div class="flex items-center gap-2">
                         <label class="text-xs text-gray-400 flex items-center gap-1" title="Si coché, le prompt dit à Meta AI d'ajouter à la conversation en cours (ne pas repartir de zéro)">
-                            <input type="checkbox" id="topic-cont-${id}" class="rounded"> Suite de la conversation
+                            <input type="checkbox" id="topic-cont-${id}" class="rounded" checked> Suite de la conversation
                         </label>
                         <button onclick="topicGenerate(${id})" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm text-white">📤 Générer les parts</button>
                         <button onclick="topicRename(${id},'${t.title.replace(/'/g,"\\'")}')" class="px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm">✏️ Renommer</button>
