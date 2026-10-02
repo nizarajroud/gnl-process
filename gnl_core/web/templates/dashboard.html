@@ -991,6 +991,63 @@
             });
         }
 
+        // --- Styled dialogs (toast / confirm / prompt) replacing native popups ---
+        function uiToast(message, kind) {
+            const t = document.createElement('div');
+            const bg = kind === 'error' ? '#dc2626' : (kind === 'success' ? '#16a34a' : '#374151');
+            t.style.cssText = `position:fixed;top:20px;right:20px;z-index:10000;background:${bg};color:#fff;padding:12px 18px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,0.4);font-size:14px;max-width:360px;`;
+            t.textContent = message;
+            document.body.appendChild(t);
+            setTimeout(() => { t.style.transition = 'opacity .4s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 400); }, 3000);
+        }
+
+        function uiConfirm(message) {
+            return new Promise((resolve) => {
+                const m = document.createElement('div');
+                m.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;';
+                m.innerHTML = `<div style="background:#1f2937;color:#e5e7eb;max-width:420px;width:90%;border-radius:12px;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,0.5);">
+                    <div style="font-size:15px;margin-bottom:18px;">${message}</div>
+                    <div style="display:flex;justify-content:flex-end;gap:10px;">
+                        <button data-act="no" style="padding:8px 16px;background:#374151;color:#fff;border:none;border-radius:8px;cursor:pointer;">Annuler</button>
+                        <button data-act="yes" style="padding:8px 16px;background:#dc2626;color:#fff;border:none;border-radius:8px;cursor:pointer;">Confirmer</button>
+                    </div></div>`;
+                m.addEventListener('click', (e) => {
+                    const act = e.target.getAttribute && e.target.getAttribute('data-act');
+                    if (act === 'yes') { m.remove(); resolve(true); }
+                    else if (act === 'no' || e.target === m) { m.remove(); resolve(false); }
+                });
+                document.body.appendChild(m);
+            });
+        }
+
+        function uiPrompt(message, defaultValue) {
+            return new Promise((resolve) => {
+                const m = document.createElement('div');
+                m.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;';
+                m.innerHTML = `<div style="background:#1f2937;color:#e5e7eb;max-width:460px;width:90%;border-radius:12px;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,0.5);">
+                    <div style="font-size:15px;margin-bottom:12px;">${message}</div>
+                    <input type="text" id="ui-prompt-input" style="width:100%;background:#374151;color:#fff;border:1px solid #4b5563;border-radius:8px;padding:10px;font-size:14px;box-sizing:border-box;margin-bottom:16px;">
+                    <div style="display:flex;justify-content:flex-end;gap:10px;">
+                        <button data-act="cancel" style="padding:8px 16px;background:#374151;color:#fff;border:none;border-radius:8px;cursor:pointer;">Annuler</button>
+                        <button data-act="ok" style="padding:8px 16px;background:#4f46e5;color:#fff;border:none;border-radius:8px;cursor:pointer;">OK</button>
+                    </div></div>`;
+                document.body.appendChild(m);
+                const input = m.querySelector('#ui-prompt-input');
+                input.value = defaultValue || '';
+                input.focus(); input.select();
+                function done(val) { m.remove(); resolve(val); }
+                m.addEventListener('click', (e) => {
+                    const act = e.target.getAttribute && e.target.getAttribute('data-act');
+                    if (act === 'ok') done(input.value);
+                    else if (act === 'cancel' || e.target === m) done(null);
+                });
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') done(input.value);
+                    if (e.key === 'Escape') done(null);
+                });
+            });
+        }
+
         // --- Meta AI export: generate parts + per-part copy buttons (modal) ---
         function _metaModal() {
             let m = document.getElementById('meta-export-modal');
@@ -1060,14 +1117,14 @@
         async function topicCreate() {
             const inp = document.getElementById('topic-new-title');
             const title = (inp.value || '').trim();
-            if (!title) { alert('Titre requis'); return; }
+            if (!title) { uiToast('Titre requis', 'error'); return; }
             const d = await (await fetch('/api/topics', {method:'POST', body: new URLSearchParams({title})})).json();
             if (d.status === 'ok') { inp.value=''; loadTopics(); topicOpen(d.id); }
-            else alert(d.error || 'échec');
+            else uiToast(d.error || 'échec', 'error');
         }
 
         async function topicDelete(id) {
-            if (!confirm('Supprimer ce topic ?')) return;
+            if (!(await uiConfirm('Supprimer ce topic ?'))) return;
             await fetch(`/api/topics/${id}/delete`, {method:'POST'});
             document.getElementById('topic-detail').classList.add('hidden');
             loadTopics();
@@ -1126,7 +1183,7 @@
         }
 
         async function topicRename(id, current) {
-            const title = prompt('Nouveau titre:', current);
+            const title = await uiPrompt('Nouveau titre :', current);
             if (!title || !title.trim()) return;
             await fetch(`/api/topics/${id}/rename`, {method:'POST', body: new URLSearchParams({title: title.trim()})});
             loadTopics(); topicOpen(id);
@@ -1147,7 +1204,7 @@
             if (linksEl.value.trim()) fd.append('links', linksEl.value.trim());
             const d = await (await fetch(`/api/topics/${id}/sources`, {method:'POST', body: fd})).json();
             if (d.status === 'ok') topicOpen(id);
-            else alert(d.error || 'échec');
+            else uiToast(d.error || 'échec', 'error');
         }
 
         async function topicGenerate(id) {
