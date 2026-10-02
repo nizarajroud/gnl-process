@@ -143,14 +143,32 @@ def _topic_dir(title):
     return d
 
 
-def add_file_source(topic_id, filename, db_path=None):
-    """Store just the file name as a reference (no content, no path)."""
+def add_file_source(topic_id, filename, content=None, db_path=None):
+    """Copy the uploaded file into Meta-AI/<title>/ and store its full path.
+
+    The file is kept (copied) under the topic folder and its path is stored +
+    shown in the UI (like texts). Its text is extracted at generation time.
+    `content` = raw bytes of the uploaded file.
+    """
+    topic = get_topic(topic_id, db_path)
+    title = topic['title'] if topic else f"topic{topic_id}"
+    safe_name = os.path.basename(filename)
+    dest = _topic_dir(title) / safe_name
+    if content is not None:
+        # Avoid clobbering: if a file with same name exists, suffix it.
+        if dest.exists():
+            stem, ext = os.path.splitext(safe_name)
+            n = 2
+            while (_topic_dir(title) / f"{stem}_{n}{ext}").exists():
+                n += 1
+            dest = _topic_dir(title) / f"{stem}_{n}{ext}"
+        dest.write_bytes(content)
     with get_db(db_path) as conn:
         conn.execute(
             "INSERT INTO meta_topic_sources (topic_id, type, display_name, stored_path, added_at) "
-            "VALUES (?,?,?,?,?)", (topic_id, 'file', filename, None, _now()))
+            "VALUES (?,?,?,?,?)", (topic_id, 'file', safe_name, str(dest), _now()))
         conn.execute("UPDATE meta_topics SET updated_at=? WHERE id=?", (_now(), topic_id))
-        _log(conn, topic_id, 'source_added', f"fichier: {filename}")
+        _log(conn, topic_id, 'source_added', f"fichier: {safe_name} → {dest}")
         conn.commit()
 
 
@@ -222,6 +240,16 @@ def build_topic_corpus(topic_id, on_progress=None, db_path=None):
                     blocks.append(f"# {s['display_name']}\n\n{t.strip()}")
                     if on_progress:
                         on_progress(f"✓ texte {s['display_name']}: {len(t)} chars")
+            except Exception as e:
+                skipped.append(f"{s['display_name']} ({str(e)[:50]})")
+        elif s['type'] == 'file' and s['stored_path']:
+            try:
+                from gnl_core.doc_extract import extract_text
+                t = extract_text(s['stored_path'])
+                if t.strip():
+                    blocks.append(f"# {s['display_name']}\n\n{t.strip()}")
+                    if on_progress:
+                        on_progress(f"✓ fichier {s['display_name']}: {len(t)} chars")
             except Exception as e:
                 skipped.append(f"{s['display_name']} ({str(e)[:50]})")
         elif s['type'] == 'link':

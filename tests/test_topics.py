@@ -21,7 +21,7 @@ def test_create_and_list(db):
 
 def test_add_sources_and_detail(db):
     tid = topics.create_topic('T', db_path=db)
-    topics.add_file_source(tid, 'cours.pdf', db_path=db)
+    topics.add_file_source(tid, 'cours.txt', content=b'file body content', db_path=db)
     topics.add_link_source(tid, 'https://x.com/a', db_path=db)
     sid = topics.add_text_source(tid, 'hello pasted', label='N1', db_path=db)
     d = topics.get_topic(tid, db_path=db)
@@ -52,7 +52,7 @@ def test_rename_and_remove(db):
 
 def test_delete_topic(db):
     tid = topics.create_topic('ToDelete', db_path=db)
-    topics.add_file_source(tid, 'f.pdf', db_path=db)
+    topics.add_file_source(tid, 'f.txt', content=b'x', db_path=db)
     topics.delete_topic(tid, db_path=db)
     assert topics.get_topic(tid, db_path=db) is None
     assert topics.list_topics(db_path=db) == []

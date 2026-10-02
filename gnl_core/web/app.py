@@ -2671,14 +2671,21 @@ async def topics_delete(topic_id: int):
 
 @app.post("/api/topics/{topic_id}/sources")
 async def topics_add_sources(topic_id: int, request: Request):
-    """Add sources to a topic: files (name only), links (one per line), text."""
+    """Add sources to a topic: files (copied + path stored), links, text."""
     from gnl_core import topics as T
+    from gnl_core.doc_extract import SUPPORTED
     form = await request.form()
     added = 0
+    skipped = []
     uploads = form.getlist("file") if hasattr(form, 'getlist') else []
     for up in uploads:
         if up is not None and hasattr(up, 'filename') and up.filename:
-            T.add_file_source(topic_id, os.path.basename(up.filename))
+            ext = os.path.splitext(up.filename)[1].lower()
+            if ext not in SUPPORTED:
+                skipped.append(f"{os.path.basename(up.filename)} (format non supporté)")
+                continue
+            content = await up.read()
+            T.add_file_source(topic_id, os.path.basename(up.filename), content=content)
             added += 1
     for ln in (form.get("links") or "").splitlines():
         ln = ln.strip()
@@ -2690,8 +2697,11 @@ async def topics_add_sources(topic_id: int, request: Request):
         T.add_text_source(topic_id, text, label=(form.get("text_label") or "Texte collé").strip())
         added += 1
     if not added:
-        return {"status": "error", "error": "Aucune source fournie"}
-    return {"status": "ok", "added": added}
+        err = "Aucune source fournie"
+        if skipped:
+            err = "Aucune source ajoutée. Ignorés: " + "; ".join(skipped)
+        return {"status": "error", "error": err}
+    return {"status": "ok", "added": added, "skipped": skipped}
 
 
 @app.post("/api/topics/{topic_id}/sources/{source_id}/delete")
