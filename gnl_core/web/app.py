@@ -2712,8 +2712,9 @@ async def topics_remove_source(topic_id: int, source_id: int):
 
 
 @app.post("/api/topics/{topic_id}/generate")
-async def topics_generate(topic_id: int):
-    """Build the topic corpus (texts + scraped links) and split into parts."""
+async def topics_generate(topic_id: int, continuation: int = 0):
+    """Build the topic corpus (files + texts + scraped links) and split into parts.
+    continuation=1 -> prompt tells Meta AI to ADD to the ongoing conversation."""
     from gnl_core import topics as T
     from gnl_core.config import get_config
     loop = asyncio.get_event_loop()
@@ -2726,13 +2727,17 @@ async def topics_generate(topic_id: int):
             pass
 
     try:
-        await broadcast_log(f"▶ [TOPIC] génération des parts (topic {topic_id})")
+        await broadcast_log(f"▶ [TOPIC] génération des parts (topic {topic_id})"
+                            + (" [continuité]" if continuation else ""))
         max_chars = config.get('GENERIC_EXPORT_MAX_CHARS') or None
-        prompt_tpl = config.get('GENERIC_EXPORT_PROMPT') or None
+        # In continuation mode, let generate_topic_parts pick the continuation
+        # prompt; otherwise use the configured generic prompt (or default).
+        prompt_tpl = None if continuation else (config.get('GENERIC_EXPORT_PROMPT') or None)
         res = await loop.run_in_executor(
             None, lambda: T.generate_topic_parts(topic_id, on_progress=on_p,
                                                  max_chars=max_chars,
-                                                 prompt_template=prompt_tpl))
+                                                 prompt_template=prompt_tpl,
+                                                 continuation=bool(continuation)))
         await broadcast_log(f"  ✓ {len(res['parts'])} parts")
         return {"status": "ok", "name": res['name'], "skipped": res['skipped'],
                 "parts": [{"part": p['part'], "total": p['total'],

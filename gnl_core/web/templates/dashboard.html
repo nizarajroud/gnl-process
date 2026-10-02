@@ -1081,7 +1081,10 @@
             box.innerHTML = `
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="text-lg font-semibold">${t.title}</h3>
-                    <div class="flex gap-2">
+                    <div class="flex items-center gap-2">
+                        <label class="text-xs text-gray-400 flex items-center gap-1" title="Si coché, le prompt dit à Meta AI d'ajouter à la conversation en cours (ne pas repartir de zéro)">
+                            <input type="checkbox" id="topic-cont-${id}" class="rounded"> Suite de la conversation
+                        </label>
                         <button onclick="topicGenerate(${id})" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm text-white">📤 Générer les parts</button>
                         <button onclick="topicRename(${id},'${t.title.replace(/'/g,"\\'")}')" class="px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm">✏️ Renommer</button>
                     </div>
@@ -1139,10 +1142,12 @@
         }
 
         async function topicGenerate(id) {
+            const contEl = document.getElementById('topic-cont-'+id);
+            const cont = contEl && contEl.checked ? 1 : 0;
             const box = _metaModal();
             box.innerHTML = '⏳ Génération des parts du topic…';
             try {
-                const d = await (await fetch(`/api/topics/${id}/generate`, {method:'POST'})).json();
+                const d = await (await fetch(`/api/topics/${id}/generate?continuation=${cont}`, {method:'POST'})).json();
                 if (d.status !== 'ok') { box.innerHTML = '⚠ ' + (d.error || 'échec'); return; }
                 let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-weight:600;">📤 ${d.name} (${d.parts.length} parts)</div><button onclick="document.getElementById('meta-export-modal').remove()" style="background:none;border:none;color:#9ca3af;font-size:20px;cursor:pointer;">✕</button></div>`;
                 if (d.skipped && d.skipped.length) html += `<div style="font-size:12px;color:#f59e0b;margin-bottom:8px;">⚠ ignorés: ${d.skipped.join('; ')}</div>`;

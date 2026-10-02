@@ -155,6 +155,27 @@ DEFAULT_GENERIC_PROMPT = (
 )
 
 
+# Continuation variant: used when the new parts ADD to an ongoing conversation
+# (same Meta AI chat). Tells the model to keep all prior context and treat this
+# as a follow-up corpus, not a reset.
+DEFAULT_CONTINUATION_PROMPT = (
+    "The following is a CONTINUATION of our ongoing conversation. I'm pasting "
+    "additional material across {N} messages (Part 1 of {N}, ...).\n\n"
+    "IMPORTANT:\n"
+    "- Do NOT reset or forget anything from earlier in this conversation. KEEP "
+    "all the previous context and ADD this new material to it, as one combined "
+    "body of knowledge.\n"
+    "- During loading, reply ONLY \"Part K received.\" after each part, and "
+    "\"Ready.\" after \"ALL PARTS SENT\".\n"
+    "- Afterwards, answer naturally as an expert, using BOTH the earlier content "
+    "and this new material together. Never say \"according to the pasted "
+    "content\" or refer to parts/structure — just talk about the subject.\n"
+    "- If links appear in the material, you may silently consult them to be "
+    "accurate; never announce it.\n\n"
+    "For now, just wait for the parts."
+)
+
+
 def build_parts_from_text(text, max_chars=None, prompt_template=None):
     """Split arbitrary text into parts (list of strings), each < max_chars,
     cutting at paragraph boundaries (never mid-paragraph when avoidable).

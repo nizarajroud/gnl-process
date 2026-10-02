@@ -265,22 +265,31 @@ def build_topic_corpus(topic_id, on_progress=None, db_path=None):
 
 
 def generate_topic_parts(topic_id, on_progress=None, max_chars=None,
-                         prompt_template=None, db_path=None):
+                         prompt_template=None, continuation=False, db_path=None):
     """Build the topic corpus and split it into Meta AI parts.
+
+    If continuation=True, use the continuation prompt (adds to an ongoing Meta
+    AI conversation instead of resetting). An explicit prompt_template overrides.
     Returns {'parts': [...], 'skipped': [...], 'name': str} or raises ValueError."""
-    from gnl_core.meta_export import generate_doc_export
+    from gnl_core.meta_export import (generate_doc_export,
+                                      DEFAULT_CONTINUATION_PROMPT)
     topic = get_topic(topic_id, db_path)
     if not topic:
         raise ValueError("Topic introuvable")
     corpus, skipped = build_topic_corpus(topic_id, on_progress=on_progress, db_path=db_path)
     if not corpus.strip():
-        raise ValueError("Aucun contenu exploitable dans ce topic (ajoute du texte ou des liens).")
+        raise ValueError("Aucun contenu exploitable dans ce topic (ajoute du texte, un fichier ou un lien).")
+    # Continuation mode uses its own preamble unless an explicit one is given.
+    tpl = prompt_template
+    if continuation and not tpl:
+        tpl = DEFAULT_CONTINUATION_PROMPT
     out_dir = _topic_dir(topic['title']) / 'parts'
     parts = generate_doc_export(corpus, topic['title'], str(out_dir),
                                 on_progress=on_progress, max_chars=max_chars,
-                                prompt_template=prompt_template)
+                                prompt_template=tpl)
     with get_db(db_path) as conn:
-        _log(conn, topic_id, 'generated', f"{len(parts)} parts")
+        _log(conn, topic_id, 'generated',
+             f"{len(parts)} parts" + (" (continuité)" if continuation else ""))
         conn.commit()
     return {'name': topic['title'], 'out_dir': str(out_dir),
             'parts': parts, 'skipped': skipped}
