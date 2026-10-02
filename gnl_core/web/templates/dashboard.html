@@ -25,35 +25,8 @@
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('history')">📜 Historique</button>
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('config')">⚙️ Configuration</button>
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('defaults')">🎛️ Config par défaut</button>
-            <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('docmeta')">📤 Doc→Meta</button>
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('topics')">📚 Topics</button>
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('changelog')">📋 Changelog</button>
-        </div>
-
-        <!-- Tab: Doc→Meta (generic document to Meta AI parts) -->
-        <div id="tab-docmeta" class="tab-content hidden">
-            <div class="bg-gray-800 rounded-lg p-6">
-                <h2 class="text-lg font-semibold mb-2">📤 Document → Meta AI</h2>
-                <p class="text-sm text-gray-400 mb-4">Sélectionne un ou plusieurs documents (PDF, DOCX, PPTX, XLSX, TXT, MD) <b>et/ou</b> colle du texte. Tout est combiné en un seul corpus, découpé en parts prêtes à coller dans Meta AI, avec un prompt générique en tête de la Part 1.</p>
-                <div class="space-y-4">
-                    <div class="flex items-center gap-3">
-                        <input type="file" id="docmeta-file" multiple accept=".pdf,.docx,.pptx,.xlsx,.txt,.md,.markdown" class="text-sm text-gray-300">
-                        <span class="text-xs text-gray-500">(plusieurs fichiers possibles)</span>
-                    </div>
-                    <div class="text-xs text-gray-500 text-center">+ (optionnel) texte collé ci-dessous</div>
-                    <div>
-                        <input type="text" id="docmeta-name" placeholder="Nom (optionnel) pour le corpus combiné" class="w-full bg-gray-700 rounded px-3 py-2 text-sm mb-2">
-                        <textarea id="docmeta-text" rows="6" placeholder="Colle ton texte ici (n'importe quelle longueur)…" class="w-full bg-gray-700 rounded px-3 py-2 text-sm"></textarea>
-                    </div>
-                    <div class="text-xs text-gray-500 text-center">+ (optionnel) liens ci-dessous (le contenu des pages sera récupéré)</div>
-                    <div>
-                        <label class="text-xs text-gray-400">Liens (une URL par ligne)</label>
-                        <textarea id="docmeta-links" rows="3" placeholder="https://exemple.com/page1&#10;https://exemple.com/page2" class="w-full bg-gray-700 rounded px-3 py-2 text-sm font-mono"></textarea>
-                    </div>
-                    <button type="button" onclick="docExport()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium text-white">📤 Générer les parts</button>
-                    <div id="docmeta-status" class="text-sm text-gray-400"></div>
-                </div>
-            </div>
         </div>
 
         <!-- Tab: Topics (persistent Doc→Meta library) -->
@@ -1194,74 +1167,6 @@
                 if(btn) btn.textContent = ok ? `✅ Part ${part}/${total}` : `⚠ Part ${part}/${total}`;
                 if(msg){ msg.textContent = ok ? `✅ Part ${part}/${total} copiée` : '⚠ Réessaie'; msg.style.color = ok?'#28a745':'#dc3545'; }
             } catch (e) { if(msg) msg.textContent='⚠ Erreur: '+e; }
-        }
-
-        // --- Generic Doc→Meta: upload a file OR paste text, split, show copy modal ---
-        async function docExport() {
-            const input = document.getElementById('docmeta-file');
-            const textEl = document.getElementById('docmeta-text');
-            const nameEl = document.getElementById('docmeta-name');
-            const status = document.getElementById('docmeta-status');
-            const pasted = (textEl && textEl.value || '').trim();
-            const linksEl = document.getElementById('docmeta-links');
-            const links = (linksEl && linksEl.value || '').trim();
-            const hasFile = input.files && input.files.length;
-            if (!hasFile && !pasted && !links) { status.textContent = '⚠ Fournis un fichier, du texte, et/ou des liens.'; return; }
-
-            const fd = new FormData();
-            const labels = [];
-            if (hasFile) {
-                for (let i = 0; i < input.files.length; i++) fd.append('file', input.files[i]);
-                labels.push(input.files.length === 1 ? input.files[0].name : (input.files.length + ' fichiers'));
-            }
-            if (pasted) {
-                fd.append('text', pasted);
-                labels.push('texte collé (' + pasted.length + ' chars)');
-            }
-            if (links) {
-                fd.append('links', links);
-                labels.push(links.split('\n').filter(l=>l.trim()).length + ' lien(s)');
-            }
-            if (nameEl && nameEl.value.trim()) fd.append('name', nameEl.value.trim());
-            const label = labels.join(' + ');
-            status.textContent = '⏳ Traitement de ' + label + '…';
-            const box = _metaModal();
-            box.innerHTML = '⏳ Traitement de ' + label + '…';
-            try {
-                const d = await (await fetch('/api/doc-export', {method:'POST', body: fd})).json();
-                if (d.status !== 'ok') { box.innerHTML = '⚠ ' + (d.error || 'échec'); status.textContent = '⚠ ' + (d.error||''); return; }
-                status.textContent = `✓ ${d.parts.length} parts générées pour ${d.name}`;
-                if (d.skipped && d.skipped.length) {
-                    status.textContent += ` — ⚠ ignorés: ${d.skipped.join('; ')}`;
-                }
-                const name = d.name;
-                let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-weight:600;">📤 ${name} (${d.parts.length} parts)</div><button onclick="document.getElementById('meta-export-modal').remove()" style="background:none;border:none;color:#9ca3af;font-size:20px;cursor:pointer;">✕</button></div>`;
-                html += `<div style="font-size:12px;color:#9ca3af;margin-bottom:14px;">Clique chaque bouton dans l'ordre, colle dans un message Meta AI séparé, puis écris <code>ALL PARTS SENT</code>.</div>`;
-                html += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
-                for (const p of d.parts) {
-                    html += `<button type="button" onclick="docCopyPart('${name.replace(/'/g,"\\'")}',${p.part},${p.total},this)" style="padding:8px 14px;background:#4f46e5;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;">📋 Part ${p.part}/${p.total}</button>`;
-                }
-                html += '</div><div id="meta-copy-msg" style="font-size:14px;margin-top:12px;"></div>';
-                html += '<textarea id="meta-copy-area" readonly style="position:absolute;left:-9999px;top:0;opacity:0;height:1px;width:1px;"></textarea>';
-                box.innerHTML = html;
-            } catch (e) { box.innerHTML = '⚠ Erreur: ' + e; status.textContent = '⚠ ' + e; }
-        }
-
-        async function docCopyPart(name, part, total, btn) {
-            const msg = document.getElementById('meta-copy-msg');
-            const area = document.getElementById('meta-copy-area');
-            try {
-                const d = await (await fetch(`/api/doc-export/${encodeURIComponent(name)}/part${part}_of_${total}.txt`)).json();
-                if (d.status !== 'ok') { if(msg){msg.textContent='⚠ '+(d.error||'introuvable');} return; }
-                area.value = d.content;
-                area.style.position='static'; area.focus(); area.select();
-                let ok=false; try{ok=document.execCommand('copy');}catch(e){ok=false;}
-                if(!ok && navigator.clipboard && navigator.clipboard.writeText){ try{navigator.clipboard.writeText(area.value); ok=true;}catch(e){} }
-                area.style.position='absolute'; area.style.left='-9999px';
-                window.getSelection && window.getSelection().removeAllRanges && window.getSelection().removeAllRanges();
-                if(btn){ btn.textContent = ok ? `✅ Part ${part}/${total}` : `⚠ Part ${part}/${total}`; }
-                if(msg){ msg.textContent = ok ? `✅ Part ${part}/${total} copiée — colle-la dans Meta AI` : '⚠ Réessaie'; msg.style.color = ok ? '#28a745' : '#dc3545'; }
-            } catch (e) { if(msg){msg.textContent='⚠ Erreur: '+e;} }
         }
 
         function loadSavedArticles(source) {
