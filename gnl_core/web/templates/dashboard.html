@@ -1083,6 +1083,7 @@
             const files = t.sources.filter(s=>s.type==='file');
             const links = t.sources.filter(s=>s.type==='link');
             const texts = t.sources.filter(s=>s.type==='text');
+            const hasSources = (files.length + links.length + texts.length) > 0;
             const row = (s) => `<tr class="border-b border-gray-800"><td class="py-1 pr-3">${s.display_name}</td><td class="py-1 pr-3 text-xs text-gray-500">${s.stored_path||'—'}</td><td class="py-1 text-right"><button onclick="topicRemoveSource(${id},${s.id})" class="px-2 py-0.5 bg-red-700 hover:bg-red-600 rounded text-xs">retirer</button></td></tr>`;
             box.innerHTML = `
                 <div class="flex items-center justify-between mb-3">
@@ -1091,7 +1092,9 @@
                         <label class="text-xs text-gray-400 flex items-center gap-1" title="Si coché, le prompt dit à Meta AI d'ajouter à la conversation en cours (ne pas repartir de zéro)">
                             <input type="checkbox" id="topic-cont-${id}" class="rounded" checked> Suite de la conversation
                         </label>
-                        <button onclick="topicGenerate(${id})" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm text-white">📤 Générer les parts</button>
+                        <button id="topic-gen-${id}" onclick="topicGenerate(${id})" ${hasSources ? '' : 'disabled'}
+                            class="px-3 py-2 rounded text-sm text-white ${hasSources ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-gray-600 opacity-50 cursor-not-allowed'}"
+                            title="${hasSources ? 'Générer les parts Meta AI' : 'Ajoute au moins un fichier, un texte ou un lien d\\'abord'}">📤 Générer les parts</button>
                         <button onclick="topicRename(${id},'${t.title.replace(/'/g,"\\'")}')" class="px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm">✏️ Renommer</button>
                     </div>
                 </div>
