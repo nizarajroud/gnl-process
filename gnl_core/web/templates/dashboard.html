@@ -12,10 +12,16 @@
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen">
-    <div class="max-w-4xl mx-auto p-6">
+    <div class="max-w-screen-2xl mx-auto px-6 py-6">
         <!-- Header -->
         <div class="flex justify-between items-center mb-4">
             <h1 class="text-3xl font-bold">🎙️ GNL Process</h1>
+            {% if app_version %}
+            <div class="text-xs text-gray-500 flex items-center gap-2">
+                <span class="text-blue-400 font-medium">v{{ app_version }}</span>
+                {% if last_update %}<span>· Dernière mise à jour : {{ last_update }}</span>{% endif %}
+            </div>
+            {% endif %}
         </div>
 
         <!-- Tabs -->

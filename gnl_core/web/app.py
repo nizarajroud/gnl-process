@@ -578,10 +578,25 @@ async def dashboard(request: Request):
     changelog_path = Path(__file__).parent.parent.parent / 'CHANGELOG.md'
     changelog_html = markdown.markdown(changelog_path.read_text()) if changelog_path.exists() else "<p>No changelog found.</p>"
 
+    # Version + last update (for the header badge, kiro-web style)
+    app_version = ''
+    last_update = ''
+    try:
+        root = Path(__file__).parent.parent.parent
+        vfile = root / 'VERSION'
+        if vfile.exists():
+            app_version = vfile.read_text().strip().lstrip('vV')
+            from datetime import datetime as _dt
+            mt = _dt.fromtimestamp(vfile.stat().st_mtime)
+            last_update = mt.strftime('%Y-%m-%d %H:%M')
+    except Exception:
+        pass
+
     return templates.TemplateResponse("dashboard.html", {
         "request": request, "parents": parents, "history": history,
         "schedule_time": schedule_time, "next_run": next_run, "test_mode": test_mode,
-        "quota_remaining": quota_remaining, "config": config, "changelog_html": changelog_html
+        "quota_remaining": quota_remaining, "config": config, "changelog_html": changelog_html,
+        "app_version": app_version, "last_update": last_update
     }, headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                 "Pragma": "no-cache", "Expires": "0"})
 @app.get("/api/catalog")
