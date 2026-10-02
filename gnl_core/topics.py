@@ -199,3 +199,60 @@ def remove_source(topic_id, source_id, db_path=None):
         if row:
             _log(conn, topic_id, 'source_removed', f"{row['type']}: {row['display_name']}")
         conn.commit()
+
+
+# --- Part generation from a topic -----------------------------------------
+
+def build_topic_corpus(topic_id, on_progress=None, db_path=None):
+    """Assemble the topic's corpus text from its texts (.txt) + links (scraped).
+
+    File sources are name-only references (no content) and are NOT included in
+    the corpus — they are shown in the UI as a memo. Returns (corpus, skipped).
+    """
+    topic = get_topic(topic_id, db_path)
+    if not topic:
+        raise ValueError("Topic introuvable")
+    blocks = []
+    skipped = []
+    for s in topic['sources']:
+        if s['type'] == 'text' and s['stored_path']:
+            try:
+                t = Path(s['stored_path']).read_text(encoding='utf-8', errors='ignore')
+                if t.strip():
+                    blocks.append(f"# {s['display_name']}\n\n{t.strip()}")
+                    if on_progress:
+                        on_progress(f"✓ texte {s['display_name']}: {len(t)} chars")
+            except Exception as e:
+                skipped.append(f"{s['display_name']} ({str(e)[:50]})")
+        elif s['type'] == 'link':
+            try:
+                from gnl_core.url_fetch import fetch_url_text
+                t = fetch_url_text(s['display_name'])
+                blocks.append(f"# {s['display_name']}\n\n{t}")
+                if on_progress:
+                    on_progress(f"✓ lien {s['display_name'][:50]}: {len(t)} chars")
+            except Exception as e:
+                skipped.append(f"{s['display_name'][:50]} ({str(e)[:50]})")
+    return "\n\n".join(blocks), skipped
+
+
+def generate_topic_parts(topic_id, on_progress=None, max_chars=None,
+                         prompt_template=None, db_path=None):
+    """Build the topic corpus and split it into Meta AI parts.
+    Returns {'parts': [...], 'skipped': [...], 'name': str} or raises ValueError."""
+    from gnl_core.meta_export import generate_doc_export
+    topic = get_topic(topic_id, db_path)
+    if not topic:
+        raise ValueError("Topic introuvable")
+    corpus, skipped = build_topic_corpus(topic_id, on_progress=on_progress, db_path=db_path)
+    if not corpus.strip():
+        raise ValueError("Aucun contenu exploitable dans ce topic (ajoute du texte ou des liens).")
+    out_dir = _topic_dir(topic['title']) / 'parts'
+    parts = generate_doc_export(corpus, topic['title'], str(out_dir),
+                                on_progress=on_progress, max_chars=max_chars,
+                                prompt_template=prompt_template)
+    with get_db(db_path) as conn:
+        _log(conn, topic_id, 'generated', f"{len(parts)} parts")
+        conn.commit()
+    return {'name': topic['title'], 'out_dir': str(out_dir),
+            'parts': parts, 'skipped': skipped}

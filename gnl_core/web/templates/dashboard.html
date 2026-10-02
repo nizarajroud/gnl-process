@@ -26,6 +26,7 @@
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('config')">⚙️ Configuration</button>
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('defaults')">🎛️ Config par défaut</button>
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('docmeta')">📤 Doc→Meta</button>
+            <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('topics')">📚 Topics</button>
             <button class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" onclick="switchTab('changelog')">📋 Changelog</button>
         </div>
 
@@ -53,6 +54,21 @@
                     <div id="docmeta-status" class="text-sm text-gray-400"></div>
                 </div>
             </div>
+        </div>
+
+        <!-- Tab: Topics (persistent Doc→Meta library) -->
+        <div id="tab-topics" class="tab-content hidden">
+            <div class="bg-gray-800 rounded-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold">📚 Topics</h2>
+                    <div class="flex gap-2">
+                        <input type="text" id="topic-new-title" placeholder="Titre du nouveau topic" class="bg-gray-700 rounded px-3 py-2 text-sm w-64">
+                        <button type="button" onclick="topicCreate()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm text-white">➕ Créer</button>
+                    </div>
+                </div>
+                <div id="topics-list" class="space-y-2">Chargement…</div>
+            </div>
+            <div id="topic-detail" class="hidden mt-4 bg-gray-800 rounded-lg p-6"></div>
         </div>
 
         <!-- Tab: Production -->
@@ -1047,6 +1063,139 @@
             } catch (e) { if(msg){msg.textContent='⚠ Erreur: '+e;} }
         }
 
+        // --- Topics (persistent Doc→Meta library) ---
+        async function loadTopics() {
+            const el = document.getElementById('topics-list');
+            try {
+                const d = await (await fetch('/api/topics')).json();
+                if (!d.topics || !d.topics.length) { el.innerHTML = '<span class="text-gray-500 text-sm">Aucun topic. Crée-en un ci-dessus.</span>'; return; }
+                el.innerHTML = d.topics.map(t => `<div class="flex items-center justify-between bg-gray-900 rounded px-3 py-2">
+                    <div><span class="font-medium">${t.title}</span> <span class="text-xs text-gray-500">(${t.sources} source(s) · maj ${t.updated_at})</span></div>
+                    <div class="flex gap-2">
+                        <button onclick="topicOpen(${t.id})" class="px-2 py-1 bg-gray-600 hover:bg-gray-500 rounded text-xs">👁 Voir</button>
+                        <button onclick="topicDelete(${t.id})" class="px-2 py-1 bg-red-600 hover:bg-red-500 rounded text-xs">🗑</button>
+                    </div></div>`).join('');
+            } catch (e) { el.innerHTML = '⚠ ' + e; }
+        }
+
+        async function topicCreate() {
+            const inp = document.getElementById('topic-new-title');
+            const title = (inp.value || '').trim();
+            if (!title) { alert('Titre requis'); return; }
+            const d = await (await fetch('/api/topics', {method:'POST', body: new URLSearchParams({title})})).json();
+            if (d.status === 'ok') { inp.value=''; loadTopics(); topicOpen(d.id); }
+            else alert(d.error || 'échec');
+        }
+
+        async function topicDelete(id) {
+            if (!confirm('Supprimer ce topic ?')) return;
+            await fetch(`/api/topics/${id}/delete`, {method:'POST'});
+            document.getElementById('topic-detail').classList.add('hidden');
+            loadTopics();
+        }
+
+        async function topicOpen(id) {
+            const box = document.getElementById('topic-detail');
+            box.classList.remove('hidden');
+            box.innerHTML = '⏳ Chargement…';
+            const d = await (await fetch(`/api/topics/${id}`)).json();
+            if (d.status !== 'ok') { box.innerHTML = '⚠ ' + (d.error||''); return; }
+            const t = d.topic;
+            const files = t.sources.filter(s=>s.type==='file');
+            const links = t.sources.filter(s=>s.type==='link');
+            const texts = t.sources.filter(s=>s.type==='text');
+            const row = (s) => `<tr class="border-b border-gray-800"><td class="py-1 pr-3">${s.display_name}</td><td class="py-1 pr-3 text-xs text-gray-500">${s.stored_path||'—'}</td><td class="py-1 text-right"><button onclick="topicRemoveSource(${id},${s.id})" class="px-2 py-0.5 bg-red-700 hover:bg-red-600 rounded text-xs">retirer</button></td></tr>`;
+            box.innerHTML = `
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-lg font-semibold">${t.title}</h3>
+                    <div class="flex gap-2">
+                        <button onclick="topicGenerate(${id})" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm text-white">📤 Générer les parts</button>
+                        <button onclick="topicRename(${id},'${t.title.replace(/'/g,"\\'")}')" class="px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm">✏️ Renommer</button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 gap-4">
+                    <div>
+                        <h4 class="text-sm font-semibold mb-1">📎 Fichiers (${files.length})</h4>
+                        <table class="w-full text-sm"><tbody>${files.map(row).join('')||'<tr><td class="text-gray-500 text-xs py-1">aucun</td></tr>'}</tbody></table>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-semibold mb-1">🔗 Liens (${links.length})</h4>
+                        <table class="w-full text-sm"><tbody>${links.map(row).join('')||'<tr><td class="text-gray-500 text-xs py-1">aucun</td></tr>'}</tbody></table>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-semibold mb-1">📝 Textes (${texts.length})</h4>
+                        <table class="w-full text-sm"><tbody>${texts.map(row).join('')||'<tr><td class="text-gray-500 text-xs py-1">aucun</td></tr>'}</tbody></table>
+                    </div>
+                </div>
+                <div class="mt-4 border-t border-gray-700 pt-3">
+                    <h4 class="text-sm font-semibold mb-2">➕ Ajouter des sources</h4>
+                    <input type="file" id="ts-file-${id}" multiple accept=".pdf,.docx,.pptx,.xlsx,.txt,.md,.markdown" class="text-sm text-gray-300 mb-2 block">
+                    <textarea id="ts-text-${id}" rows="3" placeholder="Texte à ajouter…" class="w-full bg-gray-700 rounded px-3 py-2 text-sm mb-2"></textarea>
+                    <textarea id="ts-links-${id}" rows="2" placeholder="Liens (une URL par ligne)…" class="w-full bg-gray-700 rounded px-3 py-2 text-sm font-mono mb-2"></textarea>
+                    <button onclick="topicAddSources(${id})" class="px-3 py-2 bg-green-700 hover:bg-green-600 rounded text-sm text-white">Ajouter</button>
+                </div>
+                <div class="mt-4 border-t border-gray-700 pt-3">
+                    <h4 class="text-sm font-semibold mb-2">🕑 Journal</h4>
+                    <div class="text-xs text-gray-400 space-y-0.5">${t.log.map(l=>`<div>${l.at} — <b>${l.action}</b> ${l.detail||''}</div>`).join('')}</div>
+                </div>`;
+        }
+
+        async function topicRename(id, current) {
+            const title = prompt('Nouveau titre:', current);
+            if (!title || !title.trim()) return;
+            await fetch(`/api/topics/${id}/rename`, {method:'POST', body: new URLSearchParams({title: title.trim()})});
+            loadTopics(); topicOpen(id);
+        }
+
+        async function topicRemoveSource(id, sid) {
+            await fetch(`/api/topics/${id}/sources/${sid}/delete`, {method:'POST'});
+            topicOpen(id);
+        }
+
+        async function topicAddSources(id) {
+            const fd = new FormData();
+            const fileEl = document.getElementById('ts-file-'+id);
+            const textEl = document.getElementById('ts-text-'+id);
+            const linksEl = document.getElementById('ts-links-'+id);
+            if (fileEl.files) for (let i=0;i<fileEl.files.length;i++) fd.append('file', fileEl.files[i]);
+            if (textEl.value.trim()) fd.append('text', textEl.value.trim());
+            if (linksEl.value.trim()) fd.append('links', linksEl.value.trim());
+            const d = await (await fetch(`/api/topics/${id}/sources`, {method:'POST', body: fd})).json();
+            if (d.status === 'ok') topicOpen(id);
+            else alert(d.error || 'échec');
+        }
+
+        async function topicGenerate(id) {
+            const box = _metaModal();
+            box.innerHTML = '⏳ Génération des parts du topic…';
+            try {
+                const d = await (await fetch(`/api/topics/${id}/generate`, {method:'POST'})).json();
+                if (d.status !== 'ok') { box.innerHTML = '⚠ ' + (d.error || 'échec'); return; }
+                let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-weight:600;">📤 ${d.name} (${d.parts.length} parts)</div><button onclick="document.getElementById('meta-export-modal').remove()" style="background:none;border:none;color:#9ca3af;font-size:20px;cursor:pointer;">✕</button></div>`;
+                if (d.skipped && d.skipped.length) html += `<div style="font-size:12px;color:#f59e0b;margin-bottom:8px;">⚠ ignorés: ${d.skipped.join('; ')}</div>`;
+                html += `<div style="font-size:12px;color:#9ca3af;margin-bottom:14px;">Clique chaque bouton dans l'ordre, colle dans Meta AI, puis <code>ALL PARTS SENT</code>.</div><div style="display:flex;flex-wrap:wrap;gap:8px;">`;
+                for (const p of d.parts) html += `<button type="button" onclick="topicCopyPart(${id},${p.part},${p.total},this)" style="padding:8px 14px;background:#4f46e5;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;">📋 Part ${p.part}/${p.total}</button>`;
+                html += '</div><div id="meta-copy-msg" style="font-size:14px;margin-top:12px;"></div><textarea id="meta-copy-area" readonly style="position:absolute;left:-9999px;top:0;opacity:0;height:1px;width:1px;"></textarea>';
+                box.innerHTML = html;
+            } catch (e) { box.innerHTML = '⚠ Erreur: ' + e; }
+        }
+
+        async function topicCopyPart(id, part, total, btn) {
+            const msg = document.getElementById('meta-copy-msg');
+            const area = document.getElementById('meta-copy-area');
+            try {
+                const d = await (await fetch(`/api/topics/${id}/part/part${part}_of_${total}.txt`)).json();
+                if (d.status !== 'ok') { if(msg) msg.textContent='⚠ '+(d.error||'introuvable'); return; }
+                area.value = d.content; area.style.position='static'; area.focus(); area.select();
+                let ok=false; try{ok=document.execCommand('copy');}catch(e){ok=false;}
+                if(!ok && navigator.clipboard && navigator.clipboard.writeText){ try{navigator.clipboard.writeText(area.value); ok=true;}catch(e){} }
+                area.style.position='absolute'; area.style.left='-9999px';
+                window.getSelection && window.getSelection().removeAllRanges && window.getSelection().removeAllRanges();
+                if(btn) btn.textContent = ok ? `✅ Part ${part}/${total}` : `⚠ Part ${part}/${total}`;
+                if(msg){ msg.textContent = ok ? `✅ Part ${part}/${total} copiée` : '⚠ Réessaie'; msg.style.color = ok?'#28a745':'#dc3545'; }
+            } catch (e) { if(msg) msg.textContent='⚠ Erreur: '+e; }
+        }
+
         // --- Generic Doc→Meta: upload a file OR paste text, split, show copy modal ---
         async function docExport() {
             const input = document.getElementById('docmeta-file');
@@ -1661,6 +1810,7 @@
             event.target.classList.remove('border-transparent', 'text-gray-400');
             event.target.classList.add('border-blue-500', 'text-blue-400');
             if (name === 'defaults') loadCategoryDefaults();
+            if (name === 'topics') loadTopics();
         }
 
         async function loadCategoryDefaults() {

@@ -2623,6 +2623,132 @@ async def doc_export_part(name: str, part: str):
     return {"status": "ok", "content": p.read_text(encoding='utf-8')}
 
 
+# --- Topics (persistent Doc→Meta library) ----------------------------------
+
+@app.get("/api/topics")
+async def topics_list():
+    from gnl_core import topics as T
+    return {"status": "ok", "topics": T.list_topics()}
+
+
+@app.post("/api/topics")
+async def topics_create(request: Request):
+    from gnl_core import topics as T
+    form = await request.form()
+    title = (form.get("title") or "").strip()
+    if not title:
+        return {"status": "error", "error": "Titre requis"}
+    tid = T.create_topic(title)
+    return {"status": "ok", "id": tid}
+
+
+@app.get("/api/topics/{topic_id}")
+async def topics_get(topic_id: int):
+    from gnl_core import topics as T
+    t = T.get_topic(topic_id)
+    if not t:
+        return {"status": "error", "error": "Topic introuvable"}
+    return {"status": "ok", "topic": t}
+
+
+@app.post("/api/topics/{topic_id}/rename")
+async def topics_rename(topic_id: int, request: Request):
+    from gnl_core import topics as T
+    form = await request.form()
+    title = (form.get("title") or "").strip()
+    if not title:
+        return {"status": "error", "error": "Titre requis"}
+    T.rename_topic(topic_id, title)
+    return {"status": "ok"}
+
+
+@app.post("/api/topics/{topic_id}/delete")
+async def topics_delete(topic_id: int):
+    from gnl_core import topics as T
+    T.delete_topic(topic_id)
+    return {"status": "ok"}
+
+
+@app.post("/api/topics/{topic_id}/sources")
+async def topics_add_sources(topic_id: int, request: Request):
+    """Add sources to a topic: files (name only), links (one per line), text."""
+    from gnl_core import topics as T
+    form = await request.form()
+    added = 0
+    uploads = form.getlist("file") if hasattr(form, 'getlist') else []
+    for up in uploads:
+        if up is not None and hasattr(up, 'filename') and up.filename:
+            T.add_file_source(topic_id, os.path.basename(up.filename))
+            added += 1
+    for ln in (form.get("links") or "").splitlines():
+        ln = ln.strip()
+        if ln:
+            T.add_link_source(topic_id, ln)
+            added += 1
+    text = (form.get("text") or "").strip()
+    if text:
+        T.add_text_source(topic_id, text, label=(form.get("text_label") or "Texte collé").strip())
+        added += 1
+    if not added:
+        return {"status": "error", "error": "Aucune source fournie"}
+    return {"status": "ok", "added": added}
+
+
+@app.post("/api/topics/{topic_id}/sources/{source_id}/delete")
+async def topics_remove_source(topic_id: int, source_id: int):
+    from gnl_core import topics as T
+    T.remove_source(topic_id, source_id)
+    return {"status": "ok"}
+
+
+@app.post("/api/topics/{topic_id}/generate")
+async def topics_generate(topic_id: int):
+    """Build the topic corpus (texts + scraped links) and split into parts."""
+    from gnl_core import topics as T
+    from gnl_core.config import get_config
+    loop = asyncio.get_event_loop()
+    config = get_config()
+
+    def on_p(msg):
+        try:
+            asyncio.run_coroutine_threadsafe(broadcast_log(f"  {msg}"), loop)
+        except Exception:
+            pass
+
+    try:
+        await broadcast_log(f"▶ [TOPIC] génération des parts (topic {topic_id})")
+        max_chars = config.get('GENERIC_EXPORT_MAX_CHARS') or None
+        prompt_tpl = config.get('GENERIC_EXPORT_PROMPT') or None
+        res = await loop.run_in_executor(
+            None, lambda: T.generate_topic_parts(topic_id, on_progress=on_p,
+                                                 max_chars=max_chars,
+                                                 prompt_template=prompt_tpl))
+        await broadcast_log(f"  ✓ {len(res['parts'])} parts")
+        return {"status": "ok", "name": res['name'], "skipped": res['skipped'],
+                "parts": [{"part": p['part'], "total": p['total'],
+                           "chars": p['chars']} for p in res['parts']]}
+    except ValueError as e:
+        await broadcast_log(f"⚠ {str(e)[:120]}")
+        return {"status": "error", "error": str(e)[:200]}
+    except Exception as e:
+        await broadcast_log(f"⚠ Erreur: {str(e)[:100]}")
+        return {"status": "error", "error": str(e)[:200]}
+
+
+@app.get("/api/topics/{topic_id}/part/{part}")
+async def topics_part(topic_id: int, part: str):
+    """Return a generated topic part's text (for copy)."""
+    from gnl_core import topics as T
+    t = T.get_topic(topic_id)
+    if not t:
+        return {"status": "error", "error": "Topic introuvable"}
+    d = T._topic_dir(t['title']) / 'parts'
+    p = d / os.path.basename(part)
+    if not p.exists() or p.suffix != '.txt':
+        return {"status": "error", "error": "Part not found"}
+    return {"status": "ok", "content": p.read_text(encoding='utf-8')}
+
+
 @app.get("/api/nlm-usage")
 async def nlm_usage():
     """Return current NLM compute usage (5h + weekly windows)."""
