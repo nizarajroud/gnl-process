@@ -2121,7 +2121,9 @@ async def admin_save(request: Request):
                    'META_PROMPT_WRONG', 'META_PROMPT_CORRECT',
                    'META_EXPORT_PROMPT', 'META_EXPORT_MAX_CHARS',
                    'GENERIC_EXPORT_PROMPT', 'GENERIC_EXPORT_MAX_CHARS',
-                   'META_PLAN_B', 'ICLOUD_META_DIR', 'META_PLAN_B_FORMAT']
+                   'META_PLAN_B', 'ICLOUD_META_DIR', 'META_PLAN_B_FORMAT',
+                   'ANKI_TTS', 'POLLY_VOICE', 'POLLY_ENGINE', 'POLLY_PROFILE',
+                   'POLLY_REGION']
     
     data = {key: form.get(key, '') for key in config_keys}
     # Don't clobber saved Meta prompts if the form didn't include them.

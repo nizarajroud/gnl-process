@@ -552,11 +552,45 @@
                     </div>
                 </div>
 
-                <!-- Plan B : fichier Markdown unique vers iCloud -->
+                <!-- Anki TTS : audio Amazon Polly sur les cartes -->
                 <div class="bg-gray-800 rounded-lg p-5">
                     <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('span').textContent=this.nextElementSibling.classList.contains('hidden')?'▶':'▼'" class="flex items-center gap-2 font-semibold w-full text-left">
-                        <span class="text-xs">▶</span> ☁️ Plan B — Markdown vers iCloud
+                        <span class="text-xs">▶</span> 🔊 Anki — Audio TTS (Amazon Polly)
                     </button>
+                    <div class="hidden mt-4 space-y-3">
+                        <p class="text-xs text-gray-500">Si activé, les cartes Anki générées incluent un audio Polly : le recto lit la question + options, le verso lit l'explication. Fonctionne sur mobile (AnkiDroid/AnkiMobile) et desktop. Utilise un profil AWS perso (coût Polly ~4$/million de caractères en neural).</p>
+                        <div class="flex items-center gap-3">
+                            <label class="text-xs text-gray-400">Audio activé</label>
+                            <select name="ANKI_TTS" class="bg-gray-700 rounded px-3 py-2 text-sm">
+                                <option value="0" {{ 'selected' if (config.ANKI_TTS or '0')=='0' else '' }}>0 — Désactivé (défaut)</option>
+                                <option value="1" {{ 'selected' if (config.ANKI_TTS or '0')=='1' else '' }}>1 — Audio Polly sur les cartes</option>
+                            </select>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-xs text-gray-400">Profil AWS (Polly)</label>
+                                <input type="text" name="POLLY_PROFILE" value="{{ config.POLLY_PROFILE or 'personal-production-sso-760' }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm font-mono">
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-400">Région</label>
+                                <input type="text" name="POLLY_REGION" value="{{ config.POLLY_REGION or 'us-east-1' }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm font-mono">
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-400">Voix</label>
+                                <input type="text" name="POLLY_VOICE" value="{{ config.POLLY_VOICE or 'Matthew' }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-400">Moteur</label>
+                                <select name="POLLY_ENGINE" class="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                                    <option value="neural" {{ 'selected' if (config.POLLY_ENGINE or 'neural')=='neural' else '' }}>neural</option>
+                                    <option value="standard" {{ 'selected' if (config.POLLY_ENGINE or 'neural')=='standard' else '' }}>standard</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Plan B : fichier Markdown unique vers iCloud -->
                     <div class="hidden mt-4 space-y-3">
                         <p class="text-xs text-gray-500">Si activé, « Générer les parts » d'un topic écrit tout le contenu dans UN fichier Markdown déposé sur iCloud (au lieu des parts + modale). Pratique pour l'ouvrir/attacher dans Meta AI depuis l'iPhone sans dépendre de la mémoire de session.</p>
                         <div class="flex items-center gap-3">

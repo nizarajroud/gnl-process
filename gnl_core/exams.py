@@ -915,6 +915,19 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
 
     debug = _get_config().get('DEBUG_NLM', '0') == '1'
     cards_count = 0
+    # --- Optional Polly TTS setup (flag ANKI_TTS=1), personal AWS profile ---
+    _cfg = _get_config()
+    tts_enabled = str(_cfg.get('ANKI_TTS', '0')) == '1'
+    tts_voice = _cfg.get('POLLY_VOICE') or 'Matthew'
+    tts_engine = _cfg.get('POLLY_ENGINE') or 'neural'
+    tts_profile = _cfg.get('POLLY_PROFILE') or None
+    tts_region = _cfg.get('POLLY_REGION') or 'us-east-1'
+    audio_files = []
+    tts_dir = base / 'Anki-generation' / 'tts'
+    if tts_enabled:
+        tts_dir.mkdir(parents=True, exist_ok=True)
+        if on_progress:
+            on_progress(f"  🔊 TTS activé (Polly {tts_voice}/{tts_engine})")
     # Optional filter: only keep the requested question numbers (as strings).
     _only = set(str(x) for x in only_questions) if only_questions else None
     for num in sorted(answers.keys(), key=lambda x: int(x)):
@@ -988,6 +1001,36 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
             if d.get('png') and diagram_back:
                 back += f"<br><br><img src='Q{num}.png'>"
 
+        # Optional TTS audio (Amazon Polly, flag ANKI_TTS=1). Front reads the
+        # question + options; back reads the explanation. Audio files are added
+        # to media_files below and referenced via [sound:...] in the fields.
+        if tts_enabled:
+            try:
+                from gnl_core import anki_tts
+                # Front text: question statement + options (letter + text).
+                opt_lines = []
+                for o in options:
+                    opt_lines.append(str(o))
+                front_tts = f"Question {num}. {q_text}. Options: " + ". ".join(opt_lines)
+                fa = tts_dir / f"q{num}_front.mp3"
+                if anki_tts.synthesize(front_tts, str(fa), voice=tts_voice,
+                                       engine=tts_engine, profile=tts_profile,
+                                       region=tts_region):
+                    front += f"<br>[sound:{fa.name}]"
+                    audio_files.append(str(fa))
+                # Back text: the explanation (fallback to correct answers).
+                expl = explanations.get(str(num), '') or ("Correct: " + ", ".join(correct))
+                if expl.strip():
+                    ba = tts_dir / f"q{num}_back.mp3"
+                    if anki_tts.synthesize(expl, str(ba), voice=tts_voice,
+                                           engine=tts_engine, profile=tts_profile,
+                                           region=tts_region):
+                        back += f"<br>[sound:{ba.name}]"
+                        audio_files.append(str(ba))
+            except Exception as e:
+                if on_progress:
+                    on_progress(f"  ⚠ TTS Q{num}: {str(e)[:80]}")
+
         note = genanki.Note(model=model, fields=[front, back, explanations.get(str(num), '')], guid=f"{name}{guid_suffix}-q{num}")
         deck.add_note(note)
         cards_count += 1
@@ -1003,6 +1046,8 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     media_files = []
     if diagrams:
         media_files = [diagrams[num]['png'] for num in diagrams if diagrams[num].get('png')]
+    if audio_files:
+        media_files += audio_files
     if media_files:
         package.media_files = media_files
     package.write_to_file(str(apkg_path))
