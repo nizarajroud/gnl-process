@@ -70,8 +70,22 @@ def test_exam_plan_b_markdown(tmp_path):
     # Plan B corpus contains both questions.
     corpus = build_meta_corpus(pivot)
     assert 'Q one?' in corpus and 'Q two?' in corpus
-    # Writer drops a single .md in the given dir.
-    res = generate_meta_markdown(pivot, 'my-exam', icloud_dir=str(tmp_path))
+    # Writer drops a single .md in the given dir when fmt='md'.
+    res = generate_meta_markdown(pivot, 'my-exam', icloud_dir=str(tmp_path), fmt='md')
     import os
     assert os.path.exists(res['path']) and res['path'].endswith('my-exam.md')
     assert res['chars'] == len(open(res['path'], encoding='utf-8').read())
+
+
+def test_plan_b_pdf_is_readable(tmp_path):
+    """Plan B PDF: generate a PDF whose text is extractable (what Meta AI reads)."""
+    from gnl_core.meta_export import generate_meta_markdown
+    pivot = [
+        {'num': 1, 'statement': 'Unique question marker ALPHA?',
+         'options': [{'letter': 'A', 'text': 'a', 'rationale': 'r', 'correct': True}]},
+    ]
+    res = generate_meta_markdown(pivot, 'exam-pdf', icloud_dir=str(tmp_path), fmt='pdf')
+    assert res['fmt'] == 'pdf' and res['path'].endswith('.pdf')
+    from pypdf import PdfReader
+    txt = ''.join((p.extract_text() or '') for p in PdfReader(res['path']).pages)
+    assert 'ALPHA' in txt           # content is extractable from the PDF

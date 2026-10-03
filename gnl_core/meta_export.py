@@ -298,9 +298,10 @@ def generate_meta_export(pivot, name, theme, subtheme, on_progress=None,
 
 
 def generate_meta_markdown(pivot, name, prompt_template=None, icloud_dir=None,
-                           on_progress=None):
-    """Plan B (exam): write the whole exam corpus as a single Markdown file into
-    the iCloud META-AI folder. Returns {'name','path','chars'}.
+                           on_progress=None, fmt='pdf'):
+    """Plan B (exam): write the whole exam corpus as a single file into the
+    iCloud META-AI folder. fmt='pdf' (default, Meta AI reads it) or 'md'.
+    Returns {'name','path','chars','fmt'}.
     """
     import os as _os
     from pathlib import Path as _P
@@ -312,8 +313,12 @@ def generate_meta_markdown(pivot, name, prompt_template=None, icloud_dir=None,
     out.mkdir(parents=True, exist_ok=True)
     safe = (''.join(c if c.isalnum() or c in ' -_' else '_' for c in name).strip()
             or 'exam')
-    path = out / f"{safe}.md"
-    path.write_text(content, encoding='utf-8')
+    if fmt == 'pdf':
+        from gnl_core.pdf_export import write_pdf
+        path = write_pdf(content, out / f"{safe}.pdf", title=name)
+    else:
+        path = str(out / f"{safe}.md")
+        _P(path).write_text(content, encoding='utf-8')
     if on_progress:
-        on_progress(f"markdown iCloud → {path} ({len(content)} chars)")
-    return {'name': name, 'path': str(path), 'chars': len(content)}
+        on_progress(f"{fmt} iCloud → {path} ({len(content)} chars)")
+    return {'name': name, 'path': str(path), 'chars': len(content), 'fmt': fmt}

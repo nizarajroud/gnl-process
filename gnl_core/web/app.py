@@ -2121,7 +2121,7 @@ async def admin_save(request: Request):
                    'META_PROMPT_WRONG', 'META_PROMPT_CORRECT',
                    'META_EXPORT_PROMPT', 'META_EXPORT_MAX_CHARS',
                    'GENERIC_EXPORT_PROMPT', 'GENERIC_EXPORT_MAX_CHARS',
-                   'META_PLAN_B', 'ICLOUD_META_DIR']
+                   'META_PLAN_B', 'ICLOUD_META_DIR', 'META_PLAN_B_FORMAT']
     
     data = {key: form.get(key, '') for key in config_keys}
     # Don't clobber saved Meta prompts if the form didn't include them.
@@ -2488,11 +2488,13 @@ async def meta_export_generate(theme: str, subtheme: str, filename: str):
             from gnl_core.meta_export import generate_meta_markdown
             await broadcast_log("▶ [META] Plan B — fichier Markdown unique vers iCloud")
             icloud_dir = config.get('ICLOUD_META_DIR') or None
+            plan_b_fmt = (config.get('META_PLAN_B_FORMAT') or 'pdf')
             res = await loop.run_in_executor(
                 None, lambda: generate_meta_markdown(pivot, name,
                                                      prompt_template=prompt_tpl,
                                                      icloud_dir=icloud_dir,
-                                                     on_progress=on_p))
+                                                     on_progress=on_p,
+                                                     fmt=plan_b_fmt))
             await broadcast_log(f"  ✓ Markdown iCloud: {res['path']}")
             return {"status": "ok", "mode": "markdown", "name": name,
                     "theme": theme, "subtheme": subtheme,
@@ -2771,11 +2773,12 @@ async def topics_generate(topic_id: int, continuation: int = 0):
         if plan_b:
             await broadcast_log("▶ [TOPIC] Plan B — fichier Markdown unique vers iCloud")
             icloud_dir = config.get('ICLOUD_META_DIR') or None
+            plan_b_fmt = (config.get('META_PLAN_B_FORMAT') or 'pdf')
             res = await loop.run_in_executor(
                 None, lambda: T.generate_topic_markdown(
                     topic_id, prompt_template=prompt_tpl,
                     continuation=bool(continuation), icloud_dir=icloud_dir,
-                    on_progress=on_p))
+                    on_progress=on_p, fmt=plan_b_fmt))
             await broadcast_log(f"  ✓ Markdown iCloud: {res['path']}")
             return {"status": "ok", "mode": "markdown", "name": res['name'],
                     "path": res['path'], "chars": res['chars'],

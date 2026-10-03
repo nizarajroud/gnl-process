@@ -76,10 +76,25 @@ def test_generate_topic_markdown_plan_b(tmp_path):
     icloud = tmp_path / "icloud"
     tid = T.create_topic("Mon Topic PlanB", db_path=db)
     T.add_text_source(tid, "Un contenu de test suffisant. " * 20, db_path=db)
-    res = T.generate_topic_markdown(tid, icloud_dir=str(icloud), db_path=db)
+    res = T.generate_topic_markdown(tid, icloud_dir=str(icloud), db_path=db, fmt="md")
     assert os.path.exists(res["path"])
     assert res["path"].endswith(".md")
     content = open(res["path"], encoding="utf-8").read()
     assert "Un contenu de test" in content          # corpus included
     assert res["chars"] == len(content)
     assert "Mon Topic PlanB" == res["name"]
+
+
+def test_generate_topic_pdf_plan_b(tmp_path):
+    """Plan B default (PDF): topic corpus becomes an extractable PDF."""
+    import os
+    from gnl_core import topics as T
+    db = str(tmp_path / "pbpdf.db")
+    icloud = tmp_path / "icloud"
+    tid = T.create_topic("Topic PDF", db_path=db)
+    T.add_text_source(tid, "Marqueur unique BETA contenu. " * 10, db_path=db)
+    res = T.generate_topic_markdown(tid, icloud_dir=str(icloud), db_path=db)  # default pdf
+    assert res["fmt"] == "pdf" and res["path"].endswith(".pdf")
+    from pypdf import PdfReader
+    txt = "".join((p.extract_text() or "") for p in PdfReader(res["path"]).pages)
+    assert "BETA" in txt
