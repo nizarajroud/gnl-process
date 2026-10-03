@@ -77,8 +77,15 @@ def combine(parent_id, output_file, db_path=None, suffix=None):
             for mp3 in mp3_files:
                 f.write(f"file '{mp3.absolute()}'\n")
 
-        subprocess.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', str(list_file), '-c', 'copy', str(local_tmp)],
-                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Re-encode on concat (NOT `-c copy`): stream-copying MP3 segments leaves
+        # inconsistent headers/timestamps at the joins — VLC tolerates it, but
+        # strict iOS players (Documents by Readdle) stop at the first join.
+        # A clean CBR re-encode produces one coherent MP3 that plays everywhere.
+        subprocess.run(
+            ['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', str(list_file),
+             '-c:a', 'libmp3lame', '-b:a', '128k', '-ar', '44100', '-ac', '2',
+             str(local_tmp)],
+            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         list_file.unlink()
 
         shutil.copyfile(str(local_tmp), str(output_path))
