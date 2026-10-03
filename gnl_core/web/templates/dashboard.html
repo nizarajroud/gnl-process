@@ -552,6 +552,27 @@
                     </div>
                 </div>
 
+                <!-- Plan B : fichier Markdown unique vers iCloud -->
+                <div class="bg-gray-800 rounded-lg p-5">
+                    <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('span').textContent=this.nextElementSibling.classList.contains('hidden')?'▶':'▼'" class="flex items-center gap-2 font-semibold w-full text-left">
+                        <span class="text-xs">▶</span> ☁️ Plan B — Markdown vers iCloud
+                    </button>
+                    <div class="hidden mt-4 space-y-3">
+                        <p class="text-xs text-gray-500">Si activé, « Générer les parts » d'un topic écrit tout le contenu dans UN fichier Markdown déposé sur iCloud (au lieu des parts + modale). Pratique pour l'ouvrir/attacher dans Meta AI depuis l'iPhone sans dépendre de la mémoire de session.</p>
+                        <div class="flex items-center gap-3">
+                            <label class="text-xs text-gray-400">Plan B activé</label>
+                            <select name="META_PLAN_B" class="bg-gray-700 rounded px-3 py-2 text-sm">
+                                <option value="0" {{ 'selected' if (config.META_PLAN_B or '0')=='0' else '' }}>0 — Parts + modale (défaut)</option>
+                                <option value="1" {{ 'selected' if (config.META_PLAN_B or '0')=='1' else '' }}>1 — Markdown vers iCloud</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">Dossier iCloud (accessible depuis WSL)</label>
+                            <input type="text" name="ICLOUD_META_DIR" value="{{ config.ICLOUD_META_DIR or '/mnt/c/Users/nizar/Synchro-iphone/iCloudDrive/META-AI' }}" class="w-full bg-gray-700 rounded px-3 py-2 text-sm font-mono">
+                        </div>
+                    </div>
+                </div>
+
                 <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium">💾 Sauvegarder</button>
                 <button type="button" onclick="window.location.href='/admin/export'" class="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-sm font-medium">📥 Exporter</button>
             </form>
@@ -1215,6 +1236,16 @@
             try {
                 const d = await (await fetch(`/api/topics/${id}/generate?continuation=${cont}`, {method:'POST'})).json();
                 if (d.status !== 'ok') { box.innerHTML = '⚠ ' + (d.error || 'échec'); return; }
+                // Plan B: a single Markdown file written to iCloud.
+                if (d.mode === 'markdown') {
+                    let mh = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-weight:600;">☁️ ${d.name} — Markdown iCloud</div><button onclick="document.getElementById('meta-export-modal').remove()" style="background:none;border:none;color:#9ca3af;font-size:20px;cursor:pointer;">✕</button></div>`;
+                    if (d.skipped && d.skipped.length) mh += `<div style="font-size:12px;color:#f59e0b;margin-bottom:8px;">⚠ ignorés: ${d.skipped.join('; ')}</div>`;
+                    mh += `<div style="font-size:14px;color:#e5e7eb;">✅ Fichier écrit (${d.chars} caractères) :</div>`;
+                    mh += `<div style="font-size:12px;color:#9ca3af;font-family:monospace;margin-top:8px;word-break:break-all;background:#111827;padding:10px;border-radius:8px;">${d.path}</div>`;
+                    mh += `<div style="font-size:12px;color:#9ca3af;margin-top:10px;">Il sera synchronisé sur iCloud → ouvre-le / attache-le dans Meta AI depuis ton iPhone.</div>`;
+                    box.innerHTML = mh;
+                    return;
+                }
                 let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-weight:600;">📤 ${d.name} (${d.parts.length} parts)</div><button onclick="document.getElementById('meta-export-modal').remove()" style="background:none;border:none;color:#9ca3af;font-size:20px;cursor:pointer;">✕</button></div>`;
                 if (d.skipped && d.skipped.length) html += `<div style="font-size:12px;color:#f59e0b;margin-bottom:8px;">⚠ ignorés: ${d.skipped.join('; ')}</div>`;
                 html += `<div style="font-size:12px;color:#9ca3af;margin-bottom:14px;">Clique chaque bouton dans l'ordre, colle dans Meta AI, puis <code>ALL PARTS SENT</code>.</div><div style="display:flex;flex-wrap:wrap;gap:8px;">`;

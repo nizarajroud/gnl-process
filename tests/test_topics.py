@@ -66,3 +66,20 @@ def test_ensure_schema_idempotent(db):
     topics.ensure_schema(db)
     topics.ensure_schema(db)  # second call must not fail
     assert topics.list_topics(db_path=db) == []
+
+
+def test_generate_topic_markdown_plan_b(tmp_path):
+    """Plan B: writes the whole corpus as one .md into the iCloud dir."""
+    import os
+    from gnl_core import topics as T
+    db = str(tmp_path / "pb.db")
+    icloud = tmp_path / "icloud"
+    tid = T.create_topic("Mon Topic PlanB", db_path=db)
+    T.add_text_source(tid, "Un contenu de test suffisant. " * 20, db_path=db)
+    res = T.generate_topic_markdown(tid, icloud_dir=str(icloud), db_path=db)
+    assert os.path.exists(res["path"])
+    assert res["path"].endswith(".md")
+    content = open(res["path"], encoding="utf-8").read()
+    assert "Un contenu de test" in content          # corpus included
+    assert res["chars"] == len(content)
+    assert "Mon Topic PlanB" == res["name"]

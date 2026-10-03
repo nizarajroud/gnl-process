@@ -2120,7 +2120,8 @@ async def admin_save(request: Request):
                    'BEDROCK_MODEL_ID', 'AWS_REGION', 'AWS_PROFILE',
                    'META_PROMPT_WRONG', 'META_PROMPT_CORRECT',
                    'META_EXPORT_PROMPT', 'META_EXPORT_MAX_CHARS',
-                   'GENERIC_EXPORT_PROMPT', 'GENERIC_EXPORT_MAX_CHARS']
+                   'GENERIC_EXPORT_PROMPT', 'GENERIC_EXPORT_MAX_CHARS',
+                   'META_PLAN_B', 'ICLOUD_META_DIR']
     
     data = {key: form.get(key, '') for key in config_keys}
     # Don't clobber saved Meta prompts if the form didn't include them.
@@ -2748,13 +2749,29 @@ async def topics_generate(topic_id: int, continuation: int = 0):
         # In continuation mode, let generate_topic_parts pick the continuation
         # prompt; otherwise use the configured generic prompt (or default).
         prompt_tpl = None if continuation else (config.get('GENERIC_EXPORT_PROMPT') or None)
+
+        # Plan B: single Markdown file dropped on iCloud (META_PLAN_B=1).
+        plan_b = str(config.get('META_PLAN_B', '0')) == '1'
+        if plan_b:
+            await broadcast_log("▶ [TOPIC] Plan B — fichier Markdown unique vers iCloud")
+            icloud_dir = config.get('ICLOUD_META_DIR') or None
+            res = await loop.run_in_executor(
+                None, lambda: T.generate_topic_markdown(
+                    topic_id, prompt_template=prompt_tpl,
+                    continuation=bool(continuation), icloud_dir=icloud_dir,
+                    on_progress=on_p))
+            await broadcast_log(f"  ✓ Markdown iCloud: {res['path']}")
+            return {"status": "ok", "mode": "markdown", "name": res['name'],
+                    "path": res['path'], "chars": res['chars'],
+                    "skipped": res['skipped']}
+
         res = await loop.run_in_executor(
             None, lambda: T.generate_topic_parts(topic_id, on_progress=on_p,
                                                  max_chars=max_chars,
                                                  prompt_template=prompt_tpl,
                                                  continuation=bool(continuation)))
         await broadcast_log(f"  ✓ {len(res['parts'])} parts")
-        return {"status": "ok", "name": res['name'], "skipped": res['skipped'],
+        return {"status": "ok", "mode": "parts", "name": res['name'], "skipped": res['skipped'],
                 "parts": [{"part": p['part'], "total": p['total'],
                            "chars": p['chars']} for p in res['parts']]}
     except ValueError as e:

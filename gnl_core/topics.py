@@ -293,3 +293,48 @@ def generate_topic_parts(topic_id, on_progress=None, max_chars=None,
         conn.commit()
     return {'name': topic['title'], 'out_dir': str(out_dir),
             'parts': parts, 'skipped': skipped}
+
+
+def _safe_name(title):
+    return (''.join(c if c.isalnum() or c in ' -_' else '_' for c in title).strip()
+            or 'topic')
+
+
+def generate_topic_markdown(topic_id, prompt_template=None, continuation=False,
+                            icloud_dir=None, on_progress=None, db_path=None):
+    """Plan B: write the WHOLE topic corpus (prompt + content) as a single
+    Markdown file into the iCloud META-AI folder, so it syncs to the iPhone and
+    can be opened/attached in Meta AI anytime (no reliance on session memory).
+
+    Returns {'name', 'path', 'chars', 'skipped'} or raises ValueError.
+    """
+    import os as _os
+    from gnl_core.meta_export import (DEFAULT_GENERIC_PROMPT,
+                                      DEFAULT_CONTINUATION_PROMPT)
+    topic = get_topic(topic_id, db_path)
+    if not topic:
+        raise ValueError("Topic introuvable")
+    corpus, skipped = build_topic_corpus(topic_id, on_progress=on_progress, db_path=db_path)
+    if not corpus.strip():
+        raise ValueError("Aucun contenu exploitable dans ce topic (ajoute du texte, un fichier ou un lien).")
+
+    # Prompt header (single file => no parts, so {N}=1).
+    tpl = prompt_template or (DEFAULT_CONTINUATION_PROMPT if continuation
+                              else DEFAULT_GENERIC_PROMPT)
+    header = tpl.replace('{N}', '1')
+    content = header + "\n\n---\n\n" + corpus
+
+    icloud_dir = icloud_dir or _os.environ.get(
+        'ICLOUD_META_DIR',
+        '/mnt/c/Users/nizar/Synchro-iphone/iCloudDrive/META-AI')
+    out = Path(icloud_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / f"{_safe_name(topic['title'])}.md"
+    path.write_text(content, encoding='utf-8')
+    if on_progress:
+        on_progress(f"markdown iCloud → {path} ({len(content)} chars)")
+    with get_db(db_path) as conn:
+        _log(conn, topic_id, 'generated_md', f"iCloud: {path.name} ({len(content)} chars)")
+        conn.commit()
+    return {'name': topic['title'], 'path': str(path),
+            'chars': len(content), 'skipped': skipped}
