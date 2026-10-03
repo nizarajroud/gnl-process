@@ -49,3 +49,29 @@ def test_custom_prompt_and_placeholder():
     parts = build_parts(_pivot(2), max_chars=65000,
                         prompt_template="CUSTOM PROMPT {N} parts")
     assert parts[0].startswith("CUSTOM PROMPT 1 parts")
+
+
+def test_exam_plan_b_markdown(tmp_path):
+    """Plan B (exam): build_meta_corpus + generate_meta_markdown write one .md
+    containing the prompt header and every question; build_parts is unchanged."""
+    from gnl_core.meta_export import (build_parts, build_meta_corpus,
+                                     generate_meta_markdown)
+    pivot = [
+        {'num': 1, 'statement': 'Q one?',
+         'options': [{'letter': 'A', 'text': 'a', 'rationale': 'because a', 'correct': True},
+                     {'letter': 'B', 'text': 'b', 'rationale': 'nope', 'correct': False}]},
+        {'num': 2, 'statement': 'Q two?',
+         'options': [{'letter': 'A', 'text': 'a', 'rationale': 'nope', 'correct': False},
+                     {'letter': 'B', 'text': 'b', 'rationale': 'because b', 'correct': True}]},
+    ]
+    # Plan A still works and is unaffected.
+    parts = build_parts(pivot)
+    assert len(parts) >= 1
+    # Plan B corpus contains both questions.
+    corpus = build_meta_corpus(pivot)
+    assert 'Q one?' in corpus and 'Q two?' in corpus
+    # Writer drops a single .md in the given dir.
+    res = generate_meta_markdown(pivot, 'my-exam', icloud_dir=str(tmp_path))
+    import os
+    assert os.path.exists(res['path']) and res['path'].endswith('my-exam.md')
+    assert res['chars'] == len(open(res['path'], encoding='utf-8').read())

@@ -2482,13 +2482,29 @@ async def meta_export_generate(theme: str, subtheme: str, filename: str):
             None, lambda: resolve_format_output(fmt, src, name, theme, subtheme, on_progress=on_p))
         max_chars = config.get('META_EXPORT_MAX_CHARS') or None
         prompt_tpl = config.get('META_EXPORT_PROMPT') or None
+
+        # Plan B: single Markdown to iCloud (META_PLAN_B=1).
+        if str(config.get('META_PLAN_B', '0')) == '1':
+            from gnl_core.meta_export import generate_meta_markdown
+            await broadcast_log("▶ [META] Plan B — fichier Markdown unique vers iCloud")
+            icloud_dir = config.get('ICLOUD_META_DIR') or None
+            res = await loop.run_in_executor(
+                None, lambda: generate_meta_markdown(pivot, name,
+                                                     prompt_template=prompt_tpl,
+                                                     icloud_dir=icloud_dir,
+                                                     on_progress=on_p))
+            await broadcast_log(f"  ✓ Markdown iCloud: {res['path']}")
+            return {"status": "ok", "mode": "markdown", "name": name,
+                    "theme": theme, "subtheme": subtheme,
+                    "path": res['path'], "chars": res['chars']}
+
         parts = await loop.run_in_executor(
             None, lambda: generate_meta_export(pivot, name, theme, subtheme,
                                                on_progress=on_p,
                                                max_chars=max_chars,
                                                prompt_template=prompt_tpl))
         await broadcast_log(f"  ✓ {len(parts)} parts générées")
-        return {"status": "ok", "name": name, "theme": theme,
+        return {"status": "ok", "mode": "parts", "name": name, "theme": theme,
                 "subtheme": subtheme,
                 "parts": [{"part": p['part'], "total": p['total'],
                            "chars": p['chars']} for p in parts]}

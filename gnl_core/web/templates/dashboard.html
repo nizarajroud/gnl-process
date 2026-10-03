@@ -1091,6 +1091,15 @@
                 const d = await resp.json();
                 if (d.status !== 'ok') { box.innerHTML = '⚠ ' + (d.error || 'échec'); return; }
                 const name = d.name;
+                // Plan B: a single Markdown file written to iCloud.
+                if (d.mode === 'markdown') {
+                    let mh = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-weight:600;">☁️ Export Meta AI — ${name} (Markdown iCloud)</div><button onclick="document.getElementById('meta-export-modal').remove()" style="background:none;border:none;color:#9ca3af;font-size:20px;cursor:pointer;">✕</button></div>`;
+                    mh += `<div style="font-size:14px;color:#e5e7eb;">✅ Fichier écrit (${d.chars} caractères) :</div>`;
+                    mh += `<div style="font-size:12px;color:#9ca3af;font-family:monospace;margin-top:8px;word-break:break-all;background:#111827;padding:10px;border-radius:8px;">${d.path}</div>`;
+                    mh += `<div style="font-size:12px;color:#9ca3af;margin-top:10px;">Il sera synchronisé sur iCloud → ouvre-le / attache-le dans Meta AI depuis ton iPhone.</div>`;
+                    box.innerHTML = mh;
+                    return;
+                }
                 let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-weight:600;">📤 Export Meta AI — ${name} (${d.parts.length} parts)</div><button onclick="document.getElementById('meta-export-modal').remove()" style="background:none;border:none;color:#9ca3af;font-size:20px;cursor:pointer;">✕</button></div>`;
                 html += `<div style="font-size:12px;color:#9ca3af;margin-bottom:14px;">Clique chaque bouton dans l'ordre, colle dans un message Meta AI séparé, puis écris <code>ALL PARTS SENT</code>.</div>`;
                 html += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';

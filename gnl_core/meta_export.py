@@ -119,6 +119,18 @@ def build_parts(pivot, max_chars=None, prompt_template=None):
     return parts
 
 
+def build_meta_corpus(pivot, prompt_template=None):
+    """Plan B (exam): the WHOLE exam as a single string = prompt header + every
+    rendered question concatenated (same _render_question as build_parts, so the
+    content is identical to the parts, just not split). Used to write one .md.
+    """
+    prompt_template = prompt_template or DEFAULT_PROMPT
+    rendered = [_render_question(_q)
+                for _q in sorted(pivot, key=lambda x: x['num'])]
+    header = prompt_template.replace('{N}', '1')
+    return header + "\n\n===QUESTIONS===\n" + "".join(rendered)
+
+
 # --- Generic (non-exam) text splitting -------------------------------------
 # Independent of the exam pivot. Used by the generic Doc→Meta tool. The exam
 # path (build_parts above) is NOT touched.
@@ -283,3 +295,25 @@ def generate_meta_export(pivot, name, theme, subtheme, on_progress=None,
         if on_progress:
             on_progress(f"Meta export part {k}/{n} → {p.name} ({len(content)} chars)")
     return results
+
+
+def generate_meta_markdown(pivot, name, prompt_template=None, icloud_dir=None,
+                           on_progress=None):
+    """Plan B (exam): write the whole exam corpus as a single Markdown file into
+    the iCloud META-AI folder. Returns {'name','path','chars'}.
+    """
+    import os as _os
+    from pathlib import Path as _P
+    content = build_meta_corpus(pivot, prompt_template=prompt_template)
+    icloud_dir = icloud_dir or _os.environ.get(
+        'ICLOUD_META_DIR',
+        '/mnt/c/Users/nizar/Synchro-iphone/iCloudDrive/META-AI')
+    out = _P(icloud_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    safe = (''.join(c if c.isalnum() or c in ' -_' else '_' for c in name).strip()
+            or 'exam')
+    path = out / f"{safe}.md"
+    path.write_text(content, encoding='utf-8')
+    if on_progress:
+        on_progress(f"markdown iCloud → {path} ({len(content)} chars)")
+    return {'name': name, 'path': str(path), 'chars': len(content)}
