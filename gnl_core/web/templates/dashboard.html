@@ -1096,7 +1096,8 @@
                     let mh = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-weight:600;">☁️ Export Meta AI — ${name} (Markdown iCloud)</div><button onclick="document.getElementById('meta-export-modal').remove()" style="background:none;border:none;color:#9ca3af;font-size:20px;cursor:pointer;">✕</button></div>`;
                     mh += `<div style="font-size:14px;color:#e5e7eb;">✅ Fichier écrit (${d.chars} caractères) :</div>`;
                     mh += `<div style="font-size:12px;color:#9ca3af;font-family:monospace;margin-top:8px;word-break:break-all;background:#111827;padding:10px;border-radius:8px;">${d.path}</div>`;
-                    mh += `<div style="font-size:12px;color:#9ca3af;margin-top:10px;">Il sera synchronisé sur iCloud → ouvre-le / attache-le dans Meta AI depuis ton iPhone.</div>`;
+                    mh += `<div style="font-size:12px;color:#fbbf24;margin-top:10px;line-height:1.5;">📎 <b>Attache le fichier</b> dans Meta AI (comme pièce jointe) — ne colle PAS son contenu : il dépasse la limite d'un message et serait tronqué. En l'attachant, Meta AI lit TOUT le document.</div>`;
+                    mh += `<div style="font-size:12px;color:#9ca3af;margin-top:6px;">Il se synchronise sur iCloud → sur ton iPhone, ouvre Meta AI → trombone/pièce jointe → choisis ce fichier.</div>`;
                     box.innerHTML = mh;
                     return;
                 }
@@ -1251,7 +1252,8 @@
                     if (d.skipped && d.skipped.length) mh += `<div style="font-size:12px;color:#f59e0b;margin-bottom:8px;">⚠ ignorés: ${d.skipped.join('; ')}</div>`;
                     mh += `<div style="font-size:14px;color:#e5e7eb;">✅ Fichier écrit (${d.chars} caractères) :</div>`;
                     mh += `<div style="font-size:12px;color:#9ca3af;font-family:monospace;margin-top:8px;word-break:break-all;background:#111827;padding:10px;border-radius:8px;">${d.path}</div>`;
-                    mh += `<div style="font-size:12px;color:#9ca3af;margin-top:10px;">Il sera synchronisé sur iCloud → ouvre-le / attache-le dans Meta AI depuis ton iPhone.</div>`;
+                    mh += `<div style="font-size:12px;color:#fbbf24;margin-top:10px;line-height:1.5;">📎 <b>Attache le fichier</b> dans Meta AI (comme pièce jointe) — ne colle PAS son contenu : il dépasse la limite d'un message et serait tronqué. En l'attachant, Meta AI lit TOUT le document.</div>`;
+                    mh += `<div style="font-size:12px;color:#9ca3af;margin-top:6px;">Il se synchronise sur iCloud → sur ton iPhone, ouvre Meta AI → trombone/pièce jointe → choisis ce fichier.</div>`;
                     box.innerHTML = mh;
                     return;
                 }
