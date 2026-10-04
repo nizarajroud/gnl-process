@@ -69,7 +69,7 @@ def render_template(title, out_png, size=(1240, 760)):
 
 
 def _titles_for_questions(md_path, answers):
-    """Return {num: 'Q{num} · <concept>'} using the existing Bedrock labeler.
+    """Return {num: 'Q{num} · <concept>'} via Bedrock (correct profile/region).
 
     Falls back to 'Q{num}' if Bedrock yields nothing. TEST_MODE -> no AWS call.
     """
@@ -78,15 +78,46 @@ def _titles_for_questions(md_path, answers):
     if _is_test_mode():
         return {n: f"Q{n} · Test Concept" for n in nums}
     try:
-        from gnl_core.poster import _items_exam
-        items = _items_exam(str(md_path)) or []
-        # items are like 'Q3 · KMS key deletion alert' — map by leading Q number.
-        for it in items:
-            m = re.match(r'\s*Q\s*(\d+)\s*·\s*(.*)', it)
-            if m:
-                n, label = m.group(1), m.group(2).strip()
+        import json
+        import boto3
+        from botocore.config import Config
+        from gnl_core.config import get_config
+        cfg = get_config()
+        model_id = cfg.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
+        region = cfg.get('AWS_REGION', 'ca-central-1')
+        profile = cfg.get('AWS_PROFILE', '')
+
+        # Split the markdown into "## Question N:" blocks → (num, stem).
+        md = Path(md_path).read_text(encoding='utf-8', errors='ignore')
+        parts = re.split(r'##\s*Question\s+(\d+)\s*:', md)
+        blocks = []
+        for i in range(1, len(parts), 2):
+            if i + 1 < len(parts):
+                blocks.append((parts[i].strip(), parts[i + 1].strip()[:600]))
+        if not blocks:
+            return titles
+
+        session = boto3.Session(profile_name=profile or None, region_name=region)
+        client = session.client('bedrock-runtime', config=Config(read_timeout=600))
+        joined = "\n\n".join(f"Q{n}: {t}" for n, t in blocks)
+        prompt = (
+            "For each AWS exam question below, output a very short label of 2 to 4 "
+            "words capturing the CORE concept/problem the question is about (the "
+            "scenario goal), NOT the answer. Return ONLY a JSON array of strings, "
+            "in the same order, one per question.\n\n" + joined
+        )
+        resp = client.converse(
+            modelId=model_id,
+            messages=[{"role": "user", "content": [{"text": prompt}]}],
+            inferenceConfig={"maxTokens": 1500},
+        )
+        out = resp['output']['message']['content'][0]['text']
+        m = re.search(r'\[[\s\S]*\]', out)
+        labels = json.loads(m.group(0)) if m else []
+        for idx, (n, _) in enumerate(blocks):
+            if idx < len(labels) and isinstance(labels[idx], str) and labels[idx].strip():
                 if n in titles:
-                    titles[n] = f"Q{n} · {label}" if label else f"Q{n}"
+                    titles[n] = f"Q{n} · {labels[idx].strip()}"
     except Exception:
         pass
     return titles
