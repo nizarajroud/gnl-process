@@ -1095,6 +1095,23 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         # Normalize correct answers for matching
         correct_norm = [c.lower().strip() for c in correct]
 
+        # Multi-answer badge: if the question has 2+ correct options, tell the
+        # user how many to pick. Computed from the number of correct answers
+        # (the AWS Practice Exam table marks each correct option explicitly).
+        n_correct = sum(
+            1 for o in options
+            if any(o.lower().strip() == cn or (len(cn) > 20 and cn in o.lower().strip())
+                   or (len(o.lower().strip()) > 20 and o.lower().strip() in cn)
+                   for cn in correct_norm)
+        )
+        multi_badge = ""
+        if q_type != 'order' and n_correct >= 2:
+            multi_badge = (
+                f"<div style='display:inline-block;background:#f59e0b;color:#111;"
+                f"font-weight:bold;padding:3px 10px;border-radius:6px;font-size:0.85em;"
+                f"margin-bottom:8px;'>\u2691 Choisis {n_correct} r\u00e9ponses</div><br>"
+            )
+
         if q_type == 'order':
             options_html = "".join(f"<li>{o}</li>" for o in options)
             front = f"<b>Question {num}:</b><br><br>{q_text}<br><br><ul>{options_html}</ul>"
@@ -1118,7 +1135,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 f"<div class='option'><input type='checkbox' id='{kb}-q{num}o{_okey(o)}' onchange=\"localStorage.setItem('{kb}-q{num}o{_okey(o)}', this.checked?'1':'0')\"> <label for='{kb}-q{num}o{_okey(o)}'>{o}</label></div>"
                 for o in options
             )
-            front = f"<b>Question {num}:</b><br><br>{q_text}<br><br>{front_items}"
+            front = f"<b>Question {num}:</b><br><br>{multi_badge}{q_text}<br><br>{front_items}"
 
             # Back: mark correct (green), and user's wrong picks (red)
             back_items = []
@@ -1150,7 +1167,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 "if(!correct){var s=el.querySelector('.opt-text');if(s){s.classList.add('wrong');}}}"
                 "});})();</script>"
             )
-            back = f"<b>Question {num}:</b><br><br>{q_text}<br><br>{''.join(back_items)}{feedback_script}"
+            back = f"<b>Question {num}:</b><br><br>{multi_badge}{q_text}<br><br>{''.join(back_items)}{feedback_script}"
 
         # Add diagram (same image on front and/or back based on user selection)
         if diagrams and num in diagrams:

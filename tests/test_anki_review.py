@@ -361,3 +361,29 @@ def test_localstorage_keys_are_content_based(tmp_path, monkeypatch):
     for k in fkeys:
         suffix = k.rsplit('o', 1)[-1]
         assert re.fullmatch(r'[0-9a-f]{8}', suffix)
+
+
+def test_multi_answer_badge(tmp_path, monkeypatch):
+    """Questions with 2+ correct options get a 'Choisis N réponses' badge; a
+    single-answer question does not."""
+    import sqlite3
+    import zipfile
+    from gnl_core import exams
+    monkeypatch.setenv('TEST_MODE', '1')
+    exams._get_config = lambda: {'DEBUG_NLM': '0'}
+    exams.get_exam_base = lambda t, s: tmp_path
+    src = tmp_path / 'm.md'
+    src.write_text('## Question 1:\nSingle?\n- A. x\n- B. y\n\n## Question 2:\nMulti?\n- A. p\n- B. q\n- C. r\n')
+    answers = {'1': {'type': 'single', 'options': ['A. x', 'B. y'], 'correct': ['a. x']},
+               '2': {'type': 'single', 'options': ['A. p', 'B. q', 'C. r'],
+                     'correct': ['a. p', 'b. q']}}
+    out = exams.step5_anki(answers, str(src), 'exams', 'sap-c02')
+    z = zipfile.ZipFile(out)
+    z.extract('collection.anki2', tmp_path)
+    rows = sqlite3.connect(tmp_path / 'collection.anki2').execute('SELECT flds FROM notes').fetchall()
+    for r in rows:
+        front = r[0].split('\x1f')[0]
+        if 'Single?' in front:
+            assert 'Choisis' not in front
+        if 'Multi?' in front:
+            assert 'Choisis 2' in front
