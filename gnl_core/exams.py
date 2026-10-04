@@ -973,6 +973,22 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         tts_dir.mkdir(parents=True, exist_ok=True)
         if on_progress:
             on_progress(f"  🔊 TTS activé (Polly {tts_voice}/{tts_engine})")
+
+    # --- Optional empty 'reflection template' image per question (flag) ---
+    tmpl_enabled = str(_cfg.get('ANKI_TEMPLATE_IMG', '0')) == '1'
+    template_pngs = {}
+    if tmpl_enabled:
+        try:
+            from gnl_core import anki_template
+            tdir = base / 'Anki-generation' / 'templates'
+            template_pngs = anki_template.generate_question_templates(
+                source_path, answers, str(tdir), on_progress=on_progress)
+            if on_progress:
+                on_progress(f"  🖼 {len(template_pngs)} templates générés")
+        except Exception as e:
+            if on_progress:
+                on_progress(f"  ⚠ template images: {str(e)[:80]}")
+            template_pngs = {}
     # Optional filter: only keep the requested question numbers (as strings).
     _only = set(str(x) for x in only_questions) if only_questions else None
     for num in sorted(answers.keys(), key=lambda x: int(x)):
@@ -1046,6 +1062,10 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
             if d.get('png') and diagram_back:
                 back += f"<br><br><img src='Q{num}.png'>"
 
+        # Empty reflection template image (directly visible on the front).
+        if tmpl_enabled and num in template_pngs:
+            front += f"<br><br><img src='template_Q{num}.png' style='max-width:100%;'>"
+
         # Optional TTS audio (Amazon Polly, flag ANKI_TTS=1). Front reads the
         # question + options; back reads the explanation. Audio files are added
         # to media_files below and referenced via [sound:...] in the fields.
@@ -1093,6 +1113,8 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         media_files = [diagrams[num]['png'] for num in diagrams if diagrams[num].get('png')]
     if audio_files:
         media_files += audio_files
+    if template_pngs:
+        media_files += [p for p in template_pngs.values() if p]
     if media_files:
         package.media_files = media_files
     package.write_to_file(str(apkg_path))
