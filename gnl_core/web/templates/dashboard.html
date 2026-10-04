@@ -625,6 +625,10 @@
                 </div>
 
                 <!-- Plan B : fichier Markdown unique vers iCloud -->
+                <div class="bg-gray-800 rounded-lg p-5">
+                    <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('span').textContent=this.nextElementSibling.classList.contains('hidden')?'▶':'▼'" class="flex items-center gap-2 font-semibold w-full text-left">
+                        <span class="text-xs">▶</span> ☁️ Plan B — Markdown/PDF vers iCloud
+                    </button>
                     <div class="hidden mt-4 space-y-3">
                         <p class="text-xs text-gray-500">Si activé, « Générer les parts » d'un topic écrit tout le contenu dans UN fichier Markdown déposé sur iCloud (au lieu des parts + modale). Pratique pour l'ouvrir/attacher dans Meta AI depuis l'iPhone sans dépendre de la mémoire de session.</p>
                         <div class="flex items-center gap-3">
