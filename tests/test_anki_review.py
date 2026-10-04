@@ -338,3 +338,33 @@ def test_meta_copy_mode_prompt_selection(tmp_path, monkeypatch):
     assert 'continue by voice' in one and 'ONE complete reply' in one
     assert 'Copier (conversation)' in one and 'Copier (one-shot)' in one
     assert 'Copier (vocal)' in one
+
+
+def test_localstorage_keys_are_content_based(tmp_path, monkeypatch):
+    """localStorage keys bind to option CONTENT (hash), not positional index,
+    so stale index-state from a previous import can't mis-mark an option."""
+    import re
+    import sqlite3
+    import zipfile
+    from gnl_core import exams
+    monkeypatch.setenv('TEST_MODE', '1')
+    exams._get_config = lambda: {'DEBUG_NLM': '0'}
+    exams.get_exam_base = lambda t, s: tmp_path
+    src = tmp_path / 'm.md'
+    src.write_text('## Question 1:\nQ?\n- Option Alpha\n- Option Beta\n- Option Gamma\n')
+    out = exams.step5_anki({'1': {'type': 'single',
+                                  'options': ['Option Alpha', 'Option Beta', 'Option Gamma'],
+                                  'correct': ['option gamma']}}, str(src), 'exams', 'sap-c02')
+    z = zipfile.ZipFile(out)
+    z.extract('collection.anki2', tmp_path)
+    flds = sqlite3.connect(tmp_path / 'collection.anki2').execute(
+        'SELECT flds FROM notes').fetchone()[0]
+    front, back = flds.split('\x1f')[0], flds.split('\x1f')[1]
+    fkeys = set(re.findall(r"setItem\('([^']+)'", front))
+    bkeys = set(re.findall(r"data-qkey='([^']+)'", back))
+    # front and back reference the SAME content-based keys
+    assert fkeys == bkeys and len(fkeys) == 3
+    # each key suffix is an 8-hex content hash, never a bare index o0/o1/o2
+    for k in fkeys:
+        suffix = k.rsplit('o', 1)[-1]
+        assert re.fullmatch(r'[0-9a-f]{8}', suffix)

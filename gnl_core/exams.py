@@ -1109,29 +1109,38 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
             # Key = name + guid_suffix + build_id so (a) a reset ('-r2') deck
             # doesn't share state with the original, and (b) a regeneration with
             # DIFFERENT option content gets fresh keys (no stale wrong-coloring).
+            # The per-option suffix is a hash of the OPTION TEXT (not its index),
+            # so a checked option stays bound to its own content even if the
+            # option order changes between generations (fixes random mis-marking).
             kb = f"{name}{guid_suffix}-{build_id}"
+            import hashlib as _hl
+
+            def _okey(opt_text):
+                return _hl.md5(opt_text.encode('utf-8')).hexdigest()[:8]
+
             front_items = "".join(
-                f"<div class='option'><input type='checkbox' id='{kb}-q{num}o{i}' onchange=\"localStorage.setItem('{kb}-q{num}o{i}', this.checked?'1':'0')\"> <label for='{kb}-q{num}o{i}'>{o}</label></div>"
-                for i, o in enumerate(options)
+                f"<div class='option'><input type='checkbox' id='{kb}-q{num}o{_okey(o)}' onchange=\"localStorage.setItem('{kb}-q{num}o{_okey(o)}', this.checked?'1':'0')\"> <label for='{kb}-q{num}o{_okey(o)}'>{o}</label></div>"
+                for o in options
             )
             front = f"<b>Question {num}:</b><br><br>{q_text}<br><br>{front_items}"
 
             # Back: mark correct (green), and user's wrong picks (red)
             back_items = []
-            for i, opt in enumerate(options):
+            for opt in options:
                 opt_norm = opt.lower().strip()
                 is_correct = any(opt_norm == cn or (len(cn) > 20 and cn in opt_norm) or (len(opt_norm) > 20 and opt_norm in cn) for cn in correct_norm)
+                okey = f"{kb}-q{num}o{_okey(opt)}"
                 if is_correct:
                     # Correct answer — always green, checked
                     back_items.append(
-                        f"<div class='option' data-qkey='{kb}-q{num}o{i}' data-correct='1'>"
+                        f"<div class='option' data-qkey='{okey}' data-correct='1'>"
                         f"<input type='checkbox' checked disabled> "
                         f"<span class='correct'>{opt}</span></div>"
                     )
                 else:
                     # Incorrect option — will turn red if user had checked it
                     back_items.append(
-                        f"<div class='option' data-qkey='{kb}-q{num}o{i}' data-correct='0'>"
+                        f"<div class='option' data-qkey='{okey}' data-correct='0'>"
                         f"<input type='checkbox' disabled> "
                         f"<span class='opt-text'>{opt}</span></div>"
                     )
