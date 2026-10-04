@@ -2119,6 +2119,8 @@ async def admin_save(request: Request):
                    'MAX_GENERATION_RETRIES', 'TEST_MODE', 'TEST_GENERATION_DELAY',
                    'BEDROCK_MODEL_ID', 'AWS_REGION', 'AWS_PROFILE',
                    'META_PROMPT_WRONG', 'META_PROMPT_CORRECT',
+                   'META_PROMPT_WRONG_ONESHOT', 'META_PROMPT_CORRECT_ONESHOT',
+                   'META_COPY_MODE',
                    'META_EXPORT_PROMPT', 'META_EXPORT_MAX_CHARS',
                    'GENERIC_EXPORT_PROMPT', 'GENERIC_EXPORT_MAX_CHARS',
                    'META_PLAN_B', 'ICLOUD_META_DIR', 'META_PLAN_B_FORMAT',
@@ -2128,6 +2130,7 @@ async def admin_save(request: Request):
     data = {key: form.get(key, '') for key in config_keys}
     # Don't clobber saved Meta prompts if the form didn't include them.
     for pk in ('META_PROMPT_WRONG', 'META_PROMPT_CORRECT',
+               'META_PROMPT_WRONG_ONESHOT', 'META_PROMPT_CORRECT_ONESHOT',
                'META_EXPORT_PROMPT', 'META_EXPORT_MAX_CHARS',
                'GENERIC_EXPORT_PROMPT', 'GENERIC_EXPORT_MAX_CHARS'):
         if pk not in form.keys():

@@ -772,6 +772,37 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     )
     prompt_wrong = _cfg.get('META_PROMPT_WRONG') or default_wrong
     prompt_correct = _cfg.get('META_PROMPT_CORRECT') or default_correct
+
+    # One-shot variants: explain EVERYTHING in a single reply, no back-and-forth
+    # (for when the user can't use voice — e.g. at the gym). Kept separate from
+    # the conversation prompts above, which are preserved unchanged.
+    default_wrong_oneshot = (
+        "I'm studying for the AWS SAP-C02 exam. Here is a question I answered.\n"
+        "My answer(s):\n{MY_ANSWER}\n"
+        "Correct answer(s):\n{CORRECT}\n\n"
+        "My answer was WRONG. In ONE complete reply (no questions back to me, no "
+        "waiting), explain clearly: (1) why my option is wrong, (2) why the "
+        "correct option(s) are right, and (3) briefly why each of the other "
+        "options is wrong. Base it on the question and the explanations below. "
+        "Write it so it's easy to listen to — plain, flowing explanation, no "
+        "tables. (Question {QNUM})"
+    )
+    default_correct_oneshot = (
+        "I'm studying for the AWS SAP-C02 exam. Here is a question I answered.\n"
+        "My answer(s):\n{MY_ANSWER}\n"
+        "Correct answer(s):\n{CORRECT}\n\n"
+        "My answer was CORRECT. In ONE complete reply (no questions back to me, "
+        "no waiting), confirm why the correct option(s) are right and briefly why "
+        "each of the other options is wrong, and explain the underlying concepts "
+        "so I understand them fully. Base it on the question and the explanations "
+        "below. Write it so it's easy to listen to — plain, flowing explanation, "
+        "no tables. (Question {QNUM})"
+    )
+    # Mode switch: 'conversation' (default, preserved) or 'oneshot'.
+    copy_mode = (_cfg.get('META_COPY_MODE') or 'conversation').lower()
+    if copy_mode == 'oneshot':
+        prompt_wrong = _cfg.get('META_PROMPT_WRONG_ONESHOT') or default_wrong_oneshot
+        prompt_correct = _cfg.get('META_PROMPT_CORRECT_ONESHOT') or default_correct_oneshot
     # JSON-encode so the strings are safe to embed in the card JavaScript.
     import json as _json
     js_prompt_wrong = _json.dumps(prompt_wrong)

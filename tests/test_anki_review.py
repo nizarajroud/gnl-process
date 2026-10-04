@@ -299,3 +299,38 @@ def test_parse_practice_exam(tmp_path):
     assert a['letter'] == 'A' and a['selected'] and not a['correct']
     assert b['letter'] == 'B' and b['correct'] and not b['selected']
     assert 'Glacier is the cheapest' in b['rationale']
+
+
+def test_meta_copy_mode_prompt_selection(tmp_path, monkeypatch):
+    """Conversation mode (default) keeps the old prompt; oneshot swaps it."""
+    import json
+    import sqlite3
+    import zipfile
+    from pathlib import Path
+    from gnl_core import exams
+
+    def _build(mode):
+        cfg = {'DEBUG_NLM': '0'}
+        if mode:
+            cfg['META_COPY_MODE'] = mode
+        exams._get_config = lambda: cfg
+        exams.get_exam_base = lambda t, s: tmp_path
+        src = tmp_path / 'm.md'
+        src.write_text('## Question 1:\nQ?\n- A. x\n- B. y\n')
+        out = exams.step5_anki({'1': {'type': 'single', 'options': ['A. x', 'B. y'],
+                                      'correct': ['a']}}, str(src), 'exams', 'sap-c02')
+        z = zipfile.ZipFile(out)
+        z.extract('collection.anki2', tmp_path)
+        col = sqlite3.connect(tmp_path / 'collection.anki2').execute(
+            'SELECT models FROM col').fetchone()[0]
+        afmt = list(json.loads(col).values())[0]['tmpls'][0]['afmt']
+        (tmp_path / 'collection.anki2').unlink()
+        return afmt
+
+    conv = _build(None)                       # default
+    assert 'continue by voice' in conv        # old conversation prompt preserved
+    assert 'ONE complete reply' not in conv
+
+    one = _build('oneshot')
+    assert 'ONE complete reply' in one        # one-shot prompt active
+    assert 'continue by voice' not in one
