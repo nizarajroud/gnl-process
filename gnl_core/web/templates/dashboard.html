@@ -519,6 +519,7 @@
                             <select name="META_COPY_MODE" class="bg-gray-700 rounded px-3 py-2 text-sm">
                                 <option value="conversation" {{ 'selected' if (config.META_COPY_MODE or 'conversation')=='conversation' else '' }}>Conversation en premier (défaut)</option>
                                 <option value="oneshot" {{ 'selected' if (config.META_COPY_MODE or 'conversation')=='oneshot' else '' }}>One-shot en premier</option>
+                                <option value="voice" {{ 'selected' if (config.META_COPY_MODE or 'conversation')=='voice' else '' }}>Vocal en premier (colle → « reçu » ; dis « go » → explication)</option>
                             </select>
                         </div>
                         <p class="text-xs text-gray-500">Chaque carte Anki a <b>deux boutons</b> : « 📋 Copier (conversation) » et « 📋 Copier (one-shot) » — tu choisis à la volée sur le téléphone, sans régénérer. Ce réglage décide juste lequel apparaît en premier. One-shot = Meta AI explique tout d'un coup (pratique sans micro) ; conversation = Meta attend que tu continues.</p>

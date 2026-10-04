@@ -2120,6 +2120,7 @@ async def admin_save(request: Request):
                    'BEDROCK_MODEL_ID', 'AWS_REGION', 'AWS_PROFILE',
                    'META_PROMPT_WRONG', 'META_PROMPT_CORRECT',
                    'META_PROMPT_WRONG_ONESHOT', 'META_PROMPT_CORRECT_ONESHOT',
+                   'META_PROMPT_WRONG_VOICE', 'META_PROMPT_CORRECT_VOICE',
                    'META_COPY_MODE',
                    'META_EXPORT_PROMPT', 'META_EXPORT_MAX_CHARS',
                    'GENERIC_EXPORT_PROMPT', 'GENERIC_EXPORT_MAX_CHARS',
@@ -2131,6 +2132,7 @@ async def admin_save(request: Request):
     # Don't clobber saved Meta prompts if the form didn't include them.
     for pk in ('META_PROMPT_WRONG', 'META_PROMPT_CORRECT',
                'META_PROMPT_WRONG_ONESHOT', 'META_PROMPT_CORRECT_ONESHOT',
+               'META_PROMPT_WRONG_VOICE', 'META_PROMPT_CORRECT_VOICE',
                'META_EXPORT_PROMPT', 'META_EXPORT_MAX_CHARS',
                'GENERIC_EXPORT_PROMPT', 'GENERIC_EXPORT_MAX_CHARS'):
         if pk not in form.keys():

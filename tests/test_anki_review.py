@@ -332,7 +332,9 @@ def test_meta_copy_mode_prompt_selection(tmp_path, monkeypatch):
     assert 'continue by voice' in conv        # conversation prompt present
     assert 'ONE complete reply' in conv       # one-shot prompt present
     assert 'Copier (conversation)' in conv and 'Copier (one-shot)' in conv
+    assert 'Copier (vocal)' in conv
 
     one = _build('oneshot')
     assert 'continue by voice' in one and 'ONE complete reply' in one
     assert 'Copier (conversation)' in one and 'Copier (one-shot)' in one
+    assert 'Copier (vocal)' in one

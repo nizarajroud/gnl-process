@@ -859,12 +859,40 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         "below. Write it so it's easy to listen to — plain, flowing explanation, "
         "no tables. (Question {QNUM})"
     )
+    # Voice mode: paste -> Meta AI only CONFIRMS reception; when the user says
+    # "go" (minimal voice input), it launches the full explanation on its own.
+    default_wrong_voice = (
+        "I'm studying for the AWS SAP-C02 exam. Here is a question I answered.\n"
+        "My answer(s):\n{MY_ANSWER}\n"
+        "Correct answer(s):\n{CORRECT}\n\n"
+        "My answer was WRONG. For now, just RECEIVE and KEEP everything below in "
+        "memory and reply ONLY \"OK, received — Question {QNUM}. Say 'go' when "
+        "ready.\" Do NOT explain yet. Then, the moment I say ANYTHING (even just "
+        "\"go\"), IMMEDIATELY give ONE complete spoken-style explanation — no "
+        "further questions, no waiting: (1) why my option is wrong, (2) why the "
+        "correct option(s) are right, (3) briefly why each other option is wrong. "
+        "Plain, flowing, easy to listen to, no tables. (Question {QNUM})"
+    )
+    default_correct_voice = (
+        "I'm studying for the AWS SAP-C02 exam. Here is a question I answered.\n"
+        "My answer(s):\n{MY_ANSWER}\n"
+        "Correct answer(s):\n{CORRECT}\n\n"
+        "My answer was CORRECT. For now, just RECEIVE and KEEP everything below in "
+        "memory and reply ONLY \"OK, received — Question {QNUM}. Say 'go' when "
+        "ready.\" Do NOT explain yet. Then, the moment I say ANYTHING (even just "
+        "\"go\"), IMMEDIATELY give ONE complete spoken-style explanation — no "
+        "further questions, no waiting: confirm why the correct option(s) are "
+        "right, briefly why each other option is wrong, and the underlying "
+        "concepts. Plain, flowing, easy to listen to, no tables. (Question {QNUM})"
+    )
     # All four prompts are always available (both buttons on the card).
     prompt_wrong = _cfg.get('META_PROMPT_WRONG') or default_wrong
     prompt_correct = _cfg.get('META_PROMPT_CORRECT') or default_correct
     prompt_wrong_os = _cfg.get('META_PROMPT_WRONG_ONESHOT') or default_wrong_oneshot
     prompt_correct_os = _cfg.get('META_PROMPT_CORRECT_ONESHOT') or default_correct_oneshot
-    # Primary button mode (which one is shown first): 'conversation' or 'oneshot'.
+    prompt_wrong_voice = _cfg.get('META_PROMPT_WRONG_VOICE') or default_wrong_voice
+    prompt_correct_voice = _cfg.get('META_PROMPT_CORRECT_VOICE') or default_correct_voice
+    # Primary button mode (which one is shown first): conversation|oneshot|voice.
     copy_mode = (_cfg.get('META_COPY_MODE') or 'conversation').lower()
     # JSON-encode so the strings are safe to embed in the card JavaScript.
     import json as _json
@@ -872,6 +900,8 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     js_prompt_correct = _json.dumps(prompt_correct)
     js_prompt_wrong_os = _json.dumps(prompt_wrong_os)
     js_prompt_correct_os = _json.dumps(prompt_correct_os)
+    js_prompt_wrong_voice = _json.dumps(prompt_wrong_voice)
+    js_prompt_correct_voice = _json.dumps(prompt_correct_voice)
     js_copy_mode = _json.dumps(copy_mode)
 
     # Model for exam cards
@@ -908,6 +938,8 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 'var P_CORRECT=' + js_prompt_correct + ';'
                 'var P_WRONG_OS=' + js_prompt_wrong_os + ';'
                 'var P_CORRECT_OS=' + js_prompt_correct_os + ';'
+                'var P_WRONG_VOICE=' + js_prompt_wrong_voice + ';'
+                'var P_CORRECT_VOICE=' + js_prompt_correct_voice + ';'
                 'var COPY_MODE=' + js_copy_mode + ';'
                 # --- Build the CLEAN question+options text (no CSS, no ★/⚑) ---
                 # Only take .option rows + the question <b>/text, never <style>.
@@ -996,9 +1028,11 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 'b.addEventListener("click",function(){doCopy(getText());});return b;}'
                 'var convBtn=mkBtn("\\uD83D\\uDCCB Copier (conversation)","#4f46e5",function(){return buildText(P_WRONG,P_CORRECT);});'
                 'var osBtn=mkBtn("\\uD83D\\uDCCB Copier (one-shot)","#059669",function(){return buildText(P_WRONG_OS,P_CORRECT_OS);});'
+                'var voiceBtn=mkBtn("\\uD83D\\uDCCB Copier (vocal)","#0ea5e9",function(){return buildText(P_WRONG_VOICE,P_CORRECT_VOICE);});'
                 'var holder=document.getElementById("gnlBtns");'
-                'if(holder){if(COPY_MODE==="oneshot"){holder.appendChild(osBtn);holder.appendChild(convBtn);}'
-                'else{holder.appendChild(convBtn);holder.appendChild(osBtn);}}'
+                'if(holder){'
+                'var order=COPY_MODE==="oneshot"?[osBtn,convBtn,voiceBtn]:(COPY_MODE==="voice"?[voiceBtn,convBtn,osBtn]:[convBtn,osBtn,voiceBtn]);'
+                'order.forEach(function(b){holder.appendChild(b);});}'
                 '})();</script>'
             ),
         }],
