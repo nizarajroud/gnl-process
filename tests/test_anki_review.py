@@ -327,10 +327,12 @@ def test_meta_copy_mode_prompt_selection(tmp_path, monkeypatch):
         (tmp_path / 'collection.anki2').unlink()
         return afmt
 
-    conv = _build(None)                       # default
-    assert 'continue by voice' in conv        # old conversation prompt preserved
-    assert 'ONE complete reply' not in conv
+    conv = _build(None)                       # default (conversation primary)
+    # Both prompts and both buttons are embedded regardless of mode.
+    assert 'continue by voice' in conv        # conversation prompt present
+    assert 'ONE complete reply' in conv       # one-shot prompt present
+    assert 'Copier (conversation)' in conv and 'Copier (one-shot)' in conv
 
     one = _build('oneshot')
-    assert 'ONE complete reply' in one        # one-shot prompt active
-    assert 'continue by voice' not in one
+    assert 'continue by voice' in one and 'ONE complete reply' in one
+    assert 'Copier (conversation)' in one and 'Copier (one-shot)' in one

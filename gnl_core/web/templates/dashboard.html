@@ -515,13 +515,13 @@
                         </div>
                         <hr class="border-gray-700 my-2">
                         <div class="flex items-center gap-3">
-                            <label class="text-xs text-gray-400">Mode du bouton « Copier »</label>
+                            <label class="text-xs text-gray-400">Bouton principal (ordre)</label>
                             <select name="META_COPY_MODE" class="bg-gray-700 rounded px-3 py-2 text-sm">
-                                <option value="conversation" {{ 'selected' if (config.META_COPY_MODE or 'conversation')=='conversation' else '' }}>Conversation — Meta attend que tu continues (défaut)</option>
-                                <option value="oneshot" {{ 'selected' if (config.META_COPY_MODE or 'conversation')=='oneshot' else '' }}>One-shot — Meta explique tout d'un coup (ex: salle de sport)</option>
+                                <option value="conversation" {{ 'selected' if (config.META_COPY_MODE or 'conversation')=='conversation' else '' }}>Conversation en premier (défaut)</option>
+                                <option value="oneshot" {{ 'selected' if (config.META_COPY_MODE or 'conversation')=='oneshot' else '' }}>One-shot en premier</option>
                             </select>
                         </div>
-                        <p class="text-xs text-gray-500">En mode « one-shot », Meta AI explique directement (sans dialogue) pourquoi ta réponse est fausse, pourquoi la bonne est correcte, et pourquoi les autres options sont fausses — en une seule réponse, pratique sans micro.</p>
+                        <p class="text-xs text-gray-500">Chaque carte Anki a <b>deux boutons</b> : « 📋 Copier (conversation) » et « 📋 Copier (one-shot) » — tu choisis à la volée sur le téléphone, sans régénérer. Ce réglage décide juste lequel apparaît en premier. One-shot = Meta AI explique tout d'un coup (pratique sans micro) ; conversation = Meta attend que tu continues.</p>
                         <div>
                             <label class="text-xs text-gray-400">Prompt one-shot — réponse FAUSSE</label>
                             <textarea name="META_PROMPT_WRONG_ONESHOT" rows="5" class="w-full bg-gray-700 rounded px-3 py-2 text-sm font-mono" placeholder="Laisser vide = prompt one-shot par défaut">{{ config.META_PROMPT_WRONG_ONESHOT or '' }}</textarea>

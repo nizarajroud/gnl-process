@@ -770,12 +770,12 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         "IMPORTANT: do not elaborate now. Just reply \"OK, got it.(Question {QNUM})\" "
         "— I'll continue by voice on mobile to go deeper."
     )
-    prompt_wrong = _cfg.get('META_PROMPT_WRONG') or default_wrong
-    prompt_correct = _cfg.get('META_PROMPT_CORRECT') or default_correct
-
+    # Both prompt pairs are always available so the card can offer two buttons
+    # (conversation + one-shot), letting the user choose on the phone without
+    # regenerating. META_COPY_MODE only decides which button is the primary one.
+    #
     # One-shot variants: explain EVERYTHING in a single reply, no back-and-forth
-    # (for when the user can't use voice — e.g. at the gym). Kept separate from
-    # the conversation prompts above, which are preserved unchanged.
+    # (for when the user can't use voice — e.g. at the gym).
     default_wrong_oneshot = (
         "I'm studying for the AWS SAP-C02 exam. Here is a question I answered.\n"
         "My answer(s):\n{MY_ANSWER}\n"
@@ -798,15 +798,20 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         "below. Write it so it's easy to listen to — plain, flowing explanation, "
         "no tables. (Question {QNUM})"
     )
-    # Mode switch: 'conversation' (default, preserved) or 'oneshot'.
+    # All four prompts are always available (both buttons on the card).
+    prompt_wrong = _cfg.get('META_PROMPT_WRONG') or default_wrong
+    prompt_correct = _cfg.get('META_PROMPT_CORRECT') or default_correct
+    prompt_wrong_os = _cfg.get('META_PROMPT_WRONG_ONESHOT') or default_wrong_oneshot
+    prompt_correct_os = _cfg.get('META_PROMPT_CORRECT_ONESHOT') or default_correct_oneshot
+    # Primary button mode (which one is shown first): 'conversation' or 'oneshot'.
     copy_mode = (_cfg.get('META_COPY_MODE') or 'conversation').lower()
-    if copy_mode == 'oneshot':
-        prompt_wrong = _cfg.get('META_PROMPT_WRONG_ONESHOT') or default_wrong_oneshot
-        prompt_correct = _cfg.get('META_PROMPT_CORRECT_ONESHOT') or default_correct_oneshot
     # JSON-encode so the strings are safe to embed in the card JavaScript.
     import json as _json
     js_prompt_wrong = _json.dumps(prompt_wrong)
     js_prompt_correct = _json.dumps(prompt_correct)
+    js_prompt_wrong_os = _json.dumps(prompt_wrong_os)
+    js_prompt_correct_os = _json.dumps(prompt_correct_os)
+    js_copy_mode = _json.dumps(copy_mode)
 
     # Model for exam cards
     font_size = os.environ.get('ANKI_FONT_SIZE', '16')
@@ -833,18 +838,16 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 '<textarea id="gnlCopyArea" readonly '
                 'style="position:absolute;left:-9999px;top:0;opacity:0;height:1px;width:1px;">'
                 '</textarea>'
-                '<div style="margin-top:14px">'
-                '<button type="button" id="gnlCopyBtn" '
-                'style="cursor:pointer;background:#4f46e5;color:#fff;border:none;'
-                'padding:8px 14px;border-radius:6px;font-size:14px;">'
-                '\U0001F4CB Copier</button> '
+                '<div style="margin-top:14px" id="gnlBtns"></div>'
                 '<span id="gnlCopyMsg" style="font-size:13px;margin-left:8px;"></span>'
-                '</div>'
                 '<script>(function(){'
                 'var area=document.getElementById("gnlCopyArea");if(!area)return;'
-                # --- Configurable prompts (injected from server config) ---
+                # --- Configurable prompts (both pairs injected from config) ---
                 'var P_WRONG=' + js_prompt_wrong + ';'
                 'var P_CORRECT=' + js_prompt_correct + ';'
+                'var P_WRONG_OS=' + js_prompt_wrong_os + ';'
+                'var P_CORRECT_OS=' + js_prompt_correct_os + ';'
+                'var COPY_MODE=' + js_copy_mode + ';'
                 # --- Build the CLEAN question+options text (no CSS, no ★/⚑) ---
                 # Only take .option rows + the question <b>/text, never <style>.
                 'var card=document.querySelector(".card")||document.body;'
@@ -902,17 +905,17 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 # extract the question number from the "Question N:" label
                 'var qb=card.querySelector("b");'
                 'var qnum="";if(qb){var mm=(qb.innerText||"").match(/(\\d+)/);if(mm)qnum=mm[1];}'
-                # choose prompt: wrong branch also used when not answered
-                'var tmpl=(a.wrong||!a.answered)?P_WRONG:P_CORRECT;'
+                'var body=cleanText()+(expl?("\\n\\nExplanation:\\n"+expl):"");'
+                # build the full text for a given prompt pair (wrong/correct branch)
+                'function buildText(pw,pc){'
+                'var tmpl=(a.wrong||!a.answered)?pw:pc;'
                 'var preamble=tmpl.split("{MY_ANSWER}").join(a.mine)'
                 '.split("{CORRECT}").join(a.correct)'
                 '.split("{QNUM}").join(qnum);'
-                'var body=cleanText()+(expl?("\\n\\nExplanation:\\n"+expl):"");'
-                'area.value=preamble+"\\n\\n---\\n"+body;'
-                # --- Wire the copy button ---
-                'var btn=document.getElementById("gnlCopyBtn");'
+                'return preamble+"\\n\\n---\\n"+body;}'
                 'var msg=document.getElementById("gnlCopyMsg");'
-                'if(btn){btn.addEventListener("click",function(){'
+                'function doCopy(text){'
+                'area.value=text;'
                 'area.style.position="static";area.style.opacity="1";'
                 'area.focus();area.select();'
                 'var ok=false;try{ok=document.execCommand("copy");}catch(e){ok=false;}'
@@ -922,8 +925,19 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 'window.getSelection&&window.getSelection().removeAllRanges&&window.getSelection().removeAllRanges();'
                 'if(msg){msg.textContent=ok?"\\u2705 Copi\\u00e9":"\\u26a0 R\\u00e9essaie";'
                 'msg.style.color=ok?"#28a745":"#dc3545";'
-                'setTimeout(function(){msg.textContent="";},2500);}'
-                '});}'
+                'setTimeout(function(){msg.textContent="";},2500);}}'
+                # create the two buttons; primary (per COPY_MODE) shown first
+                'function mkBtn(label,bg,getText){'
+                'var b=document.createElement("button");b.type="button";'
+                'b.textContent=label;'
+                'b.style.cssText="cursor:pointer;background:"+bg+";color:#fff;border:none;'
+                'padding:8px 14px;border-radius:6px;font-size:14px;margin-right:8px;";'
+                'b.addEventListener("click",function(){doCopy(getText());});return b;}'
+                'var convBtn=mkBtn("\\uD83D\\uDCCB Copier (conversation)","#4f46e5",function(){return buildText(P_WRONG,P_CORRECT);});'
+                'var osBtn=mkBtn("\\uD83D\\uDCCB Copier (one-shot)","#059669",function(){return buildText(P_WRONG_OS,P_CORRECT_OS);});'
+                'var holder=document.getElementById("gnlBtns");'
+                'if(holder){if(COPY_MODE==="oneshot"){holder.appendChild(osBtn);holder.appendChild(convBtn);}'
+                'else{holder.appendChild(convBtn);holder.appendChild(osBtn);}}'
                 '})();</script>'
             ),
         }],
