@@ -387,3 +387,19 @@ def test_multi_answer_badge(tmp_path, monkeypatch):
             assert 'Choisis' not in front
         if 'Multi?' in front:
             assert 'Choisis 2' in front
+
+
+def test_failed_meta_corpus_and_blocks(tmp_path):
+    """Per-exam failed-questions corpus includes bodies + explanations and
+    splits into Meta blocks with the voice preamble on block 1."""
+    from gnl_core.anki_review import _failed_corpus_for_exam, _VOICE_PREAMBLE
+    from gnl_core.meta_export import build_parts_from_text
+    md = tmp_path / 'ex.md'
+    md.write_text('## Question 1:\nQ1 body\n\nExplanations:\nreason one\n\n'
+                  '## Question 3:\nQ3 body\n\nExplanations:\nreason three\n')
+    corpus = _failed_corpus_for_exam('ex', [1, 3], str(md))
+    assert 'Question 1' in corpus and 'Question 3' in corpus
+    assert 'reason one' in corpus and 'reason three' in corpus
+    parts = build_parts_from_text(corpus, prompt_template=_VOICE_PREAMBLE)
+    assert len(parts) >= 1
+    assert 'ALL BLOCKS SENT' in parts[0]   # voice preamble on first block

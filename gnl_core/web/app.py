@@ -2452,6 +2452,35 @@ async def anki_review_reset_apkg():
     return {"apkgs": [{"exam": e, "path": p} for e, p in results], "count": len(results)}
 
 
+@app.post("/api/anki-review/meta-prompt")
+async def anki_review_meta_prompt():
+    """Build a Meta AI prompt (copy-by-block) for each exam's failed questions."""
+    from gnl_core.anki_review import build_failed_meta_parts
+    from gnl_core.config import get_config
+    loop = asyncio.get_event_loop()
+    max_chars = get_config().get('META_EXPORT_MAX_CHARS') or None
+
+    def on_p(msg):
+        try:
+            asyncio.run_coroutine_threadsafe(broadcast_log(msg), loop)
+        except Exception:
+            pass
+
+    await broadcast_log("▶ Prompt Meta des questions ratées (par examen)")
+    data = await loop.run_in_executor(
+        None, lambda: build_failed_meta_parts(max_chars=max_chars, on_progress=on_p))
+    # Keep the full block text only in a per-exam list for the client to copy.
+    exams = []
+    for exam_name, info in data.items():
+        exams.append({
+            "exam": exam_name,
+            "count": info["count"],
+            "parts": [{"part": i + 1, "total": len(info["parts"]), "text": t}
+                      for i, t in enumerate(info["parts"])],
+        })
+    return {"exams": exams, "count": len(exams)}
+
+
 @app.post("/api/meta-export/{theme}/{subtheme}/{filename}")
 async def meta_export_generate(theme: str, subtheme: str, filename: str):
     """Generate Meta AI 'part' files for an exam document (any format)."""

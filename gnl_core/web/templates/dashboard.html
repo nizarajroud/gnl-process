@@ -667,6 +667,7 @@
                         <button type="button" onclick="ankiReviewFailed(this)" class="px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm">🔍 Lister les ratées</button>
                         <button type="button" onclick="ankiReviewAction('error-docs', this)" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">📄 Document d'erreurs</button>
                         <button type="button" onclick="ankiReviewAction('reset-apkg', this)" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">🔁 Deck reset (2ᵉ passe)</button>
+                        <button type="button" onclick="ankiReviewMetaPrompt(this)" class="px-3 py-2 bg-sky-600 hover:bg-sky-500 rounded text-sm">📋 Prompt Meta (ratées)</button>
                     </div>
                     <div id="anki-review-result" class="text-sm text-gray-200 bg-gray-900 rounded p-3 min-h-[3rem] font-mono whitespace-pre-wrap border border-gray-700">Clique un bouton ci-dessus pour commencer.</div>
                 </div>
@@ -700,6 +701,49 @@
                             + items.map(i => `  📄 ${i.exam}\n     ${i.path}`).join('\n\n');
                     } catch (e) { el.textContent = '⚠ Erreur: ' + e; }
                     finally { btn.disabled = false; btn.textContent = t; }
+                }
+
+                // Window store for block texts (per exam) so copy buttons can read them.
+                window._ankiMetaBlocks = {};
+                async function ankiReviewMetaPrompt(btn) {
+                    const el = document.getElementById('anki-review-result');
+                    btn.disabled = true; const t = btn.textContent; btn.textContent = '⏳…';
+                    el.textContent = '⏳ Construction du prompt Meta des questions ratées…';
+                    try {
+                        const d = await (await fetch('/api/anki-review/meta-prompt', {method:'POST'})).json();
+                        if (d.error) { el.textContent = '⚠ ' + d.error; return; }
+                        if (!d.exams || !d.exams.length) { el.textContent = 'Aucune question ratée.'; return; }
+                        window._ankiMetaBlocks = {};
+                        let html = '';
+                        d.exams.forEach(function(ex){
+                            const safe = ex.exam.replace(/[^a-zA-Z0-9_-]/g,'_');
+                            window._ankiMetaBlocks[safe] = ex.parts.map(p => p.text);
+                            html += `<div style="margin-bottom:12px;"><div style="font-weight:600;margin-bottom:6px;">🎯 ${ex.exam} — ${ex.count} ratées (${ex.parts.length} bloc(s))</div><div style="display:flex;flex-wrap:wrap;gap:6px;">`;
+                            ex.parts.forEach(function(p){
+                                html += `<button type="button" onclick="ankiCopyBlock('${safe}',${p.part-1},${p.total},this)" style="padding:6px 11px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">📋 Bloc ${p.part}/${p.total}</button>`;
+                            });
+                            html += '</div></div>';
+                        });
+                        html += '<div style="font-size:12px;color:#9ca3af;">Colle chaque bloc dans Meta AI, puis écris « ALL BLOCKS SENT » et dis « go ».</div>';
+                        html += '<textarea id="anki-meta-area" readonly style="position:absolute;left:-9999px;top:0;opacity:0;height:1px;width:1px;"></textarea>';
+                        el.innerHTML = html;
+                    } catch (e) { el.textContent = '⚠ Erreur: ' + e; }
+                    finally { btn.disabled = false; btn.textContent = t; }
+                }
+
+                function ankiCopyBlock(examKey, idx, total, btn) {
+                    const blocks = window._ankiMetaBlocks[examKey] || [];
+                    const text = blocks[idx] || '';
+                    const area = document.getElementById('anki-meta-area');
+                    area.value = text; area.style.position='static'; area.style.opacity='1';
+                    area.focus(); area.select();
+                    let ok=false; try { ok=document.execCommand('copy'); } catch(e){ ok=false; }
+                    if(!ok && navigator.clipboard && navigator.clipboard.writeText){ try{ navigator.clipboard.writeText(text); ok=true; }catch(e){} }
+                    area.style.position='absolute'; area.style.left='-9999px'; area.style.opacity='0';
+                    window.getSelection && window.getSelection().removeAllRanges && window.getSelection().removeAllRanges();
+                    const orig = btn.textContent;
+                    btn.textContent = ok ? '✅ Copié' : '⚠ Réessaie';
+                    setTimeout(function(){ btn.textContent = orig; }, 1800);
                 }
             </script>
 
