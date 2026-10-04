@@ -433,3 +433,70 @@ def build_failed_meta_parts(collection_path=None, theme='exams',
         if on_progress:
             on_progress(f"  ✓ {exam_name}: {len(nums)} ratées → {len(parts)} bloc(s)")
     return result
+
+
+# --- Podcast of failed questions, per exam (uses category defaults) ---------
+
+def generate_failed_podcasts(collection_path=None, theme='exams',
+                             subtheme='sap-c02', on_progress=None):
+    """For each exam with failed questions, build an error-doc PDF and prepare it
+    into the production DB (split + collect + titles) using the exams CATEGORY
+    DEFAULTS. Returns list of {'exam','parent_id','count'}.
+
+    This is the QUOTA-FREE prepare phase; the actual NotebookLM audio generation
+    then runs via the normal production flow (like any prepared edition).
+    """
+    import math
+    results = []
+    if _is_test_mode():
+        by_exam = failed_questions_by_exam(collection_path)
+        return [{'exam': e, 'parent_id': -1, 'count': len(n)} for e, n in by_exam.items()]
+
+    from gnl_core.config import get_config
+    from gnl_core.pdf_export import write_pdf
+    from gnl_core.split import split
+    from gnl_core.collect import collect
+    from gnl_core.titles import generate_titles
+
+    config = get_config()
+    cat_defaults = (config.get('CATEGORY_DEFAULTS', {}) or {}).get(theme, {}) or {}
+    pages_per_episode = int(cat_defaults.get('pages_per_episode', 0) or 0)
+
+    by_exam = failed_questions_by_exam(collection_path)
+    for exam_name, nums in by_exam.items():
+        md = _find_exam_markdown(exam_name, theme, subtheme)
+        if not md:
+            if on_progress:
+                on_progress(f"  ⚠ markdown source introuvable pour {exam_name}")
+            continue
+        # 1. Build the error-doc markdown for this exam's failed questions.
+        err_name = f"{exam_name}-failed"
+        err_md = Path(md).parent.parent.parent / 'erreurs' / f'{err_name}.md'
+        out = build_error_document(exam_name, nums, str(md), out_path=str(err_md))
+        if not out:
+            continue
+        # 2. Convert the error-doc markdown to a PDF the pipeline can split.
+        err_pdf = Path(out).with_suffix('.pdf')
+        try:
+            write_pdf(Path(out).read_text(encoding='utf-8'), str(err_pdf),
+                      title=f"{exam_name} — questions ratées")
+        except Exception as e:
+            if on_progress:
+                on_progress(f"  ⚠ PDF {exam_name}: {str(e)[:60]}")
+            continue
+        # 3. Prepare: split + collect + titles (quota-free), exams defaults.
+        try:
+            from PyPDF2 import PdfReader
+            total = len(PdfReader(str(err_pdf)).pages)
+            ppe = pages_per_episode if pages_per_episode > 0 else max(1, math.ceil(total / 20))
+            res = split(str(err_pdf), ppe, err_name,
+                        podcast_theme=theme, podcast_subtheme=subtheme, mode='pages')
+            parent_id = collect(res)
+            generate_titles(parent_id)
+            results.append({'exam': exam_name, 'parent_id': parent_id, 'count': len(nums)})
+            if on_progress:
+                on_progress(f"  ✓ {exam_name}: {len(nums)} ratées → édition prête (parent_id={parent_id})")
+        except Exception as e:
+            if on_progress:
+                on_progress(f"  ⚠ prepare {exam_name}: {str(e)[:80]}")
+    return results

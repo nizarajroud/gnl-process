@@ -2481,6 +2481,25 @@ async def anki_review_meta_prompt():
     return {"exams": exams, "count": len(exams)}
 
 
+@app.post("/api/anki-review/podcast")
+async def anki_review_podcast():
+    """Prepare a podcast edition (per exam) from the failed questions, using the
+    exams category defaults. Quota-free prepare; audio runs via production."""
+    from gnl_core.anki_review import generate_failed_podcasts
+    loop = asyncio.get_event_loop()
+
+    def on_p(msg):
+        try:
+            asyncio.run_coroutine_threadsafe(broadcast_log(msg), loop)
+        except Exception:
+            pass
+
+    await broadcast_log("▶ Podcast des questions ratées (prepare, par examen)")
+    results = await loop.run_in_executor(
+        None, lambda: generate_failed_podcasts(on_progress=on_p))
+    return {"editions": results, "count": len(results)}
+
+
 @app.post("/api/meta-export/{theme}/{subtheme}/{filename}")
 async def meta_export_generate(theme: str, subtheme: str, filename: str):
     """Generate Meta AI 'part' files for an exam document (any format)."""

@@ -403,3 +403,12 @@ def test_failed_meta_corpus_and_blocks(tmp_path):
     parts = build_parts_from_text(corpus, prompt_template=_VOICE_PREAMBLE)
     assert len(parts) >= 1
     assert 'ALL BLOCKS SENT' in parts[0]   # voice preamble on first block
+
+
+def test_generate_failed_podcasts_test_mode(monkeypatch):
+    """In TEST_MODE, generate_failed_podcasts returns per-exam stub editions
+    without touching NotebookLM/disk."""
+    monkeypatch.setenv('TEST_MODE', '1')
+    from gnl_core.anki_review import generate_failed_podcasts
+    res = generate_failed_podcasts()
+    assert res and all('exam' in r and 'parent_id' in r and 'count' in r for r in res)

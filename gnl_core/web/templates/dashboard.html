@@ -668,6 +668,7 @@
                         <button type="button" onclick="ankiReviewAction('error-docs', this)" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">📄 Document d'erreurs</button>
                         <button type="button" onclick="ankiReviewAction('reset-apkg', this)" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">🔁 Deck reset (2ᵉ passe)</button>
                         <button type="button" onclick="ankiReviewMetaPrompt(this)" class="px-3 py-2 bg-sky-600 hover:bg-sky-500 rounded text-sm">📋 Prompt Meta (ratées)</button>
+                        <button type="button" onclick="ankiReviewPodcast(this)" class="px-3 py-2 bg-pink-600 hover:bg-pink-500 rounded text-sm">🎙️ Podcast (ratées)</button>
                     </div>
                     <div id="anki-review-result" class="text-sm text-gray-200 bg-gray-900 rounded p-3 min-h-[3rem] font-mono whitespace-pre-wrap border border-gray-700">Clique un bouton ci-dessus pour commencer.</div>
                 </div>
@@ -731,10 +732,24 @@
                     finally { btn.disabled = false; btn.textContent = t; }
                 }
 
+                async function ankiReviewPodcast(btn) {
+                    const el = document.getElementById('anki-review-result');
+                    btn.disabled = true; const t = btn.textContent; btn.textContent = '⏳…';
+                    el.textContent = '⏳ Préparation des podcasts des questions ratées (par examen)…';
+                    try {
+                        const d = await (await fetch('/api/anki-review/podcast', {method:'POST'})).json();
+                        if (d.error) { el.textContent = '⚠ ' + d.error; return; }
+                        if (!d.editions || !d.editions.length) { el.textContent = 'Aucune question ratée à podcaster.'; return; }
+                        el.textContent = `✅ ${d.count} édition(s) préparée(s) depuis les ratées :\n\n`
+                            + d.editions.map(e => `  🎙️ ${e.exam} — ${e.count} ratées (édition #${e.parent_id})`).join('\n')
+                            + `\n\nVa dans l'onglet Production pour lancer la génération audio (quota NotebookLM).`;
+                    } catch (e) { el.textContent = '⚠ Erreur: ' + e; }
+                    finally { btn.disabled = false; btn.textContent = t; }
+                }
+
                 function ankiCopyBlock(examKey, idx, total, btn) {
                     const blocks = window._ankiMetaBlocks[examKey] || [];
-                    const text = blocks[idx] || '';
-                    const area = document.getElementById('anki-meta-area');
+                    const text = blocks[idx] || '';                    const area = document.getElementById('anki-meta-area');
                     area.value = text; area.style.position='static'; area.style.opacity='1';
                     area.focus(); area.select();
                     let ok=false; try { ok=document.execCommand('copy'); } catch(e){ ok=false; }
