@@ -1026,13 +1026,9 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 'b.style.cssText="cursor:pointer;background:"+bg+";color:#fff;border:none;'
                 'padding:8px 14px;border-radius:6px;font-size:14px;margin-right:8px;";'
                 'b.addEventListener("click",function(){doCopy(getText());});return b;}'
-                'var convBtn=mkBtn("\\uD83D\\uDCCB Copier (conversation)","#4f46e5",function(){return buildText(P_WRONG,P_CORRECT);});'
-                'var osBtn=mkBtn("\\uD83D\\uDCCB Copier (one-shot)","#059669",function(){return buildText(P_WRONG_OS,P_CORRECT_OS);});'
-                'var voiceBtn=mkBtn("\\uD83D\\uDCCB Copier (vocal)","#0ea5e9",function(){return buildText(P_WRONG_VOICE,P_CORRECT_VOICE);});'
+                'var voiceBtn=mkBtn("\\uD83D\\uDCCB Copier","#4f46e5",function(){return buildText(P_WRONG_VOICE,P_CORRECT_VOICE);});'
                 'var holder=document.getElementById("gnlBtns");'
-                'if(holder){'
-                'var order=COPY_MODE==="oneshot"?[osBtn,convBtn,voiceBtn]:(COPY_MODE==="voice"?[voiceBtn,convBtn,osBtn]:[convBtn,osBtn,voiceBtn]);'
-                'order.forEach(function(b){holder.appendChild(b);});}'
+                'if(holder){holder.appendChild(voiceBtn);}'
                 '})();</script>'
             ),
         }],
