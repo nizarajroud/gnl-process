@@ -591,6 +591,14 @@
                             </select>
                         </div>
                         <p class="text-xs text-gray-500">Le gabarit ajoute sous chaque question une image vide à remplir à la main (Internet/AWS + Func./Non-Func. Req./Constraints) avec un titre « Q{n} · concept » résumé par Bedrock.</p>
+                        <div class="flex items-center gap-3">
+                            <label class="text-xs text-gray-400">Surligneur manuel</label>
+                            <select name="ANKI_HIGHLIGHTER" class="bg-gray-700 rounded px-3 py-2 text-sm">
+                                <option value="0" {{ 'selected' if (config.ANKI_HIGHLIGHTER or '0')=='0' else '' }}>0 — Désactivé (défaut)</option>
+                                <option value="1" {{ 'selected' if (config.ANKI_HIGHLIGHTER or '0')=='1' else '' }}>1 — Surligneur (glisser pour marquer)</option>
+                            </select>
+                        </div>
+                        <p class="text-xs text-gray-500">Ajoute un bouton « ✏️ Surligneur » sur chaque carte : active-le puis glisse le doigt/souris sur les mots-clés de la question pour les surligner en jaune (temporaire). Bouton « 🧹 Effacer » pour tout enlever. Marche sur mobile et desktop.</p>
                         <div class="grid grid-cols-2 gap-3">
                             <div>
                                 <label class="text-xs text-gray-400">Profil AWS (Polly)</label>

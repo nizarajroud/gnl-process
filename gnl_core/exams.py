@@ -16,6 +16,67 @@ import subprocess
 from pathlib import Path
 
 
+# Manual highlighter injected into the card front when ANKI_HIGHLIGHTER=1.
+# A toggle enables "marker mode": dragging the mouse/finger over the question
+# wraps whole words in a yellow <mark>. In marker mode, touch scrolling is
+# suppressed on the question area so dragging highlights instead of scrolling.
+# Highlights are temporary (not saved). Self-contained, idempotent per card.
+_HIGHLIGHTER_HTML = (
+    "<div id=\"gnlHlBar\" style=\"margin-top:12px;\">"
+    "<button type=\"button\" id=\"gnlHlToggle\" style=\"cursor:pointer;background:#f59e0b;"
+    "color:#111;border:none;padding:7px 13px;border-radius:6px;font-size:14px;\">"
+    "\u270F\uFE0F Surligneur</button> "
+    "<button type=\"button\" id=\"gnlHlClear\" style=\"cursor:pointer;background:#6b7280;"
+    "color:#fff;border:none;padding:7px 13px;border-radius:6px;font-size:14px;margin-left:6px;\">"
+    "\U0001F9F9 Effacer</button></div>"
+    "<script>(function(){"
+    "var card=document.querySelector('.card')||document.body;"
+    # scope = the question area: everything on the front except the controls
+    "var scope=card;"
+    "var on=false;"
+    # wrap each text node's words in spans so we can mark word-by-word
+    "function wrapWords(root){"
+    "var walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,null,false);"
+    "var nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);"
+    "nodes.forEach(function(n){"
+    "if(!n.nodeValue||!n.nodeValue.trim())return;"
+    "var p=n.parentNode;if(!p)return;"
+    "var tag=(p.tagName||'').toLowerCase();"
+    "if(tag==='script'||tag==='style'||tag==='button'||tag==='textarea'||p.id==='gnlHlBar')return;"
+    "if(p.getAttribute&&p.getAttribute('data-gnlw')==='1')return;"
+    "var frag=document.createDocumentFragment();"
+    "n.nodeValue.split(/(\\s+)/).forEach(function(tok){"
+    "if(tok.match(/^\\s+$/)){frag.appendChild(document.createTextNode(tok));}"
+    "else if(tok.length){var s=document.createElement('span');s.setAttribute('data-gnlw','1');s.textContent=tok;frag.appendChild(s);}"
+    "});"
+    "p.replaceChild(frag,n);"
+    "});}"
+    "function mark(el){if(el&&el.getAttribute&&el.getAttribute('data-gnlw')==='1'){el.style.backgroundColor='#fde047';}}"
+    "function elAt(x,y){var e=document.elementFromPoint(x,y);return e;}"
+    "var toggle=document.getElementById('gnlHlToggle');"
+    "var clear=document.getElementById('gnlHlClear');"
+    "var dragging=false;"
+    "function down(x,y){if(!on)return;dragging=true;mark(elAt(x,y));}"
+    "function move(x,y){if(!on||!dragging)return;mark(elAt(x,y));}"
+    "function up(){dragging=false;}"
+    "card.addEventListener('mousedown',function(e){down(e.clientX,e.clientY);});"
+    "card.addEventListener('mousemove',function(e){move(e.clientX,e.clientY);});"
+    "document.addEventListener('mouseup',up);"
+    "card.addEventListener('touchstart',function(e){if(!on)return;var t=e.touches[0];down(t.clientX,t.clientY);},{passive:false});"
+    "card.addEventListener('touchmove',function(e){if(!on)return;e.preventDefault();var t=e.touches[0];move(t.clientX,t.clientY);},{passive:false});"
+    "card.addEventListener('touchend',up);"
+    "if(toggle){toggle.addEventListener('click',function(){"
+    "on=!on;"
+    "if(on){wrapWords(scope);toggle.textContent='\u270F\uFE0F Surligneur: ON';toggle.style.background='#16a34a';toggle.style.color='#fff';scope.style.touchAction='none';}"
+    "else{toggle.textContent='\u270F\uFE0F Surligneur';toggle.style.background='#f59e0b';toggle.style.color='#111';scope.style.touchAction='';}"
+    "});}"
+    "if(clear){clear.addEventListener('click',function(){"
+    "scope.querySelectorAll('[data-gnlw=\"1\"]').forEach(function(s){s.style.backgroundColor='';});"
+    "});}"
+    "})();</script>"
+)
+
+
 def get_exam_base(theme, subtheme):
     """Get base path for exam assets: INBOX_FOLDER/{theme}/{subtheme}/assets/"""
     inbox = os.environ.get('INBOX_FOLDER', '')
@@ -976,6 +1037,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
 
     # --- Optional empty 'reflection template' image per question (flag) ---
     tmpl_enabled = str(_cfg.get('ANKI_TEMPLATE_IMG', '0')) == '1'
+    hl_enabled = str(_cfg.get('ANKI_HIGHLIGHTER', '0')) == '1'
     template_pngs = {}
     if tmpl_enabled:
         try:
@@ -1065,6 +1127,12 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         # Empty reflection template image (directly visible on the front).
         if tmpl_enabled and num in template_pngs:
             front += f"<br><br><div style='text-align:center;'><img src='template_Q{num}.png' style='width:30%;max-width:30%;height:auto;'></div>"
+
+        # Optional manual highlighter (drag the mouse/finger to mark keywords).
+        # Works on desktop and mobile; a toggle enables "marker mode" so that
+        # dragging highlights instead of scrolling. Temporary (not saved).
+        if hl_enabled:
+            front += _HIGHLIGHTER_HTML
 
         # Optional TTS audio (Amazon Polly, flag ANKI_TTS=1). Front reads the
         # question + options; back reads the explanation. Audio files are added
