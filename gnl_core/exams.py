@@ -1064,7 +1064,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
 
         # Empty reflection template image (directly visible on the front).
         if tmpl_enabled and num in template_pngs:
-            front += f"<br><br><div style='text-align:center;'><img src='template_Q{num}.png' style='width:60%;max-width:60%;height:auto;'></div>"
+            front += f"<br><br><div style='text-align:center;'><img src='template_Q{num}.png' style='width:30%;max-width:30%;height:auto;'></div>"
 
         # Optional TTS audio (Amazon Polly, flag ANKI_TTS=1). Front reads the
         # question + options; back reads the explanation. Audio files are added
