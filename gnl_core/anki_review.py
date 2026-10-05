@@ -109,6 +109,56 @@ def failed_questions_by_exam(collection_path=None):
     return {exam: sorted(nums) for exam, nums in by_exam.items()}
 
 
+def in_progress_exams(collection_path=None):
+    """Return a set of exam names that are still IN PROGRESS, i.e. that have at
+    least one card never reviewed (Anki queue=0 'new'). An exam with zero new
+    cards is considered finished. Reads the collection like _read_failed_guids
+    (temp copy incl. WAL/SHM, no need to close Anki). Best-effort → set().
+    """
+    if _is_test_mode():
+        return {"test-exam"}
+    collection_path = collection_path or DEFAULT_ANKI_COLLECTION
+    if not os.path.exists(collection_path):
+        return set()
+    workdir = tempfile.mkdtemp(prefix='anki-progress-')
+    tmp_db = os.path.join(workdir, 'collection.anki2')
+    in_progress = set()
+    conn = None
+    try:
+        shutil.copy2(collection_path, tmp_db)
+        for ext in ('-wal', '-shm'):
+            src = collection_path + ext
+            if os.path.exists(src):
+                try:
+                    shutil.copy2(src, tmp_db + ext)
+                except Exception:
+                    pass
+        conn = sqlite3.connect(tmp_db)
+        # Per note guid: total cards and how many are still 'new' (queue=0).
+        rows = conn.execute(
+            """
+            SELECT n.guid, c.queue
+            FROM cards c
+            JOIN notes n ON n.id = c.nid
+            """
+        ).fetchall()
+        new_by_exam = defaultdict(int)
+        for guid, queue in rows:
+            m = _GUID_RE.match(guid or '')
+            if not m:
+                continue
+            if queue == 0:  # never studied
+                new_by_exam[m.group('exam')] += 1
+        in_progress = {exam for exam, cnt in new_by_exam.items() if cnt > 0}
+    except Exception:
+        in_progress = set()
+    finally:
+        if conn:
+            conn.close()
+        shutil.rmtree(workdir, ignore_errors=True)
+    return in_progress
+
+
 # --- Artefact 1 (#51): error-review markdown document -------------------------
 
 def _find_exam_markdown(exam_name, theme='exams', subtheme='sap-c02'):

@@ -2432,7 +2432,10 @@ async def anki_review_error_docs():
 
     await broadcast_log("▶ Génération des documents d'erreurs (questions ratées)")
     results = await loop.run_in_executor(None, lambda: generate_error_documents(on_progress=on_p))
-    return {"documents": [{"exam": e, "path": p} for e, p in results], "count": len(results)}
+    from gnl_core.anki_review import in_progress_exams
+    in_prog = await loop.run_in_executor(None, in_progress_exams)
+    return {"documents": [{"exam": e, "path": p, "in_progress": e in in_prog}
+                          for e, p in results], "count": len(results)}
 
 
 @app.post("/api/anki-review/reset-apkg")

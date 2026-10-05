@@ -699,7 +699,7 @@
                         if (!items.length) { el.textContent = 'Rien à générer (aucune question ratée ?).'; return; }
                         const label = (kind === 'reset-apkg') ? 'deck(s) reset' : 'document(s) d\'erreurs';
                         el.textContent = `✅ ${d.count} ${label} généré(s) :\n\n`
-                            + items.map(i => `  📄 ${i.exam}\n     ${i.path}`).join('\n\n');
+                            + items.map(i => `  📄 ${i.exam}${i.in_progress ? '  ⏳ (en cours)' : ''}\n     ${i.path}`).join('\n\n');
                     } catch (e) { el.textContent = '⚠ Erreur: ' + e; }
                     finally { btn.disabled = false; btn.textContent = t; }
                 }

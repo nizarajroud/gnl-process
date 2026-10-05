@@ -412,3 +412,10 @@ def test_generate_failed_podcasts_test_mode(monkeypatch):
     from gnl_core.anki_review import generate_failed_podcasts
     res = generate_failed_podcasts()
     assert res and all('exam' in r and 'parent_id' in r and 'count' in r for r in res)
+
+
+def test_in_progress_exams_test_mode(monkeypatch):
+    """in_progress_exams returns the stub set in TEST_MODE."""
+    monkeypatch.setenv('TEST_MODE', '1')
+    from gnl_core.anki_review import in_progress_exams
+    assert 'test-exam' in in_progress_exams()
