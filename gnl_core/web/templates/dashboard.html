@@ -706,73 +706,84 @@
 
                 // Window store for block texts (per exam) so copy buttons can read them.
                 window._ankiMetaBlocks = {};
-                async function ankiReviewMetaPrompt(btn) {
-                    const el = document.getElementById('anki-review-result');
-                    btn.disabled = true; const t = btn.textContent; btn.textContent = '⏳…';
-                    el.textContent = '⏳ Construction du prompt Meta des questions ratées…';
-                    try {
-                        const d = await (await fetch('/api/anki-review/meta-prompt', {method:'POST'})).json();
-                        if (d.error) { el.textContent = '⚠ ' + d.error; return; }
-                        if (!d.exams || !d.exams.length) { el.textContent = 'Aucune question ratée.'; return; }
-                        window._ankiMetaBlocks = {};
-                        let html = '';
-                        d.exams.forEach(function(ex){
-                            const safe = ex.exam.replace(/[^a-zA-Z0-9_-]/g,'_');
-                            window._ankiMetaBlocks[safe] = ex.parts.map(p => p.text);
-                            html += `<div style="margin-bottom:12px;"><div style="font-weight:600;margin-bottom:6px;">🎯 ${ex.exam} — ${ex.count} ratées (${ex.parts.length} bloc(s))</div><div style="display:flex;flex-wrap:wrap;gap:6px;">`;
-                            ex.parts.forEach(function(p){
-                                html += `<button type="button" onclick="ankiCopyBlock('${safe}',${p.part-1},${p.total},this)" style="padding:6px 11px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">📋 Bloc ${p.part}/${p.total}</button>`;
-                            });
-                            html += '</div></div>';
-                        });
-                        html += '<div style="font-size:12px;color:#9ca3af;">Colle chaque bloc dans Meta AI, puis écris « ALL BLOCKS SENT » et dis « go ».</div>';
-                        html += '<textarea id="anki-meta-area" readonly style="position:absolute;left:-9999px;top:0;opacity:0;height:1px;width:1px;"></textarea>';
-                        el.innerHTML = html;
-                    } catch (e) { el.textContent = '⚠ Erreur: ' + e; }
-                    finally { btn.disabled = false; btn.textContent = t; }
-                }
-
-                async function ankiReviewPodcast(btn) {
-                    const el = document.getElementById('anki-review-result');
-                    btn.disabled = true; const t = btn.textContent; btn.textContent = '⏳…';
-                    el.textContent = '⏳ Préparation des podcasts des questions ratées (par examen)…';
-                    try {
-                        const d = await (await fetch('/api/anki-review/podcast', {method:'POST'})).json();
-                        if (d.error) { el.textContent = '⚠ ' + d.error; return; }
-                        if (!d.editions || !d.editions.length) { el.textContent = 'Aucune question ratée à podcaster.'; return; }
-                        el.textContent = `✅ ${d.count} édition(s) préparée(s) depuis les ratées :\n\n`
-                            + d.editions.map(e => `  🎙️ ${e.exam} — ${e.count} ratées (édition #${e.parent_id})`).join('\n')
-                            + `\n\nVa dans l'onglet Production pour lancer la génération audio (quota NotebookLM).`;
-                    } catch (e) { el.textContent = '⚠ Erreur: ' + e; }
-                    finally { btn.disabled = false; btn.textContent = t; }
-                }
-
-                async function ankiResetPopup(btn) {
-                    const el = document.getElementById('anki-review-result');
+                // Shared styled popup: fetch finished exams (with fails, not in
+                // progress), show a dropdown; onPick(exam) runs on Valider.
+                async function ankiExamPicker(title, btn, onPick) {
                     btn.disabled = true; const t = btn.textContent; btn.textContent = '⏳…';
                     let exams = [];
                     try {
                         const d = await (await fetch('/api/anki-review/reset-candidates')).json();
                         exams = d.exams || [];
-                    } catch (e) { el.textContent = '⚠ Erreur: ' + e; btn.disabled=false; btn.textContent=t; return; }
+                    } catch (e) { uiToast('Erreur: ' + e, 'error'); return; }
                     finally { btn.disabled = false; btn.textContent = t; }
                     if (!exams.length) { uiToast('Aucun examen terminé avec des questions ratées.', 'info'); return; }
-                    // Styled modal overlay
                     const ov = document.createElement('div');
                     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999;';
                     const opts = exams.map(e => `<option value="${e.exam}">${e.exam} (${e.count} ratées)</option>`).join('');
                     ov.innerHTML = `<div style="background:#1f2937;color:#e5e7eb;border-radius:12px;padding:22px;width:90%;max-width:440px;box-shadow:0 10px 40px rgba(0,0,0,0.5);">
-                        <div style="font-weight:600;font-size:16px;margin-bottom:14px;">🔁 Deck reset — choisis un examen</div>
-                        <select id="ankiResetSel" style="width:100%;background:#374151;color:#e5e7eb;border:none;border-radius:8px;padding:10px;font-size:14px;margin-bottom:18px;">${opts}</select>
+                        <div style="font-weight:600;font-size:16px;margin-bottom:14px;">${title}</div>
+                        <select id="ankiPickSel" style="width:100%;background:#374151;color:#e5e7eb;border:none;border-radius:8px;padding:10px;font-size:14px;margin-bottom:18px;">${opts}</select>
                         <div style="display:flex;justify-content:flex-end;gap:8px;">
-                            <button type="button" id="ankiResetCancel" style="background:#4b5563;color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;">Annuler</button>
-                            <button type="button" id="ankiResetOk" style="background:#4f46e5;color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;">Valider</button>
+                            <button type="button" id="ankiPickCancel" style="background:#4b5563;color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;">Annuler</button>
+                            <button type="button" id="ankiPickOk" style="background:#4f46e5;color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;">Valider</button>
                         </div></div>`;
                     document.body.appendChild(ov);
-                    ov.querySelector('#ankiResetCancel').onclick = () => ov.remove();
-                    ov.querySelector('#ankiResetOk').onclick = async () => {
-                        const exam = ov.querySelector('#ankiResetSel').value;
+                    ov.querySelector('#ankiPickCancel').onclick = () => ov.remove();
+                    ov.querySelector('#ankiPickOk').onclick = () => {
+                        const exam = ov.querySelector('#ankiPickSel').value;
                         ov.remove();
+                        onPick(exam);
+                    };
+                }
+
+                function ankiReviewMetaPrompt(btn) {
+                    ankiExamPicker('📋 Prompt Meta — choisis un examen', btn, async function(exam){
+                        const el = document.getElementById('anki-review-result');
+                        el.textContent = `⏳ Construction du prompt Meta — ${exam}…`;
+                        try {
+                            const d = await (await fetch('/api/anki-review/meta-prompt', {
+                                method:'POST', headers:{'Content-Type':'application/json'},
+                                body: JSON.stringify({exam})})).json();
+                            if (d.error) { el.textContent = '⚠ ' + d.error; return; }
+                            if (!d.exams || !d.exams.length) { el.textContent = 'Aucune question ratée.'; return; }
+                            window._ankiMetaBlocks = {};
+                            let html = '';
+                            d.exams.forEach(function(ex){
+                                const safe = ex.exam.replace(/[^a-zA-Z0-9_-]/g,'_');
+                                window._ankiMetaBlocks[safe] = ex.parts.map(p => p.text);
+                                html += `<div style="margin-bottom:12px;"><div style="font-weight:600;margin-bottom:6px;">🎯 ${ex.exam} — ${ex.count} ratées (${ex.parts.length} bloc(s))</div><div style="display:flex;flex-wrap:wrap;gap:6px;">`;
+                                ex.parts.forEach(function(p){
+                                    html += `<button type="button" onclick="ankiCopyBlock('${safe}',${p.part-1},${p.total},this)" style="padding:6px 11px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">📋 Bloc ${p.part}/${p.total}</button>`;
+                                });
+                                html += '</div></div>';
+                            });
+                            html += '<div style="font-size:12px;color:#9ca3af;">Colle chaque bloc dans Meta AI, puis écris « ALL BLOCKS SENT » et dis « go ».</div>';
+                            html += '<textarea id="anki-meta-area" readonly style="position:absolute;left:-9999px;top:0;opacity:0;height:1px;width:1px;"></textarea>';
+                            el.innerHTML = html;
+                        } catch (e) { el.textContent = '⚠ Erreur: ' + e; }
+                    });
+                }
+
+                async function ankiReviewPodcast(btn) {
+                    ankiExamPicker('🎙️ Podcast (ratées) — choisis un examen', btn, async function(exam){
+                        const el = document.getElementById('anki-review-result');
+                        el.textContent = `⏳ Préparation du podcast — ${exam}…`;
+                        try {
+                            const d = await (await fetch('/api/anki-review/podcast', {
+                                method:'POST', headers:{'Content-Type':'application/json'},
+                                body: JSON.stringify({exam})})).json();
+                            if (d.error) { el.textContent = '⚠ ' + d.error; return; }
+                            if (!d.editions || !d.editions.length) { el.textContent = 'Aucune question ratée à podcaster.'; return; }
+                            el.textContent = `✅ ${d.count} édition(s) préparée(s) :\n\n`
+                                + d.editions.map(e => `  🎙️ ${e.exam} — ${e.count} ratées (édition #${e.parent_id})`).join('\n')
+                                + `\n\nVa dans l'onglet Production pour lancer la génération audio (quota NotebookLM).`;
+                        } catch (e) { el.textContent = '⚠ Erreur: ' + e; }
+                    });
+                }
+
+                function ankiResetPopup(btn) {
+                    ankiExamPicker('🔁 Deck reset — choisis un examen', btn, async function(exam){
+                        const el = document.getElementById('anki-review-result');
                         el.textContent = `⏳ Génération du deck reset pour ${exam} (appel Bedrock)…`;
                         try {
                             const r = await (await fetch('/api/anki-review/reset-apkg-one', {
@@ -781,7 +792,7 @@
                             if (r.error) { el.textContent = '⚠ ' + r.error; return; }
                             el.textContent = `✅ Deck reset généré pour ${r.exam} — ${r.count} ratées :\n\n     ${r.path}`;
                         } catch (e) { el.textContent = '⚠ Erreur: ' + e; }
-                    };
+                    });
                 }
 
                 function ankiCopyBlock(examKey, idx, total, btn) {

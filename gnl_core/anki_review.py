@@ -457,10 +457,12 @@ def _failed_corpus_for_exam(exam_name, failed_nums, md_path):
 
 
 def build_failed_meta_parts(collection_path=None, theme='exams',
-                            subtheme='sap-c02', max_chars=None, on_progress=None):
+                            subtheme='sap-c02', max_chars=None, on_progress=None,
+                            only_exam=None):
     """For each exam with failed questions, build a Meta AI prompt split into
     copy blocks. Returns {exam_name: {'count': n, 'parts': [str, ...]}}.
 
+    If only_exam is given, restrict to that single exam.
     Reuses the generic block splitter (build_parts_from_text) and the voice
     preamble so the user pastes block-by-block, then says 'go' for the full
     explanation of all failed questions.
@@ -469,6 +471,8 @@ def build_failed_meta_parts(collection_path=None, theme='exams',
     result = {}
     by_exam = failed_questions_by_exam(collection_path)
     for exam_name, nums in by_exam.items():
+        if only_exam and exam_name != only_exam:
+            continue
         md = _find_exam_markdown(exam_name, theme, subtheme)
         if not md:
             if on_progress:
@@ -488,10 +492,11 @@ def build_failed_meta_parts(collection_path=None, theme='exams',
 # --- Podcast of failed questions, per exam (uses category defaults) ---------
 
 def generate_failed_podcasts(collection_path=None, theme='exams',
-                             subtheme='sap-c02', on_progress=None):
+                             subtheme='sap-c02', on_progress=None, only_exam=None):
     """For each exam with failed questions, build an error-doc PDF and prepare it
     into the production DB (split + collect + titles) using the exams CATEGORY
-    DEFAULTS. Returns list of {'exam','parent_id','count'}.
+    DEFAULTS. Returns list of {'exam','parent_id','count'}. If only_exam is set,
+    restrict to that single exam.
 
     This is the QUOTA-FREE prepare phase; the actual NotebookLM audio generation
     then runs via the normal production flow (like any prepared edition).
@@ -500,7 +505,8 @@ def generate_failed_podcasts(collection_path=None, theme='exams',
     results = []
     if _is_test_mode():
         by_exam = failed_questions_by_exam(collection_path)
-        return [{'exam': e, 'parent_id': -1, 'count': len(n)} for e, n in by_exam.items()]
+        return [{'exam': e, 'parent_id': -1, 'count': len(n)} for e, n in by_exam.items()
+                if not only_exam or e == only_exam]
 
     from gnl_core.config import get_config
     from gnl_core.pdf_export import write_pdf
@@ -514,6 +520,8 @@ def generate_failed_podcasts(collection_path=None, theme='exams',
 
     by_exam = failed_questions_by_exam(collection_path)
     for exam_name, nums in by_exam.items():
+        if only_exam and exam_name != only_exam:
+            continue
         md = _find_exam_markdown(exam_name, theme, subtheme)
         if not md:
             if on_progress:

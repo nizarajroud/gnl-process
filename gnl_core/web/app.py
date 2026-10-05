@@ -2496,12 +2496,17 @@ async def anki_review_reset_apkg_one(request: Request):
 
 
 @app.post("/api/anki-review/meta-prompt")
-async def anki_review_meta_prompt():
-    """Build a Meta AI prompt (copy-by-block) for each exam's failed questions."""
+async def anki_review_meta_prompt(request: Request):
+    """Build a Meta AI prompt (copy-by-block) for one exam's failed questions."""
     from gnl_core.anki_review import build_failed_meta_parts
     from gnl_core.config import get_config
     loop = asyncio.get_event_loop()
     max_chars = get_config().get('META_EXPORT_MAX_CHARS') or None
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    only_exam = (body or {}).get('exam') or None
 
     def on_p(msg):
         try:
@@ -2509,9 +2514,10 @@ async def anki_review_meta_prompt():
         except Exception:
             pass
 
-    await broadcast_log("▶ Prompt Meta des questions ratées (par examen)")
+    await broadcast_log("▶ Prompt Meta des questions ratées" + (f" — {only_exam}" if only_exam else ""))
     data = await loop.run_in_executor(
-        None, lambda: build_failed_meta_parts(max_chars=max_chars, on_progress=on_p))
+        None, lambda: build_failed_meta_parts(max_chars=max_chars, on_progress=on_p,
+                                              only_exam=only_exam))
     # Keep the full block text only in a per-exam list for the client to copy.
     exams = []
     for exam_name, info in data.items():
@@ -2525,11 +2531,16 @@ async def anki_review_meta_prompt():
 
 
 @app.post("/api/anki-review/podcast")
-async def anki_review_podcast():
-    """Prepare a podcast edition (per exam) from the failed questions, using the
+async def anki_review_podcast(request: Request):
+    """Prepare a podcast edition (one exam) from the failed questions, using the
     exams category defaults. Quota-free prepare; audio runs via production."""
     from gnl_core.anki_review import generate_failed_podcasts
     loop = asyncio.get_event_loop()
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    only_exam = (body or {}).get('exam') or None
 
     def on_p(msg):
         try:
@@ -2537,9 +2548,9 @@ async def anki_review_podcast():
         except Exception:
             pass
 
-    await broadcast_log("▶ Podcast des questions ratées (prepare, par examen)")
+    await broadcast_log("▶ Podcast des questions ratées (prepare)" + (f" — {only_exam}" if only_exam else ""))
     results = await loop.run_in_executor(
-        None, lambda: generate_failed_podcasts(on_progress=on_p))
+        None, lambda: generate_failed_podcasts(on_progress=on_p, only_exam=only_exam))
     return {"editions": results, "count": len(results)}
 
 
