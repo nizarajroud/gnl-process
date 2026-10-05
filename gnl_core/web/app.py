@@ -2554,6 +2554,42 @@ async def anki_review_podcast(request: Request):
     return {"editions": results, "count": len(results)}
 
 
+@app.post("/api/anki-review/video-deck")
+async def anki_review_video_deck(request: Request):
+    """Enqueue an AGENT job: build a 'video deck' (AWS draw.io architecture +
+    narrated speech audio per failed question) for ONE exam. The Kiro agent
+    processes the queue; this endpoint only creates the job."""
+    from gnl_core.anki_review import failed_questions_by_exam
+    from gnl_core import agent_jobs
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    exam = (body or {}).get('exam', '')
+    loop = asyncio.get_event_loop()
+    by_exam = await loop.run_in_executor(None, failed_questions_by_exam)
+    nums = by_exam.get(exam)
+    if not nums:
+        return {"error": f"Aucune question ratée pour {exam}"}
+    job = agent_jobs.enqueue('video_deck', exam=exam, failed_nums=nums,
+                             theme='exams', subtheme='sap-c02')
+    await broadcast_log(
+        f"🧩 Job agent créé: deck vidéo pour {exam} ({len(nums)} ratées) — id={job['id']}. "
+        f"Lance Kiro et dis « traite les jobs deck vidéo ».")
+    return {"job": {"id": job['id'], "exam": exam, "count": len(nums)}}
+
+
+@app.get("/api/anki-review/jobs")
+async def anki_review_jobs():
+    """List pending agent jobs (for the UI to show what's queued)."""
+    from gnl_core import agent_jobs
+    jobs = agent_jobs.list_jobs('pending')
+    return {"jobs": [{"id": j.get('id'), "type": j.get('type'),
+                      "exam": j.get('exam'),
+                      "count": len(j.get('failed_nums', [])),
+                      "created_at": j.get('created_at')} for j in jobs]}
+
+
 @app.post("/api/meta-export/{theme}/{subtheme}/{filename}")
 async def meta_export_generate(theme: str, subtheme: str, filename: str):
     """Generate Meta AI 'part' files for an exam document (any format)."""

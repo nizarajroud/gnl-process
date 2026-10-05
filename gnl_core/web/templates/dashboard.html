@@ -669,6 +669,7 @@
                         <button type="button" onclick="ankiResetPopup(this)" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">🔁 Deck reset (2ᵉ passe)</button>
                         <button type="button" onclick="ankiReviewMetaPrompt(this)" class="px-3 py-2 bg-sky-600 hover:bg-sky-500 rounded text-sm">📋 Prompt Meta (ratées)</button>
                         <button type="button" onclick="ankiReviewPodcast(this)" class="px-3 py-2 bg-pink-600 hover:bg-pink-500 rounded text-sm">🎙️ Podcast (ratées)</button>
+                        <button type="button" onclick="ankiReviewVideoDeck(this)" class="px-3 py-2 bg-teal-600 hover:bg-teal-500 rounded text-sm">🎬 Deck vidéo (ratées)</button>
                     </div>
                     <div id="anki-review-result" class="text-sm text-gray-200 bg-gray-900 rounded p-3 min-h-[3rem] font-mono whitespace-pre-wrap border border-gray-700">Clique un bouton ci-dessus pour commencer.</div>
                 </div>
@@ -781,9 +782,24 @@
                     });
                 }
 
-                function ankiResetPopup(btn) {
-                    ankiExamPicker('🔁 Deck reset — choisis un examen', btn, async function(exam){
+                function ankiReviewVideoDeck(btn) {
+                    ankiExamPicker('🎬 Deck vidéo (ratées) — choisis un examen', btn, async function(exam){
                         const el = document.getElementById('anki-review-result');
+                        el.textContent = `⏳ Création du job agent — ${exam}…`;
+                        try {
+                            const d = await (await fetch('/api/anki-review/video-deck', {
+                                method:'POST', headers:{'Content-Type':'application/json'},
+                                body: JSON.stringify({exam})})).json();
+                            if (d.error) { el.textContent = '⚠ ' + d.error; return; }
+                            el.textContent = `🧩 Job agent créé pour ${d.job.exam} (${d.job.count} ratées) — id ${d.job.id}.\n\n`
+                                + `Ce deck (architecture AWS draw.io + audio narré par question) est fait par l'agent Kiro.\n`
+                                + `➡️ Lance Kiro CLI et dis : « traite les jobs deck vidéo ».`;
+                        } catch (e) { el.textContent = '⚠ Erreur: ' + e; }
+                    });
+                }
+
+                function ankiResetPopup(btn) {
+                    ankiExamPicker('🔁 Deck reset — choisis un examen', btn, async function(exam){                        const el = document.getElementById('anki-review-result');
                         el.textContent = `⏳ Génération du deck reset pour ${exam} (appel Bedrock)…`;
                         try {
                             const r = await (await fetch('/api/anki-review/reset-apkg-one', {
