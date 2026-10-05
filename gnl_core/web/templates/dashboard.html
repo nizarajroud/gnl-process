@@ -666,7 +666,7 @@
                     <div class="flex flex-wrap gap-2">
                         <button type="button" onclick="ankiReviewFailed(this)" class="px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm">🔍 Lister les ratées</button>
                         <button type="button" onclick="ankiReviewAction('error-docs', this)" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">📄 Document d'erreurs</button>
-                        <button type="button" onclick="ankiReviewAction('reset-apkg', this)" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">🔁 Deck reset (2ᵉ passe)</button>
+                        <button type="button" onclick="ankiResetPopup(this)" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">🔁 Deck reset (2ᵉ passe)</button>
                         <button type="button" onclick="ankiReviewMetaPrompt(this)" class="px-3 py-2 bg-sky-600 hover:bg-sky-500 rounded text-sm">📋 Prompt Meta (ratées)</button>
                         <button type="button" onclick="ankiReviewPodcast(this)" class="px-3 py-2 bg-pink-600 hover:bg-pink-500 rounded text-sm">🎙️ Podcast (ratées)</button>
                     </div>
@@ -747,9 +747,47 @@
                     finally { btn.disabled = false; btn.textContent = t; }
                 }
 
+                async function ankiResetPopup(btn) {
+                    const el = document.getElementById('anki-review-result');
+                    btn.disabled = true; const t = btn.textContent; btn.textContent = '⏳…';
+                    let exams = [];
+                    try {
+                        const d = await (await fetch('/api/anki-review/reset-candidates')).json();
+                        exams = d.exams || [];
+                    } catch (e) { el.textContent = '⚠ Erreur: ' + e; btn.disabled=false; btn.textContent=t; return; }
+                    finally { btn.disabled = false; btn.textContent = t; }
+                    if (!exams.length) { uiToast('Aucun examen terminé avec des questions ratées.', 'info'); return; }
+                    // Styled modal overlay
+                    const ov = document.createElement('div');
+                    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999;';
+                    const opts = exams.map(e => `<option value="${e.exam}">${e.exam} (${e.count} ratées)</option>`).join('');
+                    ov.innerHTML = `<div style="background:#1f2937;color:#e5e7eb;border-radius:12px;padding:22px;width:90%;max-width:440px;box-shadow:0 10px 40px rgba(0,0,0,0.5);">
+                        <div style="font-weight:600;font-size:16px;margin-bottom:14px;">🔁 Deck reset — choisis un examen</div>
+                        <select id="ankiResetSel" style="width:100%;background:#374151;color:#e5e7eb;border:none;border-radius:8px;padding:10px;font-size:14px;margin-bottom:18px;">${opts}</select>
+                        <div style="display:flex;justify-content:flex-end;gap:8px;">
+                            <button type="button" id="ankiResetCancel" style="background:#4b5563;color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;">Annuler</button>
+                            <button type="button" id="ankiResetOk" style="background:#4f46e5;color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;">Valider</button>
+                        </div></div>`;
+                    document.body.appendChild(ov);
+                    ov.querySelector('#ankiResetCancel').onclick = () => ov.remove();
+                    ov.querySelector('#ankiResetOk').onclick = async () => {
+                        const exam = ov.querySelector('#ankiResetSel').value;
+                        ov.remove();
+                        el.textContent = `⏳ Génération du deck reset pour ${exam} (appel Bedrock)…`;
+                        try {
+                            const r = await (await fetch('/api/anki-review/reset-apkg-one', {
+                                method:'POST', headers:{'Content-Type':'application/json'},
+                                body: JSON.stringify({exam})})).json();
+                            if (r.error) { el.textContent = '⚠ ' + r.error; return; }
+                            el.textContent = `✅ Deck reset généré pour ${r.exam} — ${r.count} ratées :\n\n     ${r.path}`;
+                        } catch (e) { el.textContent = '⚠ Erreur: ' + e; }
+                    };
+                }
+
                 function ankiCopyBlock(examKey, idx, total, btn) {
                     const blocks = window._ankiMetaBlocks[examKey] || [];
-                    const text = blocks[idx] || '';                    const area = document.getElementById('anki-meta-area');
+                    const text = blocks[idx] || '';
+                    const area = document.getElementById('anki-meta-area');
                     area.value = text; area.style.position='static'; area.style.opacity='1';
                     area.focus(); area.select();
                     let ok=false; try { ok=document.execCommand('copy'); } catch(e){ ok=false; }

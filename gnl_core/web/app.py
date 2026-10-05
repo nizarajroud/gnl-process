@@ -2455,6 +2455,46 @@ async def anki_review_reset_apkg():
     return {"apkgs": [{"exam": e, "path": p} for e, p in results], "count": len(results)}
 
 
+@app.get("/api/anki-review/reset-candidates")
+async def anki_review_reset_candidates():
+    """List exams eligible for a reset deck: have failed questions AND are
+    finished (not in progress). Used by the Deck reset popup dropdown."""
+    from gnl_core.anki_review import failed_questions_by_exam, in_progress_exams
+    loop = asyncio.get_event_loop()
+    by_exam = await loop.run_in_executor(None, failed_questions_by_exam)
+    in_prog = await loop.run_in_executor(None, in_progress_exams)
+    exams = [{"exam": e, "count": len(nums)}
+             for e, nums in sorted(by_exam.items())
+             if nums and e not in in_prog]
+    return {"exams": exams}
+
+
+@app.post("/api/anki-review/reset-apkg-one")
+async def anki_review_reset_apkg_one(request: Request):
+    """Generate the reset .apkg for ONE selected exam."""
+    from gnl_core.anki_review import failed_questions_by_exam, generate_reset_apkg
+    body = await request.json()
+    exam = (body or {}).get('exam', '')
+    loop = asyncio.get_event_loop()
+
+    def on_p(msg):
+        try:
+            asyncio.run_coroutine_threadsafe(broadcast_log(msg), loop)
+        except Exception:
+            pass
+
+    by_exam = await loop.run_in_executor(None, failed_questions_by_exam)
+    nums = by_exam.get(exam)
+    if not nums:
+        return {"error": f"Aucune question ratée pour {exam}"}
+    await broadcast_log(f"▶ Deck reset pour {exam} ({len(nums)} ratées)")
+    path = await loop.run_in_executor(
+        None, lambda: generate_reset_apkg(exam, nums, on_progress=on_p))
+    if not path:
+        return {"error": f"Échec de génération pour {exam}"}
+    return {"exam": exam, "path": path, "count": len(nums)}
+
+
 @app.post("/api/anki-review/meta-prompt")
 async def anki_review_meta_prompt():
     """Build a Meta AI prompt (copy-by-block) for each exam's failed questions."""
