@@ -683,7 +683,12 @@
                         if (d.error) { el.textContent = '⚠ ' + d.error; return; }
                         if (!d.total) { el.textContent = 'Aucune question ratée détectée (aucune carte avec flag rouge).'; return; }
                         let lines = [`✅ Total ratées : ${d.total}`, ''];
-                        for (const [exam, nums] of Object.entries(d.failed)) lines.push(`  ${exam} (${nums.length}) : Q${nums.join(', Q')}`);
+                        for (const [exam, nums] of Object.entries(d.failed)) {
+                            const st = (d.stats && d.stats[exam]) || {};
+                            const pct = (st.success_pct != null) ? ` · ${st.success_pct}% réussies` : '';
+                            const tot = st.total ? `/${st.total}` : '';
+                            lines.push(`  ${exam} (${nums.length}${tot} ratées${pct}) : Q${nums.join(', Q')}`);
+                        }
                         el.textContent = lines.join('\n');
                     } catch (e) { el.textContent = '⚠ Erreur: ' + e; }
                 }

@@ -2408,12 +2408,32 @@ async def health_check_now():
 
 @app.get("/api/anki-review/failed")
 async def anki_review_failed():
-    """List failed Anki questions grouped by exam (read-only, from the collection)."""
-    from gnl_core.anki_review import failed_questions_by_exam
+    """List failed Anki questions grouped by exam (read-only, from the collection).
+    Also returns, per exam, the total question count and the success percentage."""
+    from gnl_core.anki_review import (failed_questions_by_exam,
+                                      _find_exam_markdown, parse_exam_questions)
     loop = asyncio.get_event_loop()
+
+    def _build():
+        by_exam = failed_questions_by_exam()
+        stats = {}
+        for exam, nums in by_exam.items():
+            total = 0
+            try:
+                md = _find_exam_markdown(exam, 'exams', 'sap-c02')
+                if md:
+                    total = len(parse_exam_questions(str(md)))
+            except Exception:
+                total = 0
+            failed = len(nums)
+            pct = round((total - failed) / total * 100) if total else None
+            stats[exam] = {'total': total, 'failed': failed, 'success_pct': pct}
+        return by_exam, stats
+
     try:
-        by_exam = await loop.run_in_executor(None, failed_questions_by_exam)
-        return {"failed": by_exam, "total": sum(len(v) for v in by_exam.values())}
+        by_exam, stats = await loop.run_in_executor(None, _build)
+        return {"failed": by_exam, "stats": stats,
+                "total": sum(len(v) for v in by_exam.values())}
     except Exception as e:
         return {"error": str(e)[:120]}
 
