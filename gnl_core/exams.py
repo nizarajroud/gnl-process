@@ -1157,15 +1157,31 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                         f"<input type='checkbox' disabled> "
                         f"<span class='opt-text'>{opt}</span></div>"
                     )
-            # Script: read localStorage, color user's wrong choices in red
+            # Script: read localStorage, color user's wrong choices in red.
+            # Also adds a Reset button that clears THIS question's saved checkbox
+            # state from localStorage, so a stale pick from a previous attempt
+            # can be wiped (fixes "a wrong option stays red" after re-studying).
             feedback_script = (
+                "<div style='margin-top:10px'><button type='button' id='gnlReset' "
+                "style='cursor:pointer;background:#6b7280;color:#fff;border:none;"
+                "padding:6px 12px;border-radius:6px;font-size:13px;'>"
+                "\U0001F504 Reset</button></div>"
                 "<script>(function(){"
                 "document.querySelectorAll('.option[data-qkey]').forEach(function(el){"
                 "var picked=localStorage.getItem(el.getAttribute('data-qkey'))==='1';"
                 "var correct=el.getAttribute('data-correct')==='1';"
                 "if(picked){el.querySelector('input').checked=true;"
                 "if(!correct){var s=el.querySelector('.opt-text');if(s){s.classList.add('wrong');}}}"
-                "});})();</script>"
+                "});"
+                "var rb=document.getElementById('gnlReset');"
+                "if(rb){rb.addEventListener('click',function(){"
+                "document.querySelectorAll('.option[data-qkey]').forEach(function(el){"
+                "var k=el.getAttribute('data-qkey');try{localStorage.removeItem(k);}catch(e){}"
+                "var inp=el.querySelector('input');if(inp){inp.checked=false;}"
+                "var s=el.querySelector('.opt-text');if(s){s.classList.remove('wrong');}"
+                "});rb.textContent='\\u2705 Reset fait';"
+                "});}"
+                "})();</script>"
             )
             back = f"<b>Question {num}:</b><br><br>{multi_badge}{q_text}<br><br>{''.join(back_items)}{feedback_script}"
 
