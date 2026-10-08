@@ -40,9 +40,9 @@ def setup_database(db_path=None):
     if current < 4:
         _apply_v4(cursor)
     if current < 5:
+        _apply_v5(cursor)
     if current < 6:
         _apply_v6(cursor)
-        _apply_v5(cursor)
 
     conn.commit()
     conn.close()
