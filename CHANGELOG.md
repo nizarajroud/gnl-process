@@ -1,5 +1,14 @@
 # Changelog
 
+## v4.32.0 — 2026-10-07
+- Anki « Copier » (cartes classiques + deck vidéo slider) écrit maintenant aussi le fichier iCloud SHARE.txt
+  via un nouvel endpoint local GNL `POST /api/share` (Anki Desktop). Le bouton copie dans le presse-papier
+  ET envoie la question courante au fichier `META-AI/SHARE.txt` (écrasé à chaque copie), synchronisé par iCloud.
+- CORS activé pour permettre le fetch cross-origin depuis la webview Anki.
+- Chemin configurable via `SHARE_FILE`; URL configurable via `SHARE_URL` (défaut http://127.0.0.1:8000/api/share).
+
+# Changelog
+
 All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).

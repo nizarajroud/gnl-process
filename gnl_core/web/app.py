@@ -396,6 +396,52 @@ app = FastAPI(title="GNL Process", lifespan=lifespan)
 _WEB_DIR = Path(__file__).parent.parent.parent / 'web'
 
 
+# --- CORS: the Anki "Copier" button fetches /api/share cross-origin (the card
+# runs in Anki's webview, a different origin than this server). Allow it. ---
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["POST", "OPTIONS", "GET"],
+    allow_headers=["*"],
+)
+
+
+# Default path for the shared Meta-AI file (overridable via config SHARE_FILE).
+_DEFAULT_SHARE_FILE = (
+    "/mnt/c/Users/nizar/Synchro-iphone/iCloudDrive/META-AI/SHARE.txt"
+)
+
+
+@app.post("/api/share")
+async def api_share(request: Request):
+    """Write the posted text (overwrite) into the iCloud SHARE.txt file.
+
+    Called by the Anki card's "Copier" button on Anki Desktop: the button
+    copies to the clipboard AND fetches this endpoint so the current question
+    lands in the iCloud file, which iCloud then syncs to the phone. Body is the
+    raw text to write. Returns JSON {ok, path}.
+    """
+    try:
+        body = (await request.body()).decode("utf-8", "replace")
+    except Exception:
+        body = ""
+    try:
+        from gnl_core.config import get_config
+        share_path = get_config().get("SHARE_FILE") or _DEFAULT_SHARE_FILE
+    except Exception:
+        share_path = _DEFAULT_SHARE_FILE
+    try:
+        os.makedirs(os.path.dirname(share_path), exist_ok=True)
+        # Overwrite: SHARE.txt always holds the last question copied.
+        with open(share_path, "w", encoding="utf-8") as f:
+            f.write(body)
+        return {"ok": True, "path": share_path, "bytes": len(body)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 @app.get("/manifest.webmanifest")
 async def pwa_manifest():
     from fastapi.responses import FileResponse
