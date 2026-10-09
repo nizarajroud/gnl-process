@@ -1,5 +1,11 @@
 # Changelog
 
+## v4.35.0 — 2026-10-09
+- Nouvel examen **AB1-C01** (AWS Certified AI Business Strategist, beta) ajouté à GNL.
+- Migration DB v8 : entrée catalogue `('exams','ab1-c01')` (fresh-install + upgrade idempotent).
+- Arborescence `exams/ab1-c01/assets/...` créée (identique à saa-c03).
+
+
 ## v4.34.0 — 2026-10-09
 - **Revert** de la fonction « Copier vers fichier partagé » (v4.32.0) : le bouton Copier redevient
   **presse-papier classique uniquement**, sur les cartes d'examen ET les decks vidéo.
