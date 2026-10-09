@@ -358,9 +358,10 @@ async def lifespan(app: FastAPI):
             )
 
     # Health-check dry-run (US-002): evening (18h) + just before the pass (5h30).
-    # Enabled by default; times overridable via SCHEDULER.health_check.times.
+    # DISABLED by default (opt-in): user asked to stop the "tests à blanc"
+    # Telegram notifications. Enable explicitly via SCHEDULER.health_check.enabled=true.
     hc_cfg = sched_config.get('health_check', {})
-    if hc_cfg.get('enabled', True):
+    if hc_cfg.get('enabled', False):
         for t in hc_cfg.get('times', ['18:00', '05:30']):
             try:
                 hh, mm = t.split(':')

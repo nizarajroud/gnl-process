@@ -1,5 +1,10 @@
 # Changelog
 
+## v4.36.0 — 2026-10-09
+- **Tests à blanc (health-check dry-run) désactivés par défaut** : plus de notifications Telegram
+  automatiques à 18h/5h30. Le défaut code passe à `enabled=False` (opt-in via SCHEDULER.health_check.enabled=true).
+
+
 ## v4.35.0 — 2026-10-09
 - Nouvel examen **AB1-C01** (AWS Certified AI Business Strategist, beta) ajouté à GNL.
 - Migration DB v8 : entrée catalogue `('exams','ab1-c01')` (fresh-install + upgrade idempotent).
