@@ -1,5 +1,12 @@
 # Changelog
 
+## v4.34.0 — 2026-10-09
+- **Revert** de la fonction « Copier vers fichier partagé » (v4.32.0) : le bouton Copier redevient
+  **presse-papier classique uniquement**, sur les cartes d'examen ET les decks vidéo.
+- Retiré : endpoint `/api/share`, middleware CORS, `SHARE_URL`/`SHARE_FILE`, et le `fetch` vers le serveur local.
+- Conservé : prompt voice, explication embarquée, badges « Choisis N », examen SAA-C03, migration DB v7.
+
+
 ## v4.33.0 — 2026-10-09
 - Nouvel examen **SAA-C03** (AWS Solutions Architect Associate) ajouté à GNL.
 - `build_slider_deck.py` généralisé : nouvel argument `--subtheme=<slug>` (défaut `sap-c02`) pour

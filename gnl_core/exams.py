@@ -903,11 +903,6 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     js_prompt_wrong_voice = _json.dumps(prompt_wrong_voice)
     js_prompt_correct_voice = _json.dumps(prompt_correct_voice)
     js_copy_mode = _json.dumps(copy_mode)
-    # URL of the local GNL endpoint that writes the iCloud SHARE.txt file.
-    # The Copy button fetches it (Anki Desktop) so the copied question also
-    # lands in the shared file. Empty string disables the fetch (e.g. mobile).
-    share_url = _cfg.get('SHARE_URL') or 'http://127.0.0.1:8000/api/share'
-    js_share_url = _json.dumps(share_url)
 
     # Model for exam cards
     font_size = os.environ.get('ANKI_FONT_SIZE', '16')
@@ -946,7 +941,6 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 'var P_WRONG_VOICE=' + js_prompt_wrong_voice + ';'
                 'var P_CORRECT_VOICE=' + js_prompt_correct_voice + ';'
                 'var COPY_MODE=' + js_copy_mode + ';'
-                'var SHARE_URL=' + js_share_url + ';'
                 # --- Build the CLEAN question+options text (no CSS, no ★/⚑) ---
                 # Only take .option rows + the question <b>/text, never <style>.
                 'var card=document.querySelector(".card")||document.body;'
@@ -1022,11 +1016,6 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 'try{navigator.clipboard.writeText(area.value);ok=true;}catch(e){}}'
                 'area.style.position="absolute";area.style.left="-9999px";area.style.opacity="0";'
                 'window.getSelection&&window.getSelection().removeAllRanges&&window.getSelection().removeAllRanges();'
-                # Also write the iCloud SHARE.txt via the local GNL endpoint
-                # (Anki Desktop). Best-effort, non-blocking: ignore failures
-                # (e.g. on mobile or when GNL isn't running).
-                'if(SHARE_URL){try{fetch(SHARE_URL,{method:"POST",'
-                'headers:{"Content-Type":"text/plain;charset=UTF-8"},body:text}).catch(function(){});}catch(e){}}'
                 'if(msg){msg.textContent=ok?"\\u2705 Copi\\u00e9":"\\u26a0 R\\u00e9essaie";'
                 'msg.style.color=ok?"#28a745":"#dc3545";'
                 'setTimeout(function(){msg.textContent="";},2500);}}'

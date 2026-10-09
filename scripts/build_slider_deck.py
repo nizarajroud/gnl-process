@@ -131,14 +131,6 @@ def _full_copy(qnum, body):
 
 copy_texts = {q: _full_copy(q, texts.get(q, "")) for q in QNUMS}
 
-# URL of the local GNL endpoint that writes the iCloud SHARE.txt (Anki Desktop).
-try:
-    from gnl_core.config import get_config as _gc
-    _share_url = _gc().get("SHARE_URL") or "http://127.0.0.1:8001/api/share"
-except Exception:
-    _share_url = "http://127.0.0.1:8001/api/share"
-_share_url_json = json.dumps(_share_url)
-
 # Single-card front: slider UI. Prev/Next are real buttons in the top corners.
 # One <img> + one <audio>; navigation only via buttons; audio plays on nav
 # (user tap → iOS allows autoplay). Lazy: only current media is loaded.
@@ -172,7 +164,6 @@ front = (
     "<textarea id='gnlCopyArea' readonly style='position:absolute;left:-9999px;top:0;opacity:0;height:1px;width:1px;'></textarea>"
     "</div>"
     "<script>(function(){"
-    "var SHARE_URL=" + _share_url_json + ";"
     "var slides=document.getElementsByClassName('gnlSlide');"
     "var n=slides.length;var i=0;"
     "var cnt=document.getElementById('gnlCount');"
@@ -196,7 +187,6 @@ front = (
     "var ok=false;try{ok=document.execCommand('copy');}catch(e){ok=false;}"
     "if(!ok&&navigator.clipboard&&navigator.clipboard.writeText){try{navigator.clipboard.writeText(area.value);ok=true;}catch(e){}}"
     "area.style.position='absolute';area.style.left='-9999px';area.style.opacity='0';"
-    "if(SHARE_URL){try{fetch(SHARE_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:area.value}).catch(function(){});}catch(e){}}"
     "var b=document.getElementById('gnlCopy');b.textContent=ok?'\\u2705 Copi\\u00e9':'\\u26a0 R\\u00e9essaie';"
     "setTimeout(function(){b.innerHTML='&#128203; Copier';},1800);});"
     "show(false);"
