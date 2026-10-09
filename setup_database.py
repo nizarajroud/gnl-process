@@ -10,7 +10,7 @@ import os
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gnl.db')
 
-CURRENT_VERSION = 6
+CURRENT_VERSION = 7
 
 
 def setup_database(db_path=None):
@@ -43,6 +43,8 @@ def setup_database(db_path=None):
         _apply_v5(cursor)
     if current < 6:
         _apply_v6(cursor)
+    if current < 7:
+        _apply_v7(cursor)
 
     conn.commit()
     conn.close()
@@ -172,9 +174,16 @@ def _apply_v6(cursor):
     cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('aws', 'aws-whitepapers', '', 'manual')")
     cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('aws', 'ai-use-cases', '', 'manual')")
     cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('exams', 'sap-c02', '', 'manual')")
+    cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('exams', 'saa-c03', '', 'manual')")
     cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('saved-articles', 'linkedin', '', 'fetch')")
     cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('saved-articles', 'medium', '', 'fetch')")
     cursor.execute("INSERT INTO schema_version (version) VALUES (6)")
+
+
+def _apply_v7(cursor):
+    """v7: Add the SAA-C03 exam (AWS Solutions Architect Associate) to the catalog."""
+    cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('exams', 'saa-c03', '', 'manual')")
+    cursor.execute("INSERT INTO schema_version (version) VALUES (7)")
 
 
 if __name__ == "__main__":

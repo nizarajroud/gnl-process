@@ -1,5 +1,13 @@
 # Changelog
 
+## v4.33.0 — 2026-10-09
+- Nouvel examen **SAA-C03** (AWS Solutions Architect Associate) ajouté à GNL.
+- `build_slider_deck.py` généralisé : nouvel argument `--subtheme=<slug>` (défaut `sap-c02`) pour
+  générer des decks vidéo de n'importe quel examen (BASE + markdown dérivés du subtheme).
+- Migration DB v7 : entrée catalogue `('exams','saa-c03')` (fresh-install + upgrade idempotent).
+- Arborescence `exams/saa-c03/assets/...` créée (full-markdown, Anki-generation, video-assets, etc.).
+
+
 ## v4.32.0 — 2026-10-07
 - Anki « Copier » (cartes classiques + deck vidéo slider) écrit maintenant aussi le fichier iCloud SHARE.txt
   via un nouvel endpoint local GNL `POST /api/share` (Anki Desktop). Le bouton copie dans le presse-papier

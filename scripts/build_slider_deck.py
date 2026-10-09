@@ -7,7 +7,7 @@ buttons (no swipe → no accidental change at the gym). Lazy-load: a single
 <img>/<audio> whose src changes on navigation, so the card opens instantly and
 never preloads all media.
 
-Usage: build_slider_deck.py <exam> <qnum1> <qnum2> ...
+Usage: build_slider_deck.py <exam> <qnum1> <qnum2> ... [--subtheme=<slug>]
 Media (QN.png, QN.mp3) must already exist in the video-assets/<exam>/ folder.
 """
 import hashlib
@@ -17,10 +17,24 @@ import sys
 
 import genanki
 
-EXAM = sys.argv[1]
-QNUMS = sys.argv[2:]
+# Args: build_slider_deck.py <exam> <qnum...> [--subtheme=<slug>]
+# The subtheme (certification slug, e.g. sap-c02 / saa-c03) selects the assets
+# folder and the exam markdown. Defaults to sap-c02 to preserve existing usage.
+_argv = sys.argv[1:]
+SUBTHEME = "sap-c02"
+_rest = []
+for _a in _argv:
+    if _a.startswith("--subtheme="):
+        SUBTHEME = _a.split("=", 1)[1] or SUBTHEME
+    else:
+        _rest.append(_a)
+EXAM = _rest[0]
+QNUMS = _rest[1:]
 
-BASE = "/mnt/d/PERSONAL/SKILLS/Technical/GNL-PROCESS/Main-docs/exams/sap-c02/assets"
+BASE = (
+    "/mnt/d/PERSONAL/SKILLS/Technical/GNL-PROCESS/Main-docs/exams/"
+    f"{SUBTHEME}/assets"
+)
 VDIR = os.path.join(BASE, "Anki-generation", "video-assets", EXAM)
 ANKI = os.path.join(BASE, "Anki-generation", "anki")
 
@@ -57,7 +71,7 @@ def _load_texts():
         _sys.path.insert(0, "/mnt/d/PERSONAL/SKILLS/Technical/workspace/gnl-process")
         os.environ.setdefault("GNL_DB_PATH", "/home/nizar/.gnl-process-prod/gnl.db")
         from gnl_core.anki_review import _find_exam_markdown, parse_exam_questions
-        md = _find_exam_markdown(EXAM, "exams", "sap-c02")
+        md = _find_exam_markdown(EXAM, "exams", SUBTHEME)
         if not md:
             return {}
         q = parse_exam_questions(str(md))
@@ -83,8 +97,9 @@ texts = _load_texts()
 # question number. Prompts come from the dashboard config (same source as the
 # classic button) with the exact same defaults as a fallback.
 def _voice_prompt():
+    _exam_label = SUBTHEME.upper()
     default_wrong_voice = (
-        "I'm studying for the AWS SAP-C02 exam. Here is a question I answered.\n"
+        f"I'm studying for the AWS {_exam_label} exam. Here is a question I answered.\n"
         "My answer(s):\n{MY_ANSWER}\n"
         "Correct answer(s):\n{CORRECT}\n\n"
         "My answer was WRONG. For now, just RECEIVE and KEEP everything below in "
@@ -119,9 +134,9 @@ copy_texts = {q: _full_copy(q, texts.get(q, "")) for q in QNUMS}
 # URL of the local GNL endpoint that writes the iCloud SHARE.txt (Anki Desktop).
 try:
     from gnl_core.config import get_config as _gc
-    _share_url = _gc().get("SHARE_URL") or "http://127.0.0.1:8000/api/share"
+    _share_url = _gc().get("SHARE_URL") or "http://127.0.0.1:8001/api/share"
 except Exception:
-    _share_url = "http://127.0.0.1:8000/api/share"
+    _share_url = "http://127.0.0.1:8001/api/share"
 _share_url_json = json.dumps(_share_url)
 
 # Single-card front: slider UI. Prev/Next are real buttons in the top corners.
