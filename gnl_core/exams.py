@@ -812,8 +812,11 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     #   {MY_ANSWER}  -> the options the user checked (or "not answered")
     #   {CORRECT}    -> the correct option(s)
     _cfg = _get_config()
+    # Exam code injected into the Meta AI prompts, derived from the subtheme so
+    # each certification gets the right code (SAP-C02 / SAA-C03 / AB1-C01 / ...).
+    _exam_code = (subtheme or 'sap-c02').upper()
     default_wrong = (
-        "I'm studying for the AWS SAP-C02 exam. Here is a question I answered.\n"
+        f"I'm studying for the AWS {_exam_code} exam. Here is a question I answered.\n"
         "My answer(s):\n{MY_ANSWER}\n"
         "Correct answer(s):\n{CORRECT}\n\n"
         "My answer was WRONG. Based ONLY on the question statement and the "
@@ -823,7 +826,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         "— I'll continue by voice on mobile to go deeper."
     )
     default_correct = (
-        "I'm studying for the AWS SAP-C02 exam. Here is a question I answered.\n"
+        f"I'm studying for the AWS {_exam_code} exam. Here is a question I answered.\n"
         "My answer(s):\n{MY_ANSWER}\n"
         "Correct answer(s):\n{CORRECT}\n\n"
         "My answer was CORRECT. Still, discuss the options and the underlying "
@@ -838,7 +841,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     # One-shot variants: explain EVERYTHING in a single reply, no back-and-forth
     # (for when the user can't use voice — e.g. at the gym).
     default_wrong_oneshot = (
-        "I'm studying for the AWS SAP-C02 exam. Here is a question I answered.\n"
+        f"I'm studying for the AWS {_exam_code} exam. Here is a question I answered.\n"
         "My answer(s):\n{MY_ANSWER}\n"
         "Correct answer(s):\n{CORRECT}\n\n"
         "My answer was WRONG. In ONE complete reply (no questions back to me, no "
@@ -849,7 +852,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         "tables. (Question {QNUM})"
     )
     default_correct_oneshot = (
-        "I'm studying for the AWS SAP-C02 exam. Here is a question I answered.\n"
+        f"I'm studying for the AWS {_exam_code} exam. Here is a question I answered.\n"
         "My answer(s):\n{MY_ANSWER}\n"
         "Correct answer(s):\n{CORRECT}\n\n"
         "My answer was CORRECT. In ONE complete reply (no questions back to me, "
@@ -862,7 +865,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     # Voice mode: paste -> Meta AI only CONFIRMS reception; when the user says
     # "go" (minimal voice input), it launches the full explanation on its own.
     default_wrong_voice = (
-        "I'm studying for the AWS SAP-C02 exam. Here is a question I answered.\n"
+        f"I'm studying for the AWS {_exam_code} exam. Here is a question I answered.\n"
         "My answer(s):\n{MY_ANSWER}\n"
         "Correct answer(s):\n{CORRECT}\n\n"
         "My answer was WRONG. For now, just RECEIVE and KEEP everything below in "
@@ -874,7 +877,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         "Plain, flowing, easy to listen to, no tables. (Question {QNUM})"
     )
     default_correct_voice = (
-        "I'm studying for the AWS SAP-C02 exam. Here is a question I answered.\n"
+        f"I'm studying for the AWS {_exam_code} exam. Here is a question I answered.\n"
         "My answer(s):\n{MY_ANSWER}\n"
         "Correct answer(s):\n{CORRECT}\n\n"
         "My answer was CORRECT. For now, just RECEIVE and KEEP everything below in "
@@ -1161,11 +1164,21 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
             # Also adds a Reset button that clears THIS question's saved checkbox
             # state from localStorage, so a stale pick from a previous attempt
             # can be wiped (fixes "a wrong option stays red" after re-studying).
-            feedback_script = (
+            # The Reset button is HIDDEN by default; show it by setting the env
+            # var SHOW_RESET_BUTTON=true (or config SHOW_RESET_BUTTON).
+            _show_reset = (
+                os.environ.get('SHOW_RESET_BUTTON',
+                               str(_get_config().get('SHOW_RESET_BUTTON', 'false')))
+                .strip().lower() in ('1', 'true', 'yes', 'on')
+            )
+            _reset_btn_html = (
                 "<div style='margin-top:10px'><button type='button' id='gnlReset' "
                 "style='cursor:pointer;background:#6b7280;color:#fff;border:none;"
                 "padding:6px 12px;border-radius:6px;font-size:13px;'>"
                 "\U0001F504 Reset</button></div>"
+            ) if _show_reset else ""
+            feedback_script = (
+                _reset_btn_html +
                 "<script>(function(){"
                 "document.querySelectorAll('.option[data-qkey]').forEach(function(el){"
                 "var picked=localStorage.getItem(el.getAttribute('data-qkey'))==='1';"
