@@ -1,5 +1,10 @@
 # Changelog
 
+## v4.38.0 — 2026-10-15
+- **Correction du slug** de l'examen AI Business Strategist : `ab1-c01` → **`aib-c01`** (code officiel).
+- Migration DB v9 : renomme l'entrée catalogue existante `ab1-c01` → `aib-c01` (idempotent) ; dossier assets renommé.
+
+
 ## v4.37.0 — 2026-10-11
 - **Bouton Reset masqué par défaut** sur les cartes d'examen : nouvelle variable `SHOW_RESET_BUTTON`
   (défaut `false`). Le mettre à `true` (env ou config) réaffiche le bouton. Le feedback couleur localStorage reste.

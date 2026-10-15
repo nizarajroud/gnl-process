@@ -813,7 +813,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     #   {CORRECT}    -> the correct option(s)
     _cfg = _get_config()
     # Exam code injected into the Meta AI prompts, derived from the subtheme so
-    # each certification gets the right code (SAP-C02 / SAA-C03 / AB1-C01 / ...).
+    # each certification gets the right code (SAP-C02 / SAA-C03 / AIB-C01 / ...).
     _exam_code = (subtheme or 'sap-c02').upper()
     default_wrong = (
         f"I'm studying for the AWS {_exam_code} exam. Here is a question I answered.\n"
