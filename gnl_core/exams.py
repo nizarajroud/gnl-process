@@ -815,8 +815,33 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     # Exam code injected into the Meta AI prompts, derived from the subtheme so
     # each certification gets the right code (SAP-C02 / SAA-C03 / AIB-C01 / ...).
     _exam_code = (subtheme or 'sap-c02').upper()
+    # Per-exam SCOPE hint (grounds the AI's explanation in the real exam
+    # perimeter from the official exam guide). Overridable via config
+    # META_EXAM_SCOPE.<subtheme>. For AIB-C01, the exam prioritizes strategic
+    # business decision-making over technical implementation.
+    _default_scopes = {
+        'aib-c01': (
+            "This is the AWS Certified AI Business Strategist exam: it validates "
+            "translating AI capabilities into BUSINESS outcomes — AI strategy, "
+            "business value (KPIs, ROI), responsible AI governance, and "
+            "organizational AI transformation. It PRIORITIZES strategic "
+            "decision-making over technical implementation. Frame the explanation "
+            "around business strategy, value, risk/governance and tradeoffs — "
+            "NOT hands-on AWS service configuration."
+        ),
+    }
+    _scope_cfg = _cfg.get('META_EXAM_SCOPE', {})
+    if isinstance(_scope_cfg, str):
+        try:
+            import json as _sj
+            _scope_cfg = _sj.loads(_scope_cfg) if _scope_cfg else {}
+        except Exception:
+            _scope_cfg = {}
+    _exam_scope = _scope_cfg.get((subtheme or '').lower(), _default_scopes.get((subtheme or '').lower(), ''))
+    _scope_line = (f"Exam scope: {_exam_scope}\n" if _exam_scope else "")
     default_wrong = (
         f"I'm studying for the AWS {_exam_code} exam. Here is a question I answered.\n"
+        f"{_scope_line}"
         "My answer(s):\n{MY_ANSWER}\n"
         "Correct answer(s):\n{CORRECT}\n\n"
         "My answer was WRONG. Based ONLY on the question statement and the "
@@ -827,6 +852,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     )
     default_correct = (
         f"I'm studying for the AWS {_exam_code} exam. Here is a question I answered.\n"
+        f"{_scope_line}"
         "My answer(s):\n{MY_ANSWER}\n"
         "Correct answer(s):\n{CORRECT}\n\n"
         "My answer was CORRECT. Still, discuss the options and the underlying "
@@ -842,6 +868,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     # (for when the user can't use voice — e.g. at the gym).
     default_wrong_oneshot = (
         f"I'm studying for the AWS {_exam_code} exam. Here is a question I answered.\n"
+        f"{_scope_line}"
         "My answer(s):\n{MY_ANSWER}\n"
         "Correct answer(s):\n{CORRECT}\n\n"
         "My answer was WRONG. In ONE complete reply (no questions back to me, no "
@@ -853,6 +880,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     )
     default_correct_oneshot = (
         f"I'm studying for the AWS {_exam_code} exam. Here is a question I answered.\n"
+        f"{_scope_line}"
         "My answer(s):\n{MY_ANSWER}\n"
         "Correct answer(s):\n{CORRECT}\n\n"
         "My answer was CORRECT. In ONE complete reply (no questions back to me, "
@@ -866,6 +894,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     # "go" (minimal voice input), it launches the full explanation on its own.
     default_wrong_voice = (
         f"I'm studying for the AWS {_exam_code} exam. Here is a question I answered.\n"
+        f"{_scope_line}"
         "My answer(s):\n{MY_ANSWER}\n"
         "Correct answer(s):\n{CORRECT}\n\n"
         "My answer was WRONG. For now, just RECEIVE and KEEP everything below in "
@@ -878,6 +907,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     )
     default_correct_voice = (
         f"I'm studying for the AWS {_exam_code} exam. Here is a question I answered.\n"
+        f"{_scope_line}"
         "My answer(s):\n{MY_ANSWER}\n"
         "Correct answer(s):\n{CORRECT}\n\n"
         "My answer was CORRECT. For now, just RECEIVE and KEEP everything below in "

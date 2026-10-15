@@ -1,5 +1,13 @@
 # Changelog
 
+## v4.39.0 — 2026-10-15
+- **Cartes Anki AIB-C01** générées (45 questions, badges « Choisis N », bouton Copier avec explication).
+- **Prompt du bouton Copier adapté au périmètre de l'examen** : ligne « Exam scope » injectée, dérivée
+  par subtheme. Pour AIB-C01 (AI Business Strategist), le prompt cadre l'explication sur la STRATÉGIE
+  business (valeur/KPI/ROI, gouvernance/responsible AI, transformation) plutôt que l'implémentation technique,
+  conformément à l'exam guide officiel. Overridable via config META_EXAM_SCOPE.<subtheme>.
+
+
 ## v4.38.0 — 2026-10-15
 - **Correction du slug** de l'examen AI Business Strategist : `ab1-c01` → **`aib-c01`** (code officiel).
 - Migration DB v9 : renomme l'entrée catalogue existante `ab1-c01` → `aib-c01` (idempotent) ; dossier assets renommé.
