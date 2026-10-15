@@ -1074,6 +1074,13 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
             .option input[type='checkbox'] {{ margin-right: 8px; transform: scale(1.2); vertical-align: middle; }}
             .correct {{ color: #28a745; font-weight: bold; }}
             .wrong {{ color: #dc3545; font-weight: bold; }}
+            .badge-correct {{ display:inline-block; background:#28a745; color:#fff;
+                font-size:0.75em; font-weight:bold; padding:1px 7px; border-radius:10px;
+                margin-right:6px; vertical-align:middle; }}
+            .badge-pick-red {{ display:inline-block; background:#dc3545; color:#fff;
+                font-size:0.75em; font-weight:bold; padding:1px 7px; border-radius:10px;
+                margin-right:6px; vertical-align:middle; }}
+            .mypick-ok {{ color:#28a745; font-weight:bold; font-size:0.85em; }}
             b {{ color: #0073bb; }}
         """
     )
@@ -1164,66 +1171,64 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
             def _okey(opt_text):
                 return _hl.md5(opt_text.encode('utf-8')).hexdigest()[:8]
 
+            # FRONT: checkboxes save the user's pick to localStorage so the BACK
+            # can show it. A tiny script runs FIRST and CLEARS this question's
+            # keys on every front render → no stale "ghost" picks from a previous
+            # attempt (root-cause fix; replaces the manual Reset button).
+            _front_qkeys = [f"{kb}-q{num}o{_okey(o)}" for o in options]
+            _front_reset_js = (
+                "<script>(function(){var ks=" + _json.dumps(_front_qkeys) + ";"
+                "ks.forEach(function(k){try{localStorage.removeItem(k);}catch(e){}});"
+                "})();</script>"
+            )
             front_items = "".join(
                 f"<div class='option'><input type='checkbox' id='{kb}-q{num}o{_okey(o)}' onchange=\"localStorage.setItem('{kb}-q{num}o{_okey(o)}', this.checked?'1':'0')\"> <label for='{kb}-q{num}o{_okey(o)}'>{o}</label></div>"
                 for o in options
             )
-            front = f"<b>Question {num}:</b><br><br>{multi_badge}{q_text}<br><br>{front_items}"
+            front = f"{_front_reset_js}<b>Question {num}:</b><br><br>{multi_badge}{q_text}<br><br>{front_items}"
 
-            # Back: mark correct (green), and user's wrong picks (red)
+            # BACK: two SEPARATE signals, never mixed on one checkbox.
+            #   • Correct answers  → green "✓ Correct" tag (always, no checkbox)
+            #   • User's own picks → red "✗ ton choix" tag (only what was checked)
+            # A correct option the user also picked shows BOTH ("✓ Correct" +
+            # a small "ton choix" confirmation in green).
             back_items = []
             for opt in options:
                 opt_norm = opt.lower().strip()
                 is_correct = any(opt_norm == cn or (len(cn) > 20 and cn in opt_norm) or (len(opt_norm) > 20 and opt_norm in cn) for cn in correct_norm)
                 okey = f"{kb}-q{num}o{_okey(opt)}"
+                dc = '1' if is_correct else '0'
                 if is_correct:
-                    # Correct answer — always green, checked
                     back_items.append(
-                        f"<div class='option' data-qkey='{okey}' data-correct='1'>"
-                        f"<input type='checkbox' checked disabled> "
-                        f"<span class='correct'>{opt}</span></div>"
+                        f"<div class='option' data-qkey='{okey}' data-correct='{dc}'>"
+                        f"<span class='badge-correct'>&#10003; Correct</span> "
+                        f"<span class='correct'>{opt}</span>"
+                        f"<span class='mypick-note'></span></div>"
                     )
                 else:
-                    # Incorrect option — will turn red if user had checked it
                     back_items.append(
-                        f"<div class='option' data-qkey='{okey}' data-correct='0'>"
-                        f"<input type='checkbox' disabled> "
+                        f"<div class='option' data-qkey='{okey}' data-correct='{dc}'>"
+                        f"<span class='badge-pick'></span> "
                         f"<span class='opt-text'>{opt}</span></div>"
                     )
-            # Script: read localStorage, color user's wrong choices in red.
-            # Also adds a Reset button that clears THIS question's saved checkbox
-            # state from localStorage, so a stale pick from a previous attempt
-            # can be wiped (fixes "a wrong option stays red" after re-studying).
-            # The Reset button is HIDDEN by default; show it by setting the env
-            # var SHOW_RESET_BUTTON=true (or config SHOW_RESET_BUTTON).
-            _show_reset = (
-                os.environ.get('SHOW_RESET_BUTTON',
-                               str(_get_config().get('SHOW_RESET_BUTTON', 'false')))
-                .strip().lower() in ('1', 'true', 'yes', 'on')
-            )
-            _reset_btn_html = (
-                "<div style='margin-top:10px'><button type='button' id='gnlReset' "
-                "style='cursor:pointer;background:#6b7280;color:#fff;border:none;"
-                "padding:6px 12px;border-radius:6px;font-size:13px;'>"
-                "\U0001F504 Reset</button></div>"
-            ) if _show_reset else ""
+            # Script: read localStorage (the user's picks from the front) and
+            # annotate — WITHOUT re-using the correct/checked state. Then clear
+            # the keys so nothing persists to a future attempt.
             feedback_script = (
-                _reset_btn_html +
                 "<script>(function(){"
                 "document.querySelectorAll('.option[data-qkey]').forEach(function(el){"
-                "var picked=localStorage.getItem(el.getAttribute('data-qkey'))==='1';"
+                "var k=el.getAttribute('data-qkey');"
+                "var picked=false;try{picked=localStorage.getItem(k)==='1';}catch(e){}"
                 "var correct=el.getAttribute('data-correct')==='1';"
-                "if(picked){el.querySelector('input').checked=true;"
-                "if(!correct){var s=el.querySelector('.opt-text');if(s){s.classList.add('wrong');}}}"
+                "if(picked&&!correct){"
+                # user picked a WRONG option → red "✗ ton choix" + red text
+                "var b=el.querySelector('.badge-pick');if(b){b.textContent='\\u2717 ton choix';b.className='badge-pick-red';}"
+                "var s=el.querySelector('.opt-text');if(s){s.classList.add('wrong');}}"
+                "if(picked&&correct){"
+                # user picked a CORRECT option → confirm in green
+                "var n=el.querySelector('.mypick-note');if(n){n.textContent=' \\u2713 (ton choix)';n.className='mypick-ok';}}"
+                "try{localStorage.removeItem(k);}catch(e){}"
                 "});"
-                "var rb=document.getElementById('gnlReset');"
-                "if(rb){rb.addEventListener('click',function(){"
-                "document.querySelectorAll('.option[data-qkey]').forEach(function(el){"
-                "var k=el.getAttribute('data-qkey');try{localStorage.removeItem(k);}catch(e){}"
-                "var inp=el.querySelector('input');if(inp){inp.checked=false;}"
-                "var s=el.querySelector('.opt-text');if(s){s.classList.remove('wrong');}"
-                "});rb.textContent='\\u2705 Reset fait';"
-                "});}"
                 "})();</script>"
             )
             back = f"<b>Question {num}:</b><br><br>{multi_badge}{q_text}<br><br>{''.join(back_items)}{feedback_script}"

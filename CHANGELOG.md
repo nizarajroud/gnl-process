@@ -1,5 +1,14 @@
 # Changelog
 
+## v4.40.0 — 2026-10-15
+- **Fix fiable de l'affichage des réponses** (cartes d'examen), sans bouton Reset :
+  - Recto : auto-reset du localStorage de la question au chargement → plus d'état « fantôme »
+    (fini les options correctes cochées à tort venant d'une tentative précédente).
+  - Verso : séparation nette — badge vert « ✓ Correct » sur les bonnes réponses (sans case cochée),
+    badge rouge « ✗ ton choix » UNIQUEMENT sur ce que l'utilisateur a réellement coché. Plus de
+    mélange checked/correct sur le même widget. Bouton Reset retiré.
+
+
 ## v4.39.0 — 2026-10-15
 - **Cartes Anki AIB-C01** générées (45 questions, badges « Choisis N », bouton Copier avec explication).
 - **Prompt du bouton Copier adapté au périmètre de l'examen** : ligne « Exam scope » injectée, dérivée
