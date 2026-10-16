@@ -1189,10 +1189,20 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 "ks.forEach(function(k){try{localStorage.removeItem(k);}catch(e){}});"
                 "})();</script>"
             )
+            # Whole-row tap toggles the checkbox via an EXPLICIT JS handler on
+            # the row — not via label[for], because AnkiMobile/iOS WebKit does
+            # not reliably propagate a tap on a <label> to its <input>. The
+            # handler flips the box and saves state; tapping the box itself is
+            # also handled (stopPropagation avoids a double toggle).
             front_items = "".join(
-                f"<div class='option'><label class='opt-row' for='{kb}-q{num}o{_okey(o)}'>"
-                f"<input type='checkbox' id='{kb}-q{num}o{_okey(o)}' onchange=\"localStorage.setItem('{kb}-q{num}o{_okey(o)}', this.checked?'1':'0')\">"
-                f"<span class='opt-label'>{o}</span></label></div>"
+                (lambda cid: (
+                    f"<div class='option'>"
+                    f"<div class='opt-row' onclick=\"(function(cb){{cb.checked=!cb.checked;"
+                    f"localStorage.setItem(cb.id,cb.checked?'1':'0');}})(document.getElementById('{cid}'))\">"
+                    f"<input type='checkbox' id='{cid}' "
+                    f"onclick=\"event.stopPropagation();localStorage.setItem(this.id,this.checked?'1':'0')\">"
+                    f"<span class='opt-label'>{o}</span></div></div>"
+                ))(f"{kb}-q{num}o{_okey(o)}")
                 for o in options
             )
             front = f"{_front_reset_js}<b>Question {num}:</b><br><br>{multi_badge}{q_text}<br><br>{front_items}"

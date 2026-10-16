@@ -1,5 +1,11 @@
 # Changelog
 
+## v4.42.0 — 2026-10-16
+- **Fix cochage sur AnkiMobile (iPhone)** : taper une option coche désormais réellement la case.
+  Le toggle passe par un handler onclick explicite sur la ligne (au lieu de label[for], que WebKit/iOS
+  ne propage pas de façon fiable) ; un tap sur la case elle-même reste géré (stopPropagation anti double-toggle).
+
+
 ## v4.41.0 — 2026-10-16
 - **Toute la ligne de l'option est cliquable** (recto des cartes d'examen) : taper n'importe où sur
   l'option coche/décoche sa case — grande cible tactile (padding + bordure), bien plus facile au gym
