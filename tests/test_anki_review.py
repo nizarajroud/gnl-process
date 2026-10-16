@@ -353,7 +353,7 @@ def test_localstorage_keys_are_content_based(tmp_path, monkeypatch):
     flds = sqlite3.connect(tmp_path / 'collection.anki2').execute(
         'SELECT flds FROM notes').fetchone()[0]
     front, back = flds.split('\x1f')[0], flds.split('\x1f')[1]
-    fkeys = set(re.findall(r"setItem\('([^']+)'", front))
+    fkeys = set(re.findall(r"<input type='checkbox' id='([^']+)'", front))
     bkeys = set(re.findall(r"data-qkey='([^']+)'", back))
     # front and back reference the SAME content-based keys
     assert fkeys == bkeys and len(fkeys) == 3
