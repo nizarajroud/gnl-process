@@ -1072,6 +1072,14 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
             li {{ margin-bottom: 5px; }}
             .option {{ margin-bottom: 8px; line-height: 1.4; }}
             .option input[type='checkbox'] {{ margin-right: 8px; transform: scale(1.2); vertical-align: middle; }}
+            /* Whole-row tap target (front): tapping anywhere on the option row
+               toggles its checkbox — much easier to hit than the small box. */
+            .opt-row {{ display: flex; align-items: flex-start; gap: 10px;
+                padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px;
+                cursor: pointer; -webkit-tap-highlight-color: rgba(0,115,187,0.15); }}
+            .opt-row:hover {{ background: #f0f7ff; }}
+            .opt-row input[type='checkbox'] {{ transform: scale(1.4); margin-top: 2px; flex: 0 0 auto; }}
+            .opt-label {{ flex: 1; }}
             .correct {{ color: #28a745; font-weight: bold; }}
             .wrong {{ color: #dc3545; font-weight: bold; }}
             .badge-correct {{ display:inline-block; background:#28a745; color:#fff;
@@ -1182,7 +1190,9 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 "})();</script>"
             )
             front_items = "".join(
-                f"<div class='option'><input type='checkbox' id='{kb}-q{num}o{_okey(o)}' onchange=\"localStorage.setItem('{kb}-q{num}o{_okey(o)}', this.checked?'1':'0')\"> <label for='{kb}-q{num}o{_okey(o)}'>{o}</label></div>"
+                f"<div class='option'><label class='opt-row' for='{kb}-q{num}o{_okey(o)}'>"
+                f"<input type='checkbox' id='{kb}-q{num}o{_okey(o)}' onchange=\"localStorage.setItem('{kb}-q{num}o{_okey(o)}', this.checked?'1':'0')\">"
+                f"<span class='opt-label'>{o}</span></label></div>"
                 for o in options
             )
             front = f"{_front_reset_js}<b>Question {num}:</b><br><br>{multi_badge}{q_text}<br><br>{front_items}"

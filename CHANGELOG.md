@@ -1,5 +1,11 @@
 # Changelog
 
+## v4.41.0 — 2026-10-16
+- **Toute la ligne de l'option est cliquable** (recto des cartes d'examen) : taper n'importe où sur
+  l'option coche/décoche sa case — grande cible tactile (padding + bordure), bien plus facile au gym
+  que viser la petite case. Le `<label>` couvre toute la ligne.
+
+
 ## v4.40.0 — 2026-10-15
 - **Fix fiable de l'affichage des réponses** (cartes d'examen), sans bouton Reset :
   - Recto : auto-reset du localStorage de la question au chargement → plus d'état « fantôme »
