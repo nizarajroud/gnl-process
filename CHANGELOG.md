@@ -1,5 +1,10 @@
 # Changelog
 
+## v4.45.1 — 2026-10-17
+- Fix: le bouton Copier envoie désormais la clé examen = NOM DU DECK (ex: aib-c01-aws-practice-exam)
+  au lieu du subtheme, pour que le Paquet Meta retrouve bien l'option capturée (alignement des clés).
+
+
 ## v4.45.0 — 2026-10-17
 - **Paquet Meta avec TON option erronée** (PC) : au clic Copier (desktop), l'option choisie est envoyée
   à GNL (`POST /api/anki-review/record-answer`, best-effort, non bloquant) et stockée en SQLite

@@ -941,7 +941,10 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     # RECORD_URL (default localhost:8001). Fails silently on mobile/offline.
     _record_url = _cfg.get('RECORD_URL') or 'http://127.0.0.1:8001/api/anki-review/record-answer'
     js_record_url = _json.dumps(_record_url)
-    js_exam_name = _json.dumps(subtheme or '')
+    # Exam key sent with the recorded answer = the deck/GUID name (same key
+    # failed_questions_by_exam returns and generate_meta_apkg reads), NOT the
+    # subtheme — otherwise the Meta deck can't match the captured pick.
+    js_exam_name = _json.dumps(name or '')
 
     # Model for exam cards
     font_size = os.environ.get('ANKI_FONT_SIZE', '16')
