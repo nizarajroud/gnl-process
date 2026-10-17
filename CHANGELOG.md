@@ -1,5 +1,13 @@
 # Changelog
 
+## v4.45.0 — 2026-10-17
+- **Paquet Meta avec TON option erronée** (PC) : au clic Copier (desktop), l'option choisie est envoyée
+  à GNL (`POST /api/anki-review/record-answer`, best-effort, non bloquant) et stockée en SQLite
+  (table `user_answers`, migration v10). Le paquet Meta croise alors : cartes flaguées rouge (ratées) ×
+  options capturées → affiche **ton option erronée en rouge** + l'injecte dans « My answer(s) » du Copier.
+  Fonctionne sur PC ; sur iPhone le fetch est ignoré silencieusement (traité séparément plus tard).
+
+
 ## v4.44.0 — 2026-10-17
 - **Fix : le bouton Copier ré-inclut ton option** (« My answer(s) »). La régression venait du fix
   v4.40.0 : le verso effaçait le localStorage AVANT que le bouton Copier le lise → « not answered ».

@@ -10,7 +10,7 @@ import os
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gnl.db')
 
-CURRENT_VERSION = 9
+CURRENT_VERSION = 10
 
 
 def setup_database(db_path=None):
@@ -49,6 +49,8 @@ def setup_database(db_path=None):
         _apply_v8(cursor)
     if current < 9:
         _apply_v9(cursor)
+    if current < 10:
+        _apply_v10(cursor)
 
     conn.commit()
     conn.close()
@@ -206,6 +208,24 @@ def _apply_v9(cursor):
     cursor.execute("UPDATE series_catalog SET subtheme='aib-c01' WHERE theme='exams' AND subtheme='ab1-c01'")
     cursor.execute("INSERT OR IGNORE INTO series_catalog (theme, subtheme, prompt, content_mode) VALUES ('exams', 'aib-c01', '', 'manual')")
     cursor.execute("INSERT INTO schema_version (version) VALUES (9)")
+
+
+
+def _apply_v10(cursor):
+    """v10: user_answers table — stores the option(s) the user picked per
+    question (captured on PC at Copy time), so the Meta deck can show the
+    user's wrong option in red. One row per (exam, qnum)."""
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_answers (
+            exam TEXT NOT NULL,
+            qnum INTEGER NOT NULL,
+            picked TEXT,
+            correct TEXT,
+            ts TEXT,
+            PRIMARY KEY (exam, qnum)
+        )
+    """)
+    cursor.execute("INSERT INTO schema_version (version) VALUES (10)")
 
 
 if __name__ == "__main__":

@@ -313,6 +313,43 @@ def generate_reset_apkg(exam_name, failed_nums, theme='exams', subtheme='sap-c02
         return None
 
 
+def _answers_from_markdown(md_path, only_questions=None):
+    """Build the step5_anki `answers` dict from an exam markdown that encodes
+    options as '- ...' lines and correctness via '[CORRECT] <letter>.' in the
+    Explanations section. Returns {qnum(str): {type, options, correct}}.
+    No DOCX/Bedrock needed (used by the Meta deck)."""
+    import re as _re
+    want = set(int(n) for n in (only_questions or []))
+    text = Path(md_path).read_text(encoding='utf-8', errors='ignore')
+    parts = _re.split(r'##\s*Question\s+(\d+)\s*:', text)
+    out = {}
+    for i in range(1, len(parts), 2):
+        if i + 1 >= len(parts):
+            break
+        num = int(parts[i])
+        if want and num not in want:
+            continue
+        block = parts[i + 1]
+        m = _re.search(r'\n\s*Explanations?:\s*\n', block)
+        body = block[:m.start()] if m else block
+        expl = block[m.end():] if m else ''
+        opts = [ln[2:].strip() for ln in body.splitlines() if ln.strip().startswith('- ')]
+        if not opts:
+            continue
+        correct_letters = _re.findall(r'\[CORRECT\]\s*([A-Z])\.', expl)
+        letter_to_opt = {chr(ord('A') + idx): o for idx, o in enumerate(opts)}
+        correct = [f"{L}) {letter_to_opt[L]}" for L in correct_letters if L in letter_to_opt]
+        option_texts = [f"{chr(ord('A') + idx)}) {o}" for idx, o in enumerate(opts)]
+        if not correct:
+            continue
+        out[str(num)] = {
+            'type': 'multiple' if len(correct) > 1 else 'single',
+            'options': option_texts,
+            'correct': correct,
+        }
+    return out
+
+
 def generate_meta_apkg(exam_name, failed_nums, theme='exams', subtheme='sap-c02', on_progress=None):
     """Generate the 'Meta' .apkg: only the failed questions, in ANSWER-ONLY
     display (front == answer, no reveal step). Each card shows the statement,
@@ -329,9 +366,24 @@ def generate_meta_apkg(exam_name, failed_nums, theme='exams', subtheme='sap-c02'
             if on_progress:
                 on_progress(f"  ⚠ markdown source introuvable pour {exam_name}")
             return None
-        from gnl_core.exams import step3_highlight, step5_anki
-        answers = step3_highlight(str(md), on_progress=on_progress,
-                                  only_questions=failed_nums)
+        from gnl_core.exams import step5_anki
+        # Build `answers` from the MARKDOWN itself (it already encodes options +
+        # [CORRECT] markers). Avoids step3_highlight, which needs the DOCX in
+        # word/ + Bedrock — not available here.
+        answers = _answers_from_markdown(str(md), only_questions=failed_nums)
+        if not answers:
+            if on_progress:
+                on_progress(f"  ⚠ aucune réponse extraite du markdown pour {exam_name}")
+            return None
+        # Captured picks (recorded on PC at Copy time) → show the user's wrong
+        # option in red + fill "My answer(s)" in the Copy text. Empty if none.
+        picked_map = {}
+        try:
+            from gnl_core.db import get_user_answers
+            # picks are stored under the exam name (deck/md name)
+            picked_map = get_user_answers(exam_name) or {}
+        except Exception:
+            picked_map = {}
         out = step5_anki(
             answers, str(md), theme, subtheme, on_progress=on_progress,
             only_questions=failed_nums,           # only the failed ones
@@ -339,6 +391,7 @@ def generate_meta_apkg(exam_name, failed_nums, theme='exams', subtheme='sap-c02'
             deck_suffix=' — Meta',                # distinct deck name
             apkg_suffix='-meta',                  # distinct file name
             answer_only=True,                     # answer shown directly
+            picked_map=picked_map,                # user's captured wrong picks
         )
         if on_progress:
             on_progress(f"  ✓ {exam_name}: meta apkg ({len(failed_nums)} Q) → {out}")
