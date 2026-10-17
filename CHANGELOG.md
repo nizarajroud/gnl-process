@@ -1,5 +1,12 @@
 # Changelog
 
+## v4.44.0 — 2026-10-17
+- **Fix : le bouton Copier ré-inclut ton option** (« My answer(s) »). La régression venait du fix
+  v4.40.0 : le verso effaçait le localStorage AVANT que le bouton Copier le lise → « not answered ».
+  Désormais le nettoyage se fait uniquement au prochain affichage du recto (auto-reset), donc au verso
+  le bouton Copier lit bien ton choix et le met dans le texte copié (PC et iPhone, via presse-papier).
+
+
 ## v4.43.0 — 2026-10-17
 - **Paquet « Meta » (Phase 2 de révision)** : nouveau type de deck qui ne contient QUE les questions
   flaguées ROUGE dans Anki (ratées), en **affichage réponse direct** (recto = réponse, pas de révélation) :

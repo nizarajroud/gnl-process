@@ -1249,7 +1249,9 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 "if(picked&&correct){"
                 # user picked a CORRECT option → confirm in green
                 "var n=el.querySelector('.mypick-note');if(n){n.textContent=' \\u2713 (ton choix)';n.className='mypick-ok';}}"
-                "try{localStorage.removeItem(k);}catch(e){}"
+                # NOTE: do NOT clear localStorage here — the Copy button reads it
+                # right after to include "My answer(s)". Clearing is done on the
+                # NEXT front render (auto-reset), so no stale state persists.
                 "});"
                 "})();</script>"
             )
