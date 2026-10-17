@@ -1,5 +1,10 @@
 # Changelog
 
+## v4.48.1 — 2026-10-17
+- Hotfix: apostrophe mal échappée dans le JS du dashboard (Prompt Meta par date) qui faisait planter
+  le rendu → « rien ne se passe » au clic. Corrigé → le bouton réaffiche bien les groupes par date.
+
+
 ## v4.48.0 — 2026-10-17
 - « 📋 Prompt Meta (ratées) » : regroupement **par DATE** au lieu de blocs. Les questions ratées sont
   groupées par la date de révision du flag rouge → **Today / Yesterday / YYYY-MM-DD** (par paquet).
