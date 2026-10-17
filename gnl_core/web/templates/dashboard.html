@@ -756,14 +756,26 @@
                             let html = '';
                             d.exams.forEach(function(ex){
                                 const safe = ex.exam.replace(/[^a-zA-Z0-9_-]/g,'_');
-                                window._ankiMetaBlocks[safe] = ex.parts.map(p => p.text);
-                                html += `<div style="margin-bottom:12px;"><div style="font-weight:600;margin-bottom:6px;">🎯 ${ex.exam} — ${ex.count} ratées (${ex.parts.length} bloc(s))</div><div style="display:flex;flex-wrap:wrap;gap:6px;">`;
-                                ex.parts.forEach(function(p){
-                                    html += `<button type="button" onclick="ankiCopyBlock('${safe}',${p.part-1},${p.total},this)" style="padding:6px 11px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">📋 Bloc ${p.part}/${p.total}</button>`;
+                                // flatten all lots across dates into one indexed list per exam
+                                const flat = [];
+                                (ex.dates||[]).forEach(function(dt){ dt.parts.forEach(function(p){ flat.push(p.text); }); });
+                                window._ankiMetaBlocks[safe] = flat;
+                                html += `<div style="margin-bottom:14px;"><div style="font-weight:600;margin-bottom:8px;">🎯 ${ex.exam} — ${ex.count} ratées</div>`;
+                                let gidx = 0;
+                                (ex.dates||[]).forEach(function(dt){
+                                    html += `<div style="margin:4px 0 10px 0;padding-left:4px;border-left:3px solid #0ea5e9;">`;
+                                    html += `<div style="font-size:13px;color:#cbd5e1;margin-bottom:4px;">📅 <b>${dt.label}</b> — ${dt.count} ratée(s)</div>`;
+                                    html += `<div style="display:flex;flex-wrap:wrap;gap:6px;">`;
+                                    dt.parts.forEach(function(p){
+                                        const label = p.lot + (p.total>1 ? ` (${p.part}/${p.total})` : '');
+                                        html += `<button type="button" onclick="ankiCopyBlock('${safe}',${gidx},${flat.length},this)" style="padding:6px 11px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">📋 ${label}</button>`;
+                                        gidx++;
+                                    });
+                                    html += `</div></div>`;
                                 });
-                                html += '</div></div>';
+                                html += '</div>';
                             });
-                            html += '<div style="font-size:12px;color:#9ca3af;">Colle chaque bloc dans Meta AI, puis écris « ALL BLOCKS SENT » et dis « go ».</div>';
+                            html += '<div style="font-size:12px;color:#9ca3af;">Colle le(s) bloc(s) d\\'une date dans Meta AI, puis écris « ALL BLOCKS SENT » et dis « go ».</div>';
                             html += '<textarea id="anki-meta-area" readonly style="position:absolute;left:-9999px;top:0;opacity:0;height:1px;width:1px;"></textarea>';
                             el.innerHTML = html;
                         } catch (e) { el.textContent = '⚠ Erreur: ' + e; }

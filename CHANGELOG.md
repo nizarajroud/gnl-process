@@ -1,5 +1,12 @@
 # Changelog
 
+## v4.48.0 — 2026-10-17
+- « 📋 Prompt Meta (ratées) » : regroupement **par DATE** au lieu de blocs. Les questions ratées sont
+  groupées par la date de révision du flag rouge → **Today / Yesterday / YYYY-MM-DD** (par paquet).
+  Si une date dépasse la taille Meta AI, elle est sous-découpée en lots (ex: Today-lot1, Today-lot2).
+  Un bouton Copier par date (ou par lot). Nouvelle fonction build_failed_meta_parts_by_date + _failed_dates_by_exam (revlog).
+
+
 ## v4.47.0 — 2026-10-17
 - « 📋 Prompt Meta (ratées) » : le préambule n'est plus figé sur SAP-C02. Le code d'examen est désormais
   dérivé PAR EXAMEN du nom du deck (SAP-C02 / SAA-C03 / AIB-C01 …), comme le bouton Copier.

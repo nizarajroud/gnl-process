@@ -2518,8 +2518,10 @@ async def anki_review_reset_apkg_one(request: Request):
 
 @app.post("/api/anki-review/meta-prompt")
 async def anki_review_meta_prompt(request: Request):
-    """Build a Meta AI prompt (copy-by-block) for one exam's failed questions."""
-    from gnl_core.anki_review import build_failed_meta_parts
+    """Build a Meta AI prompt for one exam's failed questions, GROUPED BY DATE
+    (Today / Yesterday / YYYY-MM-DD). Each date has one or more copy parts (lots)
+    if it exceeds the Meta AI size limit."""
+    from gnl_core.anki_review import build_failed_meta_parts_by_date
     from gnl_core.config import get_config
     loop = asyncio.get_event_loop()
     max_chars = get_config().get('META_EXPORT_MAX_CHARS') or None
@@ -2535,19 +2537,29 @@ async def anki_review_meta_prompt(request: Request):
         except Exception:
             pass
 
-    await broadcast_log("▶ Prompt Meta des questions ratées" + (f" — {only_exam}" if only_exam else ""))
+    await broadcast_log("▶ Prompt Meta des questions ratées (par date)" + (f" — {only_exam}" if only_exam else ""))
     data = await loop.run_in_executor(
-        None, lambda: build_failed_meta_parts(max_chars=max_chars, on_progress=on_p,
-                                              only_exam=only_exam))
-    # Keep the full block text only in a per-exam list for the client to copy.
+        None, lambda: build_failed_meta_parts_by_date(max_chars=max_chars, on_progress=on_p,
+                                                      only_exam=only_exam))
+    # Per exam → list of dates → each date has parts (lots).
     exams = []
     for exam_name, info in data.items():
-        exams.append({
-            "exam": exam_name,
-            "count": info["count"],
-            "parts": [{"part": i + 1, "total": len(info["parts"]), "text": t}
-                      for i, t in enumerate(info["parts"])],
-        })
+        dates = []
+        for d in info["dates"]:
+            n_parts = len(d["parts"])
+            dates.append({
+                "label": d["label"],
+                "date": d["date"],
+                "count": d["count"],
+                "parts": [{
+                    "part": i + 1,
+                    "total": n_parts,
+                    # lot label e.g. "Today" or "Today-lot2" when a date is split
+                    "lot": (d["label"] if n_parts == 1 else f"{d['label']}-lot{i+1}"),
+                    "text": t,
+                } for i, t in enumerate(d["parts"])],
+            })
+        exams.append({"exam": exam_name, "count": info["count"], "dates": dates})
     return {"exams": exams, "count": len(exams)}
 
 

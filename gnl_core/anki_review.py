@@ -90,6 +90,77 @@ def _read_failed_guids(collection_path):
     return guids
 
 
+def _failed_dates_by_exam(collection_path):
+    """Return {exam_name: {qnum(int): 'YYYY-MM-DD'}} — for each RED-flagged card
+    (a failed question), the LOCAL date of its most recent review (revlog).
+    That is treated as 'the day you failed it'. Cards with no revlog entry are
+    grouped under date None (unknown). Best-effort → {} on error."""
+    import datetime as _dt
+    if not os.path.exists(collection_path):
+        return {}
+    workdir = tempfile.mkdtemp(prefix='anki-faildates-')
+    tmp_db = os.path.join(workdir, 'collection.anki2')
+    out = defaultdict(dict)
+    conn = None
+    try:
+        shutil.copy2(collection_path, tmp_db)
+        for ext in ('-wal', '-shm'):
+            src = collection_path + ext
+            if os.path.exists(src):
+                try:
+                    shutil.copy2(src, tmp_db + ext)
+                except Exception:
+                    pass
+        conn = sqlite3.connect(tmp_db)
+        # For each red-flagged card: its note guid + the max revlog timestamp.
+        rows = conn.execute(
+            """
+            SELECT n.guid, (SELECT MAX(r.id) FROM revlog r WHERE r.cid = c.id) AS last_rev
+            FROM cards c
+            JOIN notes n ON n.id = c.nid
+            WHERE (c.flags & 7) = 1
+            """
+        ).fetchall()
+        for guid, last_rev in rows:
+            m = _GUID_RE.match(guid or '')
+            if not m:
+                continue
+            exam = m.group('exam')
+            num = int(m.group('num'))
+            if last_rev:
+                d = _dt.datetime.fromtimestamp(last_rev / 1000).strftime('%Y-%m-%d')
+            else:
+                d = None
+            out[exam][num] = d
+    except Exception:
+        out = {}
+    finally:
+        if conn:
+            conn.close()
+        try:
+            shutil.rmtree(workdir, ignore_errors=True)
+        except Exception:
+            pass
+    return {e: dict(v) for e, v in out.items()}
+
+
+def _date_label(date_str):
+    """Human label for a 'YYYY-MM-DD' date: Today / Yesterday / the date."""
+    import datetime as _dt
+    if not date_str:
+        return 'Sans date'
+    try:
+        d = _dt.datetime.strptime(date_str, '%Y-%m-%d').date()
+    except Exception:
+        return date_str
+    today = _dt.date.today()
+    if d == today:
+        return 'Today'
+    if d == today - _dt.timedelta(days=1):
+        return 'Yesterday'
+    return date_str
+
+
 def failed_questions_by_exam(collection_path=None):
     """Return {exam_name: sorted[list of failed question numbers (int)]}.
 
@@ -509,6 +580,62 @@ def build_failed_meta_parts(collection_path=None, theme='exams',
         result[exam_name] = {'count': len(nums), 'parts': parts}
         if on_progress:
             on_progress(f"  ✓ {exam_name}: {len(nums)} ratées → {len(parts)} bloc(s)")
+    return result
+
+
+def build_failed_meta_parts_by_date(collection_path=None, theme='exams',
+                                    subtheme='sap-c02', max_chars=None,
+                                    on_progress=None, only_exam=None):
+    """Like build_failed_meta_parts, but GROUP the failed questions BY DATE
+    (the local date of the red-flag's latest review). Returns:
+      {exam_name: {'count': n, 'dates': [
+          {'label': 'Today'|'Yesterday'|'YYYY-MM-DD'|'Sans date',
+           'date': 'YYYY-MM-DD'|None,
+           'count': k,
+           'parts': [str, ...]}   # one or more if a date exceeds the size
+      ]}}
+    Dates are ordered most-recent first (Sans date last).
+    """
+    from gnl_core.meta_export import build_parts_from_text
+    collection_path = collection_path or DEFAULT_ANKI_COLLECTION
+    result = {}
+    by_exam = failed_questions_by_exam(collection_path)
+    dates_map = _failed_dates_by_exam(collection_path)  # {exam:{qnum:date}}
+    for exam_name, nums in by_exam.items():
+        if only_exam and exam_name != only_exam:
+            continue
+        md = _find_exam_markdown(exam_name, theme, subtheme)
+        if not md:
+            if on_progress:
+                on_progress(f"  ⚠ markdown source introuvable pour {exam_name}")
+            continue
+        q_dates = dates_map.get(exam_name, {})
+        # group question numbers by date
+        from collections import defaultdict as _dd
+        by_date = _dd(list)
+        for n in nums:
+            by_date[q_dates.get(n)].append(n)
+        # order: real dates desc, then None (Sans date) last
+        ordered = sorted(by_date.keys(), key=lambda d: (d is None, d or ''), reverse=True)
+        _code = _exam_code_from_name(exam_name, subtheme)
+        date_entries = []
+        for d in ordered:
+            dnums = sorted(by_date[d])
+            corpus = _failed_corpus_for_exam(exam_name, dnums, str(md))
+            if not corpus.strip():
+                continue
+            parts = build_parts_from_text(corpus, max_chars=max_chars,
+                                          prompt_template=_voice_preamble(_code))
+            date_entries.append({
+                'label': _date_label(d),
+                'date': d,
+                'count': len(dnums),
+                'parts': parts,
+            })
+        if date_entries:
+            result[exam_name] = {'count': len(nums), 'dates': date_entries}
+            if on_progress:
+                on_progress(f"  ✓ {exam_name}: {len(nums)} ratées → {len(date_entries)} date(s)")
     return result
 
 
