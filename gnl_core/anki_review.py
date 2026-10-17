@@ -313,6 +313,61 @@ def generate_reset_apkg(exam_name, failed_nums, theme='exams', subtheme='sap-c02
         return None
 
 
+def generate_meta_apkg(exam_name, failed_nums, theme='exams', subtheme='sap-c02', on_progress=None):
+    """Generate the 'Meta' .apkg: only the failed questions, in ANSWER-ONLY
+    display (front == answer, no reveal step). Each card shows the statement,
+    the options with the correct one(s) in green, and the Copy button — so the
+    user opens it, taps Copier, and starts the Meta AI discussion directly,
+    without redoing the question. Distinct GUIDs/deck/file ('-meta').
+    Returns the apkg path, or None. Best-effort.
+    """
+    if _is_test_mode():
+        return f"/tmp/{exam_name}-meta.apkg"
+    try:
+        md = _find_exam_markdown(exam_name, theme, subtheme)
+        if not md:
+            if on_progress:
+                on_progress(f"  ⚠ markdown source introuvable pour {exam_name}")
+            return None
+        from gnl_core.exams import step3_highlight, step5_anki
+        answers = step3_highlight(str(md), on_progress=on_progress,
+                                  only_questions=failed_nums)
+        out = step5_anki(
+            answers, str(md), theme, subtheme, on_progress=on_progress,
+            only_questions=failed_nums,           # only the failed ones
+            guid_suffix='-meta',                  # distinct GUIDs
+            deck_suffix=' — Meta',                # distinct deck name
+            apkg_suffix='-meta',                  # distinct file name
+            answer_only=True,                     # answer shown directly
+        )
+        if on_progress:
+            on_progress(f"  ✓ {exam_name}: meta apkg ({len(failed_nums)} Q) → {out}")
+        return str(out)
+    except Exception as e:
+        if on_progress:
+            on_progress(f"  ⚠ generate_meta_apkg({exam_name}): {str(e)[:60]}")
+        return None
+
+
+def generate_meta_apkgs(collection_path=None, theme='exams', subtheme='sap-c02', on_progress=None, only_exam=None):
+    """For every exam with failed (red-flagged) questions, generate a Meta
+    .apkg. Returns list of (exam, path)."""
+    results = []
+    try:
+        for exam_name, nums in failed_questions_by_exam(collection_path).items():
+            if only_exam and exam_name != only_exam:
+                continue
+            if not nums:
+                continue
+            path = generate_meta_apkg(exam_name, nums, theme, subtheme, on_progress=on_progress)
+            if path:
+                results.append((exam_name, path))
+    except Exception as e:
+        if on_progress:
+            on_progress(f"  ⚠ generate_meta_apkgs: {str(e)[:60]}")
+    return results
+
+
 def generate_reset_apkgs(collection_path=None, theme='exams', subtheme='sap-c02', on_progress=None):
     """For every exam with failed questions, generate a reset .apkg. Returns list of (exam, path)."""
     results = []

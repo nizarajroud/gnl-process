@@ -1,5 +1,14 @@
 # Changelog
 
+## v4.43.0 — 2026-10-17
+- **Paquet « Meta » (Phase 2 de révision)** : nouveau type de deck qui ne contient QUE les questions
+  flaguées ROUGE dans Anki (ratées), en **affichage réponse direct** (recto = réponse, pas de révélation) :
+  énoncé + options avec la/les correcte(s) en vert + bouton Copier. On ouvre, on tape Copier, on lance
+  Meta AI — sans refaire la question. Distinct du « Deck reset » (2ᵉ passe interactive).
+  - `step5_anki(answer_only=True)` ; `generate_meta_apkg` / `generate_meta_apkgs` (anki_review).
+  - Endpoint `POST /api/anki-review/meta-apkg-one` + bouton « 📎 Paquet Meta » (picker examens finis).
+
+
 ## v4.42.0 — 2026-10-16
 - **Fix cochage sur AnkiMobile (iPhone)** : taper une option coche désormais réellement la case.
   Le toggle passe par un handler onclick explicite sur la ligne (au lieu de label[for], que WebKit/iOS

@@ -749,7 +749,7 @@ def step4_compact(source_path, answers, theme, subtheme, on_progress=None):
     return str(md_path)
 
 
-def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams=None, diagram_front=True, diagram_back=True, only_questions=None, guid_suffix='', deck_suffix='', apkg_suffix=''):
+def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams=None, diagram_front=True, diagram_back=True, only_questions=None, guid_suffix='', deck_suffix='', apkg_suffix='', answer_only=False):
     """Step 5: Generate Anki .apkg package directly from answers dict.
     
     Args:
@@ -940,23 +940,9 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     # Model for exam cards
     font_size = os.environ.get('ANKI_FONT_SIZE', '16')
     model_id = random.randrange(1 << 30, 1 << 31)
-    model = genanki.Model(
-        model_id,
-        f'{name} Model',
-        fields=[
-            {'name': 'Front'},
-            {'name': 'Back'},
-            {'name': 'Explanation'},   # hidden — used by the Copy button
-        ],
-        templates=[{
-            'name': 'Card 1',
-            'qfmt': '{{Front}}',
-            # Answer side + hidden Explanation + a HIDDEN textarea holding the
-            # final Meta AI prompt (built at render time). The 'Copier' button
-            # selects & copies that textarea. The prompt is prepended with a
-            # configurable preamble, the user's answer (detected from
-            # localStorage), the correct answer, and a wrong/correct branch.
-            'afmt': (
+    # The answer side (also used as the FRONT when answer_only=True, so the
+    # correction shows directly without a reveal step — the "Meta" deck).
+    _afmt = (
                 '{{Back}}'
                 '<div id="copysrc" style="display:none">{{Explanation}}</div>'
                 '<textarea id="gnlCopyArea" readonly '
@@ -1063,7 +1049,23 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 'var holder=document.getElementById("gnlBtns");'
                 'if(holder){holder.appendChild(voiceBtn);}'
                 '})();</script>'
-            ),
+            )
+    # answer_only (Meta deck): the front shows the answer directly (no reveal).
+    # A harmless HTML comment makes qfmt textually differ from afmt, so Anki
+    # never rejects the note type for "front identical to back".
+    _qfmt = ('<!-- meta:answer-only -->' + _afmt) if answer_only else '{{Front}}'
+    model = genanki.Model(
+        model_id,
+        f'{name} Model',
+        fields=[
+            {'name': 'Front'},
+            {'name': 'Back'},
+            {'name': 'Explanation'},   # hidden — used by the Copy button
+        ],
+        templates=[{
+            'name': 'Card 1',
+            'qfmt': _qfmt,
+            'afmt': _afmt,
         }],
         css=f"""
             .card {{ text-align: left; font-family: Arial; font-size: {font_size}px; padding: 10px; }}

@@ -2516,6 +2516,34 @@ async def anki_review_reset_apkg_one(request: Request):
     return {"exam": exam, "path": path, "count": len(nums)}
 
 
+@app.post("/api/anki-review/meta-apkg-one")
+async def anki_review_meta_apkg_one(request: Request):
+    """Generate the Meta .apkg for ONE selected exam: only the red-flagged
+    (failed) questions, in answer-only display + Copy button."""
+    from gnl_core.anki_review import failed_questions_by_exam, generate_meta_apkg
+    body = await request.json()
+    exam = (body or {}).get('exam', '')
+    subtheme = (body or {}).get('subtheme') or 'sap-c02'
+    loop = asyncio.get_event_loop()
+
+    def on_p(msg):
+        try:
+            asyncio.run_coroutine_threadsafe(broadcast_log(msg), loop)
+        except Exception:
+            pass
+
+    by_exam = await loop.run_in_executor(None, failed_questions_by_exam)
+    nums = by_exam.get(exam)
+    if not nums:
+        return {"error": f"Aucune question ratée pour {exam}"}
+    await broadcast_log(f"▶ Paquet Meta pour {exam} ({len(nums)} ratées, réponse directe)")
+    path = await loop.run_in_executor(
+        None, lambda: generate_meta_apkg(exam, nums, subtheme=subtheme, on_progress=on_p))
+    if not path:
+        return {"error": f"Échec de génération Meta pour {exam}"}
+    return {"exam": exam, "path": path, "count": len(nums)}
+
+
 @app.post("/api/anki-review/meta-prompt")
 async def anki_review_meta_prompt(request: Request):
     """Build a Meta AI prompt (copy-by-block) for one exam's failed questions."""
