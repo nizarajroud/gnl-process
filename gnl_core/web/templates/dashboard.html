@@ -767,8 +767,13 @@
                                     html += `<div style="font-size:13px;color:#cbd5e1;margin-bottom:4px;">📅 <b>${dt.label}</b> — ${dt.count} ratées${(dt.nums&&dt.nums.length)?` (${dt.nums.join(', ')})`:''}</div>`;
                                     html += `<div style="display:flex;flex-wrap:wrap;gap:6px;">`;
                                     dt.parts.forEach(function(p){
-                                        const label = p.lot + (p.total>1 ? ` (${p.part}/${p.total})` : '');
-                                        html += `<button type="button" onclick="ankiCopyBlock('${safe}',${gidx},${flat.length},this)" style="padding:6px 11px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">📋 ${label}</button>`;
+                                        const sub = p.total>1 ? ` (${p.part}/${p.total})` : '';
+                                        const bg = p.done ? '#16a34a' : '#4f46e5';
+                                        const lbl = p.done ? "✅ Already done" : "▶️ Let's do it";
+                                        const examAttr = encodeURIComponent(ex.exam);
+                                        const dateAttr = encodeURIComponent(dt.date||'');
+                                        const lotAttr = encodeURIComponent(p.lot);
+                                        html += `<button type="button" data-exam="${examAttr}" data-date="${dateAttr}" data-lot="${lotAttr}" data-key="${safe}" data-idx="${gidx}" data-total="${flat.length}" onclick="ankiMetaCopyDone(this)" style="padding:6px 11px;background:${bg};color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">${lbl} <span style="opacity:.8;font-size:12px;">— ${p.lot}${sub}</span></button>`;
                                         gidx++;
                                     });
                                     html += `</div></div>`;
@@ -841,6 +846,34 @@
                     const orig = btn.textContent;
                     btn.textContent = ok ? '✅ Copié' : '⚠ Réessaie';
                     setTimeout(function(){ btn.textContent = orig; }, 1800);
+                }
+
+                async function ankiMetaCopyDone(btn) {
+                    // 1) copy the block text to the clipboard
+                    const key = btn.getAttribute('data-key');
+                    const idx = parseInt(btn.getAttribute('data-idx'),10);
+                    const blocks = window._ankiMetaBlocks[key] || [];
+                    const text = blocks[idx] || '';
+                    const area = document.getElementById('anki-meta-area');
+                    area.value = text; area.style.position='static'; area.style.opacity='1';
+                    area.focus(); area.select();
+                    let ok=false; try { ok=document.execCommand('copy'); } catch(e){ ok=false; }
+                    if(!ok && navigator.clipboard && navigator.clipboard.writeText){ try{ navigator.clipboard.writeText(text); ok=true; }catch(e){} }
+                    area.style.position='absolute'; area.style.left='-9999px'; area.style.opacity='0';
+                    window.getSelection && window.getSelection().removeAllRanges && window.getSelection().removeAllRanges();
+                    // 2) toggle the persistent 'done' state server-side
+                    const exam = decodeURIComponent(btn.getAttribute('data-exam'));
+                    const date = decodeURIComponent(btn.getAttribute('data-date'));
+                    const lot  = decodeURIComponent(btn.getAttribute('data-lot'));
+                    const sub  = btn.querySelector('span') ? btn.querySelector('span').outerHTML : '';
+                    try {
+                        const r = await (await fetch('/api/anki-review/meta-done/toggle', {
+                            method:'POST', headers:{'Content-Type':'application/json'},
+                            body: JSON.stringify({exam, date, lot})})).json();
+                        const done = !!(r && r.done);
+                        btn.style.background = done ? '#16a34a' : '#4f46e5';
+                        btn.innerHTML = (done ? '✅ Already done' : "▶️ Let's do it") + ' ' + sub;
+                    } catch(e) { /* keep clipboard working even if toggle fails */ }
                 }
             </script>
 

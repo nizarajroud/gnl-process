@@ -93,3 +93,36 @@ def get_active_parents(db_path=None):
             WHERE generation_state = 0 OR download_state = 0 OR conversion_state = 0
         """).fetchall()
     return [r['parent_configuration_id'] for r in rows]
+
+
+def toggle_meta_done(exam, date, lot, db_path=None):
+    """Toggle the 'done' state of a Prompt Meta button (exam+date+lot) and
+    return the NEW state (bool). Persisted so it survives GNL restarts."""
+    exam = str(exam); date = str(date or ''); lot = str(lot or '')
+    with get_db(db_path) as conn:
+        row = conn.execute(
+            "SELECT done FROM meta_done WHERE exam=? AND date=? AND lot=?",
+            (exam, date, lot),
+        ).fetchone()
+        new_val = 0 if (row and row['done']) else 1
+        conn.execute(
+            """
+            INSERT INTO meta_done (exam, date, lot, done, ts)
+            VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+            ON CONFLICT(exam, date, lot) DO UPDATE SET
+                done=excluded.done, ts=excluded.ts
+            """,
+            (exam, date, lot, new_val),
+        )
+        conn.commit()
+    return bool(new_val)
+
+
+def get_meta_done(exam, db_path=None):
+    """Return {(date, lot): True} for all 'done' buttons of an exam."""
+    with get_db(db_path) as conn:
+        rows = conn.execute(
+            "SELECT date, lot, done FROM meta_done WHERE exam=? AND done=1",
+            (str(exam),),
+        ).fetchall()
+    return {(r['date'] or '', r['lot'] or ''): True for r in rows}

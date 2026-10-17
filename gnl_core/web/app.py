@@ -2516,6 +2516,28 @@ async def anki_review_reset_apkg_one(request: Request):
     return {"exam": exam, "path": path, "count": len(nums)}
 
 
+@app.post("/api/anki-review/meta-done/toggle")
+async def anki_review_meta_done_toggle(request: Request):
+    """Toggle (persist) the 'Already done' state of a Prompt Meta button,
+    keyed by (exam, date, lot). Returns {done: bool}."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    exam = str((body or {}).get('exam', '')).strip()
+    date = str((body or {}).get('date', '') or '')
+    lot = str((body or {}).get('lot', '') or '')
+    if not exam:
+        return {"ok": False, "error": "exam required"}
+    try:
+        from gnl_core.db import toggle_meta_done
+        loop = asyncio.get_event_loop()
+        done = await loop.run_in_executor(None, lambda: toggle_meta_done(exam, date, lot))
+        return {"ok": True, "done": bool(done)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:80]}
+
+
 @app.post("/api/anki-review/meta-prompt")
 async def anki_review_meta_prompt(request: Request):
     """Build a Meta AI prompt for one exam's failed questions, GROUPED BY DATE
@@ -2542,23 +2564,33 @@ async def anki_review_meta_prompt(request: Request):
         None, lambda: build_failed_meta_parts_by_date(max_chars=max_chars, on_progress=on_p,
                                                       only_exam=only_exam))
     # Per exam → list of dates → each date has parts (lots).
+    from gnl_core.db import get_meta_done
     exams = []
     for exam_name, info in data.items():
+        done_map = {}
+        try:
+            done_map = get_meta_done(exam_name)
+        except Exception:
+            done_map = {}
         dates = []
         for d in info["dates"]:
             n_parts = len(d["parts"])
+            parts = []
+            for i, t in enumerate(d["parts"]):
+                lot = (d["label"] if n_parts == 1 else f"{d['label']}-lot{i+1}")
+                parts.append({
+                    "part": i + 1,
+                    "total": n_parts,
+                    "lot": lot,
+                    "done": bool(done_map.get((d["date"] or "", lot))),
+                    "text": t,
+                })
             dates.append({
                 "label": d["label"],
                 "date": d["date"],
                 "count": d["count"],
                 "nums": d.get("nums", []),
-                "parts": [{
-                    "part": i + 1,
-                    "total": n_parts,
-                    # lot label e.g. "Today" or "Today-lot2" when a date is split
-                    "lot": (d["label"] if n_parts == 1 else f"{d['label']}-lot{i+1}"),
-                    "text": t,
-                } for i, t in enumerate(d["parts"])],
+                "parts": parts,
             })
         exams.append({"exam": exam_name, "count": info["count"], "dates": dates})
     return {"exams": exams, "count": len(exams)}

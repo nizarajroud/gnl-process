@@ -1,5 +1,12 @@
 # Changelog
 
+## v4.50.0 — 2026-10-17
+- « Prompt Meta (ratées) » : chaque bouton de date/lot affiche « ▶️ Let's do it » avant clic et
+  « ✅ Already done » après, avec état PERSISTANT côté serveur (table meta_done, migration v11).
+  L'état survit à la fermeture/réouverture de GNL et à la régénération. Décliquable (re-clic repasse à
+  Let's do it). Clé par (exam, date, lot). Endpoint POST /api/anki-review/meta-done/toggle.
+
+
 ## v4.49.0 — 2026-10-17
 - « Prompt Meta (ratées) » : chaque date affiche désormais les NUMÉROS des questions ratées,
   ex: « 6 ratées (35, 42, 61, …) » au lieu de « 6 ratée(s) ».

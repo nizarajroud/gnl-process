@@ -10,7 +10,7 @@ import os
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gnl.db')
 
-CURRENT_VERSION = 10
+CURRENT_VERSION = 11
 
 
 def setup_database(db_path=None):
@@ -51,6 +51,8 @@ def setup_database(db_path=None):
         _apply_v9(cursor)
     if current < 10:
         _apply_v10(cursor)
+    if current < 11:
+        _apply_v11(cursor)
 
     conn.commit()
     conn.close()
@@ -226,6 +228,23 @@ def _apply_v10(cursor):
         )
     """)
     cursor.execute("INSERT INTO schema_version (version) VALUES (10)")
+
+
+
+def _apply_v11(cursor):
+    """v11: meta_done table — persistent 'Already done' state for the Prompt
+    Meta per-date/lot buttons. One row per (exam, date, lot)."""
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS meta_done (
+            exam TEXT NOT NULL,
+            date TEXT NOT NULL,
+            lot TEXT NOT NULL,
+            done INTEGER DEFAULT 0,
+            ts TEXT,
+            PRIMARY KEY (exam, date, lot)
+        )
+    """)
+    cursor.execute("INSERT INTO schema_version (version) VALUES (11)")
 
 
 if __name__ == "__main__":
