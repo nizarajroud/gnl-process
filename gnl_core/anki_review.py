@@ -112,25 +112,31 @@ def _failed_dates_by_exam(collection_path):
                 except Exception:
                     pass
         conn = sqlite3.connect(tmp_db)
-        # For each red-flagged card: its note guid + the max revlog timestamp.
+        # For each red-flagged card: note guid + the best available date.
+        # cards.mod (SECONDS epoch) = last modification = when the flag was set
+        # (setting a flag updates the card), which matches "the day you failed
+        # it" even if you didn't press an answer button (no revlog entry).
+        # Fall back to the latest revlog timestamp (MS epoch) if mod is missing.
         rows = conn.execute(
             """
-            SELECT n.guid, (SELECT MAX(r.id) FROM revlog r WHERE r.cid = c.id) AS last_rev
+            SELECT n.guid, c.mod AS card_mod,
+                   (SELECT MAX(r.id) FROM revlog r WHERE r.cid = c.id) AS last_rev
             FROM cards c
             JOIN notes n ON n.id = c.nid
             WHERE (c.flags & 7) = 1
             """
         ).fetchall()
-        for guid, last_rev in rows:
+        for guid, card_mod, last_rev in rows:
             m = _GUID_RE.match(guid or '')
             if not m:
                 continue
             exam = m.group('exam')
             num = int(m.group('num'))
-            if last_rev:
+            d = None
+            if card_mod:
+                d = _dt.datetime.fromtimestamp(card_mod).strftime('%Y-%m-%d')
+            elif last_rev:
                 d = _dt.datetime.fromtimestamp(last_rev / 1000).strftime('%Y-%m-%d')
-            else:
-                d = None
             out[exam][num] = d
     except Exception:
         out = {}

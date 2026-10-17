@@ -1,5 +1,11 @@
 # Changelog
 
+## v4.48.2 — 2026-10-17
+- Fix: la date de ratage utilise `cards.mod` (moment où le flag rouge est posé) au lieu de revlog.
+  Avant, flaguer rouge SANS noter la carte (Again/Good) laissait revlog vide → tout tombait sous « Sans date ».
+  Désormais les ratées sont bien groupées Today/Yesterday/date selon la pose du flag. (fallback revlog conservé.)
+
+
 ## v4.48.1 — 2026-10-17
 - Hotfix: apostrophe mal échappée dans le JS du dashboard (Prompt Meta par date) qui faisait planter
   le rendu → « rien ne se passe » au clic. Corrigé → le bouton réaffiche bien les groupes par date.
