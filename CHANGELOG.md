@@ -1,5 +1,10 @@
 # Changelog
 
+## v4.49.0 — 2026-10-17
+- « Prompt Meta (ratées) » : chaque date affiche désormais les NUMÉROS des questions ratées,
+  ex: « 6 ratées (35, 42, 61, …) » au lieu de « 6 ratée(s) ».
+
+
 ## v4.48.2 — 2026-10-17
 - Fix: la date de ratage utilise `cards.mod` (moment où le flag rouge est posé) au lieu de revlog.
   Avant, flaguer rouge SANS noter la carte (Again/Good) laissait revlog vide → tout tombait sous « Sans date ».

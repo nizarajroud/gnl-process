@@ -764,7 +764,7 @@
                                 let gidx = 0;
                                 (ex.dates||[]).forEach(function(dt){
                                     html += `<div style="margin:4px 0 10px 0;padding-left:4px;border-left:3px solid #0ea5e9;">`;
-                                    html += `<div style="font-size:13px;color:#cbd5e1;margin-bottom:4px;">📅 <b>${dt.label}</b> — ${dt.count} ratée(s)</div>`;
+                                    html += `<div style="font-size:13px;color:#cbd5e1;margin-bottom:4px;">📅 <b>${dt.label}</b> — ${dt.count} ratées${(dt.nums&&dt.nums.length)?` (${dt.nums.join(', ')})`:''}</div>`;
                                     html += `<div style="display:flex;flex-wrap:wrap;gap:6px;">`;
                                     dt.parts.forEach(function(p){
                                         const label = p.lot + (p.total>1 ? ` (${p.part}/${p.total})` : '');

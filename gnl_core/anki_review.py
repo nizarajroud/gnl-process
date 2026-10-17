@@ -636,6 +636,7 @@ def build_failed_meta_parts_by_date(collection_path=None, theme='exams',
                 'label': _date_label(d),
                 'date': d,
                 'count': len(dnums),
+                'nums': dnums,
                 'parts': parts,
             })
         if date_entries:

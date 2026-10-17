@@ -2551,6 +2551,7 @@ async def anki_review_meta_prompt(request: Request):
                 "label": d["label"],
                 "date": d["date"],
                 "count": d["count"],
+                "nums": d.get("nums", []),
                 "parts": [{
                     "part": i + 1,
                     "total": n_parts,
