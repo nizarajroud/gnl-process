@@ -1,5 +1,10 @@
 # Changelog
 
+## v4.47.0 — 2026-10-17
+- « 📋 Prompt Meta (ratées) » : le préambule n'est plus figé sur SAP-C02. Le code d'examen est désormais
+  dérivé PAR EXAMEN du nom du deck (SAP-C02 / SAA-C03 / AIB-C01 …), comme le bouton Copier.
+
+
 ## v4.46.0 — 2026-10-17
 - **Revert complet de la fonctionnalité « Paquet Meta »** (à la demande) : retrait du mode answer-only,
   de la capture de réponse (endpoint record-answer, fetch dans le bouton Copier, CORS), des fonctions

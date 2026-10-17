@@ -427,17 +427,37 @@ def parse_practice_exam(docx_path):
 
 # --- Meta AI prompt for failed questions, per exam (copy-by-block) -----------
 
-_VOICE_PREAMBLE = (
-    "I'm studying for the AWS SAP-C02 exam. Below are the questions I FAILED, "
-    "with their options and explanations. For now, just RECEIVE and KEEP "
-    "everything in memory across the blocks I paste, and reply ONLY \"Block K "
-    "received.\" after each. When I say \"ALL BLOCKS SENT\", reply ONLY "
-    "\"Ready — say 'go'.\" Then, the moment I say ANYTHING (even just \"go\"), "
-    "IMMEDIATELY walk me through EACH failed question in order, in one flowing "
-    "spoken-style explanation (no questions back, no waiting): for each, why the "
-    "correct answer is right and why the wrong options are wrong. Plain, easy to "
-    "listen to, no tables."
-)
+def _exam_code_from_name(exam_name, subtheme=None):
+    """Derive the AWS certification code (e.g. SAP-C02 / SAA-C03 / AIB-C01) from
+    the exam/deck name. Looks for a '<letters>-c<digits>' pattern; falls back to
+    the subtheme, then SAP-C02."""
+    import re as _re
+    m = _re.search(r'([a-zA-Z]{2,4}-c\d{2})', exam_name or '')
+    if m:
+        return m.group(1).upper()
+    if subtheme:
+        m2 = _re.search(r'([a-zA-Z]{2,4}-c\d{2})', subtheme)
+        if m2:
+            return m2.group(1).upper()
+        return subtheme.upper()
+    return 'SAP-C02'
+
+
+def _voice_preamble(exam_code='SAP-C02'):
+    """Block-by-block Meta AI preamble, with the exam code injected so it is
+    generic per certification (SAP-C02 / SAA-C03 / AIB-C01 / ...), matching the
+    Copy button behaviour."""
+    return (
+        f"I'm studying for the AWS {exam_code} exam. Below are the questions I FAILED, "
+        "with their options and explanations. For now, just RECEIVE and KEEP "
+        "everything in memory across the blocks I paste, and reply ONLY \"Block K "
+        "received.\" after each. When I say \"ALL BLOCKS SENT\", reply ONLY "
+        "\"Ready — say 'go'.\" Then, the moment I say ANYTHING (even just \"go\"), "
+        "IMMEDIATELY walk me through EACH failed question in order, in one flowing "
+        "spoken-style explanation (no questions back, no waiting): for each, why the "
+        "correct answer is right and why the wrong options are wrong. Plain, easy to "
+        "listen to, no tables."
+    )
 
 
 def _failed_corpus_for_exam(exam_name, failed_nums, md_path):
@@ -481,8 +501,11 @@ def build_failed_meta_parts(collection_path=None, theme='exams',
         corpus = _failed_corpus_for_exam(exam_name, nums, str(md))
         if not corpus.strip():
             continue
+        # Exam code injected in the preamble, derived PER EXAM from its name so
+        # each certification gets the right code (generic, like the Copy button).
+        _code = _exam_code_from_name(exam_name, subtheme)
         parts = build_parts_from_text(corpus, max_chars=max_chars,
-                                      prompt_template=_VOICE_PREAMBLE)
+                                      prompt_template=_voice_preamble(_code))
         result[exam_name] = {'count': len(nums), 'parts': parts}
         if on_progress:
             on_progress(f"  ✓ {exam_name}: {len(nums)} ratées → {len(parts)} bloc(s)")
