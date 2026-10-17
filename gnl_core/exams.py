@@ -749,7 +749,7 @@ def step4_compact(source_path, answers, theme, subtheme, on_progress=None):
     return str(md_path)
 
 
-def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams=None, diagram_front=True, diagram_back=True, only_questions=None, guid_suffix='', deck_suffix='', apkg_suffix='', answer_only=False, picked_map=None):
+def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams=None, diagram_front=True, diagram_back=True, only_questions=None, guid_suffix='', deck_suffix='', apkg_suffix=''):
     """Step 5: Generate Anki .apkg package directly from answers dict.
     
     Args:
@@ -936,21 +936,11 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
     js_prompt_wrong_voice = _json.dumps(prompt_wrong_voice)
     js_prompt_correct_voice = _json.dumps(prompt_correct_voice)
     js_copy_mode = _json.dumps(copy_mode)
-    # PC-only: the Copy button also POSTs the picked option to GNL so the Meta
-    # deck can later show the user's wrong option. URL overridable via config
-    # RECORD_URL (default localhost:8001). Fails silently on mobile/offline.
-    _record_url = _cfg.get('RECORD_URL') or 'http://127.0.0.1:8001/api/anki-review/record-answer'
-    js_record_url = _json.dumps(_record_url)
-    # Exam key sent with the recorded answer = the deck/GUID name (same key
-    # failed_questions_by_exam returns and generate_meta_apkg reads), NOT the
-    # subtheme — otherwise the Meta deck can't match the captured pick.
-    js_exam_name = _json.dumps(name or '')
 
     # Model for exam cards
     font_size = os.environ.get('ANKI_FONT_SIZE', '16')
     model_id = random.randrange(1 << 30, 1 << 31)
-    # The answer side (also used as the FRONT when answer_only=True, so the
-    # correction shows directly without a reveal step — the "Meta" deck).
+    # The answer side (Back) template with the Copy button.
     _afmt = (
                 '{{Back}}'
                 '<div id="copysrc" style="display:none">{{Explanation}}</div>'
@@ -969,8 +959,6 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 'var P_WRONG_VOICE=' + js_prompt_wrong_voice + ';'
                 'var P_CORRECT_VOICE=' + js_prompt_correct_voice + ';'
                 'var COPY_MODE=' + js_copy_mode + ';'
-                'var RECORD_URL=' + js_record_url + ';'
-                'var GNL_EXAM=' + js_exam_name + ';'
                 # --- Build the CLEAN question+options text (no CSS, no ★/⚑) ---
                 # Only take .option rows + the question <b>/text, never <style>.
                 'var card=document.querySelector(".card")||document.body;'
@@ -1046,13 +1034,6 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 'try{navigator.clipboard.writeText(area.value);ok=true;}catch(e){}}'
                 'area.style.position="absolute";area.style.left="-9999px";area.style.opacity="0";'
                 'window.getSelection&&window.getSelection().removeAllRanges&&window.getSelection().removeAllRanges();'
-                # PC-only: record the picked option in GNL so the Meta deck can
-                # show the user's wrong option. Best-effort, non-blocking;
-                # silently ignored on mobile/offline. Only sends if answered.
-                'if(RECORD_URL&&GNL_EXAM&&qnum&&a&&a.answered){try{'
-                'fetch(RECORD_URL,{method:"POST",headers:{"Content-Type":"application/json"},'
-                'body:JSON.stringify({exam:GNL_EXAM,qnum:parseInt(qnum,10),picked:a.mine,correct:a.correct})}).catch(function(){});'
-                '}catch(e){}}'
                 'if(msg){msg.textContent=ok?"\\u2705 Copi\\u00e9":"\\u26a0 R\\u00e9essaie";'
                 'msg.style.color=ok?"#28a745":"#dc3545";'
                 'setTimeout(function(){msg.textContent="";},2500);}}'
@@ -1068,10 +1049,6 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 'if(holder){holder.appendChild(voiceBtn);}'
                 '})();</script>'
             )
-    # answer_only (Meta deck): the front shows the answer directly (no reveal).
-    # A harmless HTML comment makes qfmt textually differ from afmt, so Anki
-    # never rejects the note type for "front identical to back".
-    _qfmt = ('<!-- meta:answer-only -->' + _afmt) if answer_only else '{{Front}}'
     model = genanki.Model(
         model_id,
         f'{name} Model',
@@ -1082,7 +1059,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         ],
         templates=[{
             'name': 'Card 1',
-            'qfmt': _qfmt,
+            'qfmt': '{{Front}}',
             'afmt': _afmt,
         }],
         css=f"""
@@ -1273,35 +1250,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 "});"
                 "})();</script>"
             )
-            # META mode: seed localStorage with the user's captured pick for this
-            # question (from picked_map), BEFORE feedback_script runs. The pick
-            # was recorded on PC at Copy time. This makes the existing feedback
-            # script color the user's wrong option red AND lets the Copy button
-            # include "My answer(s)" — all without any interaction on the Meta card.
-            _meta_prefill = ""
-            if answer_only and picked_map:
-                _pk = picked_map.get(int(num)) or picked_map.get(str(num)) or {}
-                _picked_raw = (_pk.get('picked') if isinstance(_pk, dict) else _pk) or ""
-                # match the picked option(s) against this question's options by
-                # letter prefix (e.g. "B)") or substring, build their qkeys.
-                _picked_keys = []
-                import re as _re2
-                def _strip_letter(t):
-                    return _re2.sub(r'^[A-Z]\)\s*', '', (t or '').strip()).lower()
-                _pr = _strip_letter(_picked_raw)
-                for opt in options:
-                    _ot = _strip_letter(opt)
-                    # match if the picked text and the option text overlap
-                    # substantially (one contains the other), ignoring letter prefix.
-                    if _pr and _ot and (_pr == _ot or _pr in _ot or _ot in _pr):
-                        _picked_keys.append(f"{kb}-q{num}o{_okey(opt)}")
-                if _picked_keys:
-                    _meta_prefill = (
-                        "<script>(function(){var ks=" + _json.dumps(_picked_keys) + ";"
-                        "ks.forEach(function(k){try{localStorage.setItem(k,'1');}catch(e){}});"
-                        "})();</script>"
-                    )
-            back = f"{_meta_prefill}<b>Question {num}:</b><br><br>{multi_badge}{q_text}<br><br>{''.join(back_items)}{feedback_script}"
+            back = f"<b>Question {num}:</b><br><br>{multi_badge}{q_text}<br><br>{''.join(back_items)}{feedback_script}"
 
         # Add diagram (same image on front and/or back based on user selection)
         if diagrams and num in diagrams:

@@ -93,34 +93,3 @@ def get_active_parents(db_path=None):
             WHERE generation_state = 0 OR download_state = 0 OR conversion_state = 0
         """).fetchall()
     return [r['parent_configuration_id'] for r in rows]
-
-
-def record_user_answer(exam, qnum, picked, correct, db_path=None):
-    """Store (upsert) the user's picked option(s) for a question, captured on
-    PC when the Copy button is clicked. 'picked'/'correct' are plain strings
-    (e.g. the option letters or texts). Used later by the Meta deck to show the
-    user's wrong option in red. Latest write wins (one row per exam+qnum)."""
-    with get_db(db_path) as conn:
-        conn.execute(
-            """
-            INSERT INTO user_answers (exam, qnum, picked, correct, ts)
-            VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ','now'))
-            ON CONFLICT(exam, qnum) DO UPDATE SET
-                picked=excluded.picked,
-                correct=excluded.correct,
-                ts=excluded.ts
-            """,
-            (str(exam), int(qnum), picked or '', correct or ''),
-        )
-        conn.commit()
-
-
-def get_user_answers(exam, db_path=None):
-    """Return {qnum(int): {'picked': str, 'correct': str}} for an exam."""
-    with get_db(db_path) as conn:
-        rows = conn.execute(
-            "SELECT qnum, picked, correct FROM user_answers WHERE exam = ?",
-            (str(exam),),
-        ).fetchall()
-    return {int(r['qnum']): {'picked': r['picked'] or '', 'correct': r['correct'] or ''}
-            for r in rows}

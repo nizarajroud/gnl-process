@@ -1,5 +1,14 @@
 # Changelog
 
+## v4.46.0 — 2026-10-17
+- **Revert complet de la fonctionnalité « Paquet Meta »** (à la demande) : retrait du mode answer-only,
+  de la capture de réponse (endpoint record-answer, fetch dans le bouton Copier, CORS), des fonctions
+  generate_meta_apkg/_answers_from_markdown/_merge_captured_answers, des helpers db record/get_user_answers,
+  et du bouton « Paquet Meta » du dashboard. CONSERVÉ intact : cartes normales, bouton Copier classique,
+  badges « Choisis N », auto-reset localStorage recto, prompt dynamique par certif. (table user_answers
+  laissée en base, inoffensive.)
+
+
 ## v4.45.2 — 2026-10-17
 - Fix: le Paquet Meta fonctionne aussi pour les examens format Dojo (markdown sans marqueur [CORRECT]).
   Il utilise alors les RÉPONSES CAPTURÉES (user_answers: ton option + la correcte) pour construire la carte,

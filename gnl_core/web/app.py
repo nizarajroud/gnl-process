@@ -397,45 +397,6 @@ app = FastAPI(title="GNL Process", lifespan=lifespan)
 _WEB_DIR = Path(__file__).parent.parent.parent / 'web'
 
 
-# --- CORS: the Anki "Copier" button (desktop) fetches /api/anki-review/
-# record-answer cross-origin (the card runs in Anki's webview). Allow it. ---
-from fastapi.middleware.cors import CORSMiddleware
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["POST", "OPTIONS", "GET"],
-    allow_headers=["*"],
-)
-
-
-@app.post("/api/anki-review/record-answer")
-async def anki_review_record_answer(request: Request):
-    """Store the user's picked option(s) for a question, sent by the Copy
-    button on Anki Desktop. Body JSON: {exam, qnum, picked, correct}. The Meta
-    deck later reads this to show the user's wrong option in red. Best-effort:
-    always returns JSON, never raises (must not break the clipboard copy)."""
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-    exam = str((body or {}).get('exam', '')).strip()
-    qnum = (body or {}).get('qnum')
-    picked = (body or {}).get('picked', '')
-    correct = (body or {}).get('correct', '')
-    if not exam or qnum in (None, ''):
-        return {"ok": False, "error": "exam and qnum required"}
-    try:
-        from gnl_core.db import record_user_answer
-        import asyncio as _a
-        loop = _a.get_event_loop()
-        await loop.run_in_executor(
-            None, lambda: record_user_answer(exam, int(qnum), str(picked), str(correct)))
-        return {"ok": True, "exam": exam, "qnum": int(qnum)}
-    except Exception as e:
-        return {"ok": False, "error": str(e)[:80]}
-
-
 @app.get("/manifest.webmanifest")
 async def pwa_manifest():
     from fastapi.responses import FileResponse
@@ -2552,34 +2513,6 @@ async def anki_review_reset_apkg_one(request: Request):
         None, lambda: generate_reset_apkg(exam, nums, on_progress=on_p))
     if not path:
         return {"error": f"Échec de génération pour {exam}"}
-    return {"exam": exam, "path": path, "count": len(nums)}
-
-
-@app.post("/api/anki-review/meta-apkg-one")
-async def anki_review_meta_apkg_one(request: Request):
-    """Generate the Meta .apkg for ONE selected exam: only the red-flagged
-    (failed) questions, in answer-only display + Copy button."""
-    from gnl_core.anki_review import failed_questions_by_exam, generate_meta_apkg
-    body = await request.json()
-    exam = (body or {}).get('exam', '')
-    subtheme = (body or {}).get('subtheme') or 'sap-c02'
-    loop = asyncio.get_event_loop()
-
-    def on_p(msg):
-        try:
-            asyncio.run_coroutine_threadsafe(broadcast_log(msg), loop)
-        except Exception:
-            pass
-
-    by_exam = await loop.run_in_executor(None, failed_questions_by_exam)
-    nums = by_exam.get(exam)
-    if not nums:
-        return {"error": f"Aucune question ratée pour {exam}"}
-    await broadcast_log(f"▶ Paquet Meta pour {exam} ({len(nums)} ratées, réponse directe)")
-    path = await loop.run_in_executor(
-        None, lambda: generate_meta_apkg(exam, nums, subtheme=subtheme, on_progress=on_p))
-    if not path:
-        return {"error": f"Échec de génération Meta pour {exam}"}
     return {"exam": exam, "path": path, "count": len(nums)}
 
 
