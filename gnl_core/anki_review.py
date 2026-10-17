@@ -350,6 +350,51 @@ def _answers_from_markdown(md_path, only_questions=None):
     return out
 
 
+def _clean_pick(s):
+    """Strip on-card badges/bullets from a captured option string so it matches
+    the plain option text ('- ✗ ton choix Advise ...' → 'Advise ...')."""
+    import re as _re
+    if not s:
+        return ''
+    s = s.replace('\u2717 ton choix', '').replace('\u2713 (ton choix)', '')
+    s = s.replace('\u2713 Correct', '').replace('\u2705', '')
+    s = _re.sub(r'^[\s\-\u2022]+', '', s)
+    s = s.replace('ton choix', '').replace('Correct', '', 1)
+    return s.strip()
+
+
+def _merge_captured_answers(answers, picked_map, failed_nums):
+    """For failed questions the markdown couldn't resolve (no [CORRECT] marker,
+    e.g. Dojo format), build an answer entry from the CAPTURED data in
+    user_answers (user's option + the correct one). answers={qnum(str):{...}};
+    picked_map={qnum(int):{picked,correct}}."""
+    answers = dict(answers or {})
+    for n in (failed_nums or []):
+        key = str(int(n))
+        if key in answers:
+            continue
+        cap = picked_map.get(int(n)) or picked_map.get(str(n))
+        if not cap:
+            continue
+        correct = _clean_pick(cap.get('correct', ''))
+        picked = _clean_pick(cap.get('picked', ''))
+        if not correct:
+            continue
+        opts = []
+        for t in (correct, picked):
+            if t and t not in opts:
+                opts.append(t)
+        letters = [chr(ord('A') + i) for i in range(len(opts))]
+        option_texts = [f"{letters[i]}) {opts[i]}" for i in range(len(opts))]
+        answers[key] = {
+            'type': 'single',
+            'options': option_texts,
+            'correct': [f"A) {correct}"],
+        }
+    return answers
+
+
+
 def generate_meta_apkg(exam_name, failed_nums, theme='exams', subtheme='sap-c02', on_progress=None):
     """Generate the 'Meta' .apkg: only the failed questions, in ANSWER-ONLY
     display (front == answer, no reveal step). Each card shows the statement,
@@ -367,23 +412,32 @@ def generate_meta_apkg(exam_name, failed_nums, theme='exams', subtheme='sap-c02'
                 on_progress(f"  ⚠ markdown source introuvable pour {exam_name}")
             return None
         from gnl_core.exams import step5_anki
-        # Build `answers` from the MARKDOWN itself (it already encodes options +
-        # [CORRECT] markers). Avoids step3_highlight, which needs the DOCX in
-        # word/ + Bedrock — not available here.
-        answers = _answers_from_markdown(str(md), only_questions=failed_nums)
-        if not answers:
-            if on_progress:
-                on_progress(f"  ⚠ aucune réponse extraite du markdown pour {exam_name}")
-            return None
-        # Captured picks (recorded on PC at Copy time) → show the user's wrong
-        # option in red + fill "My answer(s)" in the Copy text. Empty if none.
+        # Captured picks (recorded on PC at Copy time): {qnum: {picked, correct}}.
+        # They already contain the user's wrong option AND the correct one, so
+        # they work even for exam formats whose markdown has no [CORRECT] marker.
         picked_map = {}
         try:
             from gnl_core.db import get_user_answers
-            # picks are stored under the exam name (deck/md name)
             picked_map = get_user_answers(exam_name) or {}
         except Exception:
             picked_map = {}
+        # Primary: build answers from the MARKDOWN ([CORRECT] markers). For
+        # questions the markdown can't resolve (e.g. Dojo format), FALL BACK to
+        # the captured answer (correct/picked fields).
+        answers = _answers_from_markdown(str(md), only_questions=failed_nums)
+        answers = _merge_captured_answers(answers, picked_map, failed_nums)
+        if not answers:
+            if on_progress:
+                on_progress(f"  ⚠ aucune réponse (markdown ni capture) pour {exam_name}")
+            return None
+        # Clean the captured picks (strip badges) so step5_anki can match them
+        # against the plain option texts to pre-select (red) the wrong option.
+        clean_picked = {}
+        for _qn, _d in (picked_map or {}).items():
+            clean_picked[_qn] = {
+                'picked': _clean_pick((_d or {}).get('picked', '')),
+                'correct': _clean_pick((_d or {}).get('correct', '')),
+            }
         out = step5_anki(
             answers, str(md), theme, subtheme, on_progress=on_progress,
             only_questions=failed_nums,           # only the failed ones
@@ -391,10 +445,10 @@ def generate_meta_apkg(exam_name, failed_nums, theme='exams', subtheme='sap-c02'
             deck_suffix=' — Meta',                # distinct deck name
             apkg_suffix='-meta',                  # distinct file name
             answer_only=True,                     # answer shown directly
-            picked_map=picked_map,                # user's captured wrong picks
+            picked_map=clean_picked,              # user's captured wrong picks (cleaned)
         )
         if on_progress:
-            on_progress(f"  ✓ {exam_name}: meta apkg ({len(failed_nums)} Q) → {out}")
+            on_progress(f"  ✓ {exam_name}: meta apkg ({len(answers)} Q) → {out}")
         return str(out)
     except Exception as e:
         if on_progress:

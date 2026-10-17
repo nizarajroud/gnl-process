@@ -1,5 +1,11 @@
 # Changelog
 
+## v4.45.2 — 2026-10-17
+- Fix: le Paquet Meta fonctionne aussi pour les examens format Dojo (markdown sans marqueur [CORRECT]).
+  Il utilise alors les RÉPONSES CAPTURÉES (user_answers: ton option + la correcte) pour construire la carte,
+  nettoie les badges du texte, et pré-sélectionne ton option erronée (rouge) par correspondance de texte.
+
+
 ## v4.45.1 — 2026-10-17
 - Fix: le bouton Copier envoie désormais la clé examen = NOM DU DECK (ex: aib-c01-aws-practice-exam)
   au lieu du subtheme, pour que le Paquet Meta retrouve bien l'option capturée (alignement des clés).

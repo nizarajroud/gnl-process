@@ -1285,9 +1285,15 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 # match the picked option(s) against this question's options by
                 # letter prefix (e.g. "B)") or substring, build their qkeys.
                 _picked_keys = []
+                import re as _re2
+                def _strip_letter(t):
+                    return _re2.sub(r'^[A-Z]\)\s*', '', (t or '').strip()).lower()
+                _pr = _strip_letter(_picked_raw)
                 for opt in options:
-                    _ltr = opt.strip()[:2]  # "B)"
-                    if _picked_raw and (_ltr and _ltr[0] and (_ltr in _picked_raw or opt.lower().strip() in _picked_raw.lower())):
+                    _ot = _strip_letter(opt)
+                    # match if the picked text and the option text overlap
+                    # substantially (one contains the other), ignoring letter prefix.
+                    if _pr and _ot and (_pr == _ot or _pr in _ot or _ot in _pr):
                         _picked_keys.append(f"{kb}-q{num}o{_okey(opt)}")
                 if _picked_keys:
                     _meta_prefill = (
