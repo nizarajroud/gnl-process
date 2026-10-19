@@ -773,7 +773,8 @@
                                         const examAttr = encodeURIComponent(ex.exam);
                                         const dateAttr = encodeURIComponent(dt.date||'');
                                         const lotAttr = encodeURIComponent(p.lot);
-                                        html += `<button type="button" data-exam="${examAttr}" data-date="${dateAttr}" data-lot="${lotAttr}" data-key="${safe}" data-idx="${gidx}" data-total="${flat.length}" onclick="ankiMetaCopyDone(this)" style="padding:6px 11px;background:${bg};color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">${lbl} <span style="opacity:.8;font-size:12px;">— ${p.lot}${sub}</span></button>`;
+                                        const lotDisp = p.lot_label || p.lot;
+                                        html += `<button type="button" data-exam="${examAttr}" data-date="${dateAttr}" data-lot="${lotAttr}" data-key="${safe}" data-idx="${gidx}" data-total="${flat.length}" onclick="ankiMetaCopyDone(this)" style="padding:6px 11px;background:${bg};color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">${lbl} <span style="opacity:.8;font-size:12px;">— ${lotDisp}${sub}</span></button>`;
                                         gidx++;
                                     });
                                     html += `</div></div>`;

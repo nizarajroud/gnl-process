@@ -2575,13 +2575,19 @@ async def anki_review_meta_prompt(request: Request):
         dates = []
         for d in info["dates"]:
             n_parts = len(d["parts"])
+            # STABLE key (never changes over time) = the real date; the display
+            # label (Today/Yesterday/date) is cosmetic only. Using the label as
+            # key was a bug: "Today" becomes a date tomorrow → state lost.
+            _key_base = d["date"] or "nodate"
             parts = []
             for i, t in enumerate(d["parts"]):
-                lot = (d["label"] if n_parts == 1 else f"{d['label']}-lot{i+1}")
+                lot = (_key_base if n_parts == 1 else f"{_key_base}-lot{i+1}")
+                lot_label = (d["label"] if n_parts == 1 else f"{d['label']}-lot{i+1}")
                 parts.append({
                     "part": i + 1,
                     "total": n_parts,
-                    "lot": lot,
+                    "lot": lot,              # stable key (date-based)
+                    "lot_label": lot_label,  # display only
                     "done": bool(done_map.get((d["date"] or "", lot))),
                     "text": t,
                 })

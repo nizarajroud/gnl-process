@@ -1,5 +1,11 @@
 # Changelog
 
+## v4.50.1 — 2026-10-19
+- Fix (persistance « Already done ») : la CLÉ de stockage utilisait le label d'affichage (« Today »),
+  qui change de jour en jour → l'état semblait perdu le lendemain. La clé est désormais la DATE réelle
+  (stable, ex: 2026-10-17), le label reste cosmétique. Données existantes migrées (Today/Yesterday → date).
+
+
 ## v4.50.0 — 2026-10-17
 - « Prompt Meta (ratées) » : chaque bouton de date/lot affiche « ▶️ Let's do it » avant clic et
   « ✅ Already done » après, avec état PERSISTANT côté serveur (table meta_done, migration v11).
