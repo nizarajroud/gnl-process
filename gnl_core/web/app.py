@@ -2490,6 +2490,20 @@ async def anki_review_reset_candidates():
     return {"exams": exams}
 
 
+@app.get("/api/anki-review/meta-candidates")
+async def anki_review_meta_candidates():
+    """List exams eligible for a Meta prompt: ANY exam with failed questions,
+    INCLUDING in-progress ones (not yet finished). Each item carries an
+    'in_progress' flag so the UI can mark it. Used by the Prompt Meta popup."""
+    from gnl_core.anki_review import failed_questions_by_exam, in_progress_exams
+    loop = asyncio.get_event_loop()
+    by_exam = await loop.run_in_executor(None, failed_questions_by_exam)
+    in_prog = await loop.run_in_executor(None, in_progress_exams)
+    exams = [{"exam": e, "count": len(nums), "in_progress": e in in_prog}
+             for e, nums in sorted(by_exam.items()) if nums]
+    return {"exams": exams}
+
+
 @app.post("/api/anki-review/reset-apkg-one")
 async def anki_review_reset_apkg_one(request: Request):
     """Generate the reset .apkg for ONE selected exam."""

@@ -1,5 +1,11 @@
 # Changelog
 
+## v4.51.0 — 2026-10-20
+- « Prompt Meta (ratées) » couvre désormais aussi les paquets EN COURS (pas seulement finis).
+  Nouvel endpoint meta-candidates (tout examen avec ratées, sans filtre 'fini') + marqueur « — en cours »
+  dans le sélecteur. Les boutons Deck reset / Podcast / Deck vidéo gardent le filtre 'finis seulement'.
+
+
 ## v4.50.1 — 2026-10-19
 - Fix (persistance « Already done ») : la CLÉ de stockage utilisait le label d'affichage (« Today »),
   qui change de jour en jour → l'état semblait perdu le lendemain. La clé est désormais la DATE réelle

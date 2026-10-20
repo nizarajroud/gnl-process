@@ -714,18 +714,19 @@
                 window._ankiMetaBlocks = {};
                 // Shared styled popup: fetch finished exams (with fails, not in
                 // progress), show a dropdown; onPick(exam) runs on Valider.
-                async function ankiExamPicker(title, btn, onPick) {
+                async function ankiExamPicker(title, btn, onPick, candidatesUrl) {
                     btn.disabled = true; const t = btn.textContent; btn.textContent = '⏳…';
                     let exams = [];
                     try {
-                        const d = await (await fetch('/api/anki-review/reset-candidates')).json();
+                        const url = candidatesUrl || '/api/anki-review/reset-candidates';
+                        const d = await (await fetch(url)).json();
                         exams = d.exams || [];
                     } catch (e) { uiToast('Erreur: ' + e, 'error'); return; }
                     finally { btn.disabled = false; btn.textContent = t; }
-                    if (!exams.length) { uiToast('Aucun examen terminé avec des questions ratées.', 'info'); return; }
+                    if (!exams.length) { uiToast('Aucun examen avec des questions ratées.', 'info'); return; }
                     const ov = document.createElement('div');
                     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999;';
-                    const opts = exams.map(e => `<option value="${e.exam}">${e.exam} (${e.count} ratées)</option>`).join('');
+                    const opts = exams.map(e => `<option value="${e.exam}">${e.exam} (${e.count} ratées)${e.in_progress ? ' — en cours' : ''}</option>`).join('');
                     ov.innerHTML = `<div style="background:#1f2937;color:#e5e7eb;border-radius:12px;padding:22px;width:90%;max-width:440px;box-shadow:0 10px 40px rgba(0,0,0,0.5);">
                         <div style="font-weight:600;font-size:16px;margin-bottom:14px;">${title}</div>
                         <select id="ankiPickSel" style="width:100%;background:#374151;color:#e5e7eb;border:none;border-radius:8px;padding:10px;font-size:14px;margin-bottom:18px;">${opts}</select>
@@ -744,8 +745,7 @@
 
                 function ankiReviewMetaPrompt(btn) {
                     ankiExamPicker('📋 Prompt Meta — choisis un examen', btn, async function(exam){
-                        const el = document.getElementById('anki-review-result');
-                        el.textContent = `⏳ Construction du prompt Meta — ${exam}…`;
+                        const el = document.getElementById('anki-review-result');                        el.textContent = `⏳ Construction du prompt Meta — ${exam}…`;
                         try {
                             const d = await (await fetch('/api/anki-review/meta-prompt', {
                                 method:'POST', headers:{'Content-Type':'application/json'},
@@ -785,7 +785,7 @@
                             html += '<textarea id="anki-meta-area" readonly style="position:absolute;left:-9999px;top:0;opacity:0;height:1px;width:1px;"></textarea>';
                             el.innerHTML = html;
                         } catch (e) { el.textContent = '⚠ Erreur: ' + e; }
-                    });
+                    }, '/api/anki-review/meta-candidates');
                 }
 
                 async function ankiReviewPodcast(btn) {
