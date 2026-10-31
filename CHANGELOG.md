@@ -1,5 +1,13 @@
 # Changelog
 
+## v4.52.0 — 2026-10-31
+- Nouveau format **Dojo (Category)** : supporte les exports TutorialsDojo récents sans en-tête
+  « N. Question », où chaque question débute par « Category: AIBC01 – … ». Le parser découpe sur
+  « Category: », retire la ligne de catégorie, numérote séquentiellement (## Question N:), extrait les
+  4 options et la/les bonne(s) réponse(s) via « Hence, the correct answer(s) is/are: » (gère single ET
+  multi-réponses, apostrophes typographiques normalisées). Testé sur Dojo-Timed-Mode-2 (60 Q, 0 malformée).
+
+
 ## v4.51.0 — 2026-10-20
 - « Prompt Meta (ratées) » couvre désormais aussi les paquets EN COURS (pas seulement finis).
   Nouvel endpoint meta-candidates (tout examen avec ratées, sans filtre 'fini') + marqueur « — en cours »

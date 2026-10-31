@@ -7,11 +7,16 @@ format: create a module with an ExamFormat subclass and append it to FORMATS.
 
 from .base import ExamFormat, normalize_question
 from .aws_practice_exam import AwsPracticeExamFormat
+from .dojo_category import DojoCategoryFormat
 from .dojo import DojoFormat
 
 # Order: most specific / table-based first, generic paragraph-based last.
+# DojoCategoryFormat is tried before DojoFormat: it only matches the newer
+# 'Category:'-delimited export (no 'N. Question' headers), so the classic
+# DojoFormat still wins for the old layout.
 FORMATS = [
     AwsPracticeExamFormat(),
+    DojoCategoryFormat(),
     DojoFormat(),
 ]
 
