@@ -1097,7 +1097,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
             'afmt': _afmt,
         }],
         css=f"""
-            .card {{ text-align: left; font-family: Arial; font-size: {font_size}px; padding: 10px; }}
+            .card {{ text-align: left; font-family: Arial; font-size: {font_size}px; padding: 10px; max-width: none; width: auto; }}
             ul {{ padding-left: 20px; }}
             ol {{ padding-left: 20px; }}
             li {{ margin-bottom: 5px; }}

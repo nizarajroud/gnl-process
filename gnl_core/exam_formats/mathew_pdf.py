@@ -98,7 +98,7 @@ class MathewPdfFormat(ExamFormat):
         # finalize: sequential num, keep original id in statement, drop helper key
         pivot = []
         for seq, q in enumerate(sorted(questions, key=lambda x: _idkey(x['_id'])), start=1):
-            statement = f"({q['_id']}) {q['statement']}".strip()
+            statement = q['statement'].strip()
             pivot.append(normalize_question(
                 seq, statement, q['options'],
                 status='', explanation=q.get('explanation', '')))

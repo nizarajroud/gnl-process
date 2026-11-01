@@ -1,5 +1,10 @@
 # Changelog
 
+## v4.54.1 — 2026-10-31
+- Practice PDF : retrait du préfixe « (1.1) » en tête d'énoncé (la question commence directement par
+  son texte). Carte en pleine largeur (max-width:none) pour que l'énoncé s'étale comme les options.
+
+
 ## v4.54.0 — 2026-10-31
 - Mise en forme des énoncés sur les cartes : les puces (● • -) deviennent une vraie liste <ul><li>,
   et les sauts de ligne sont préservés (fini le bloc aplati). Le pied de page répété du Practice PDF
