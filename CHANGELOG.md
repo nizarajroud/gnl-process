@@ -1,5 +1,12 @@
 # Changelog
 
+## v4.54.0 — 2026-10-31
+- Mise en forme des énoncés sur les cartes : les puces (● • -) deviennent une vraie liste <ul><li>,
+  et les sauts de ligne sont préservés (fini le bloc aplati). Le pied de page répété du Practice PDF
+  (« … Practice Questions · Matthew Purcell · linkedin… ») est filtré pour ne plus se coller aux options.
+  Le texte TTS reste en version plate.
+
+
 ## v4.53.1 — 2026-10-31
 - Fix (troncature d'énoncé) : step5_anki ne gardait que les 5 PREMIÈRES lignes de l'énoncé
   (`q_lines[:5]`) → les questions à long scénario (1-2 paragraphes, ex. le Practice PDF) étaient

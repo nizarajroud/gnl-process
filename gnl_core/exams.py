@@ -749,6 +749,36 @@ def step4_compact(source_path, answers, theme, subtheme, on_progress=None):
     return str(md_path)
 
 
+def _statement_html(raw):
+    """Render a question statement (plain text with line breaks and ●/• bullet
+    lines) as structured HTML: bullet lines become a <ul>, the rest keeps its
+    line breaks. Preserves the PDF-like layout (paragraph + constraint list)."""
+    import html as _html
+    if not raw:
+        return ''
+    out = []
+    in_list = False
+    for line in raw.split('\n'):
+        s = line.strip()
+        if not s:
+            continue
+        is_bullet = s[:1] in ('\u25cf', '\u2022', '-', '\u2219', '\u00b7')  # ● • - ∙ ·
+        if is_bullet:
+            if not in_list:
+                out.append('<ul style="margin:6px 0;padding-left:22px;">')
+                in_list = True
+            item = s[1:].strip()
+            out.append(f'<li>{_html.escape(item)}</li>')
+        else:
+            if in_list:
+                out.append('</ul>')
+                in_list = False
+            out.append(_html.escape(s) + '<br>')
+    if in_list:
+        out.append('</ul>')
+    return ''.join(out)
+
+
 def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams=None, diagram_front=True, diagram_back=True, only_questions=None, guid_suffix='', deck_suffix='', apkg_suffix=''):
     """Step 5: Generate Anki .apkg package directly from answers dict.
     
@@ -796,7 +826,9 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                     q_lines.append(line.strip())
             # Keep the FULL statement (not just the first 5 lines) — long
             # scenario stems (1-2 paragraphs) were being truncated otherwise.
-            question_texts[num] = ' '.join(q_lines)
+            # Preserve line structure (newlines) so the card can render
+            # paragraphs and bullet lists instead of one flat block.
+            question_texts[num] = '\n'.join(q_lines)
 
     # Extract the full written explanation per question (same source as the
     # error document) to embed a hidden field the 'Copy' button can read.
@@ -1137,7 +1169,9 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
         q_type = entry.get('type', 'single')
         options = entry.get('options', [])
         correct = entry.get('correct', [])
-        q_text = question_texts.get(num, f'Question {num}')
+        q_text_raw = question_texts.get(num, f'Question {num}')
+        q_text_plain = q_text_raw.replace('\n', ' ')   # for TTS
+        q_text = _statement_html(q_text_raw)           # structured HTML for the card
 
         # Normalize correct answers for matching
         correct_norm = [c.lower().strip() for c in correct]
@@ -1285,7 +1319,7 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                 opt_lines = []
                 for o in options:
                     opt_lines.append(str(o))
-                front_tts = f"Question {num}. {q_text}. Options: " + ". ".join(opt_lines)
+                front_tts = f"Question {num}. {q_text_plain}. Options: " + ". ".join(opt_lines)
                 fa = tts_dir / f"q{num}_front.mp3"
                 if anki_tts.synthesize(front_tts, str(fa), voice=tts_voice,
                                        engine=tts_engine, profile=tts_profile,

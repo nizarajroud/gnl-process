@@ -31,6 +31,8 @@ _Q_HDR = re.compile(r'^\s*Question\s+(\d+\.\d+)\b(.*)$', re.I)
 _OPT = re.compile(r'^\s*([A-F])[\.\)]\s+(.*)$')
 _ANSKEY = re.compile(r'Answer\s*Key\s*&?\s*Rationales', re.I)
 _ANS_LINE = re.compile(r'^\s*(\d+\.\d+)\s*[—\-–]\s*Correct\s*:?\s*([A-F](?:\s*[,&/and]+\s*[A-F])*)', re.I)
+# Repeated page footer/header (author credit + page number) to strip.
+_FOOTER_RE = re.compile(r'Practice Questions?\s*·|linkedin\.com/in/|Matthew Purcell', re.I)
 
 
 class MathewPdfFormat(ExamFormat):
@@ -43,7 +45,16 @@ class MathewPdfFormat(ExamFormat):
         with pdfplumber.open(path) as pdf:
             for pg in pdf.pages:
                 out.append(pg.extract_text() or '')
-        return '\n'.join(out)
+        text = '\n'.join(out)
+        # Drop repeated page footer/header lines that otherwise glue onto the
+        # last option (e.g. "AIB-C01 Practice Questions · Matthew Purcell · ...").
+        clean = []
+        for ln in text.split('\n'):
+            s = ln.strip()
+            if _FOOTER_RE.search(s):
+                continue
+            clean.append(ln)
+        return '\n'.join(clean)
 
     def detect(self, path: str) -> bool:
         if not str(path).lower().endswith('.pdf'):
