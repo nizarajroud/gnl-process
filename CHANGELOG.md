@@ -1,5 +1,11 @@
 # Changelog
 
+## v4.53.1 — 2026-10-31
+- Fix (troncature d'énoncé) : step5_anki ne gardait que les 5 PREMIÈRES lignes de l'énoncé
+  (`q_lines[:5]`) → les questions à long scénario (1-2 paragraphes, ex. le Practice PDF) étaient
+  coupées en pleine phrase sur la carte. L'énoncé COMPLET est désormais conservé.
+
+
 ## v4.53.0 — 2026-10-31
 - Nouveau format **Practice PDF (questions + answer key)** : supporte les sets PDF où toutes les
   questions sont au début (« Question N.M · select ONE/TWO ») et le corrigé à la fin (« Answer Key &

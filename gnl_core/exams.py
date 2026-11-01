@@ -794,7 +794,9 @@ def step5_anki(answers, source_path, theme, subtheme, on_progress=None, diagrams
                     break
                 if line.strip():
                     q_lines.append(line.strip())
-            question_texts[num] = ' '.join(q_lines[:5])
+            # Keep the FULL statement (not just the first 5 lines) — long
+            # scenario stems (1-2 paragraphs) were being truncated otherwise.
+            question_texts[num] = ' '.join(q_lines)
 
     # Extract the full written explanation per question (same source as the
     # error document) to embed a hidden field the 'Copy' button can read.
