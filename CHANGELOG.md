@@ -1,5 +1,13 @@
 # Changelog
 
+## v4.53.0 — 2026-10-31
+- Nouveau format **Practice PDF (questions + answer key)** : supporte les sets PDF où toutes les
+  questions sont au début (« Question N.M · select ONE/TWO ») et le corrigé à la fin (« Answer Key &
+  Rationales » → « N.M — Correct: X · … » + rationale). Le parser (pdfplumber) extrait questions +
+  options, lit la lettre correcte depuis « Correct: », rattache l'explication, numérote en séquentiel
+  (## Question N:) en gardant l'id d'origine (1.1) dans l'énoncé. Testé: mathiew.pdf → 85 Q, 0 malformée.
+
+
 ## v4.52.0 — 2026-10-31
 - Nouveau format **Dojo (Category)** : supporte les exports TutorialsDojo récents sans en-tête
   « N. Question », où chaque question débute par « Category: AIBC01 – … ». Le parser découpe sur
